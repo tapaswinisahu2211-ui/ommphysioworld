@@ -1,0 +1,13 @@
+node_modules/
+client/node_modules/
+server/node_modules/
+mobileapp/node_modules/
+
+.env
+client/.env
+server/.env
+mobileapp/.env
+
+build/
+dist/
+.vs/

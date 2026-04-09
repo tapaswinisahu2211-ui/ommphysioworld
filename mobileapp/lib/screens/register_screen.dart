@@ -127,7 +127,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         return;
       }
       _showMessage(
-        'Unable to connect to the local server. Please check that it is running.',
+        'Unable to connect right now. Please check your internet connection and try again.',
       );
     } finally {
       if (mounted) {
@@ -142,7 +142,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     return AuthScaffold(
       title: 'Create your account',
-      subtitle: 'Register to manage appointments, exercises, and progress in one place.',
+      subtitle: 'Register to manage your profile, appointments, and OPW updates in one place.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

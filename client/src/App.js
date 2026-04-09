@@ -55,6 +55,7 @@ function App() {
         <Route path="/book-appointment" element={<BookAppointmentPage />} />
         <Route path="/patient-login" element={<PatientAuthPage mode="login" />} />
         <Route path="/patient-register" element={<PatientAuthPage mode="register" />} />
+        <Route path="/patient-forgot-password" element={<PatientAuthPage mode="forgot" />} />
         <Route path="/patient-dashboard" element={<PatientDashboardPage />} />
         <Route path="/patient-profile" element={<PatientProfilePage />} />
         <Route path="/contact" element={<ContactPage />} />

@@ -11,6 +11,11 @@ const publicUserSchema = new mongoose.Schema({
   },
   mobile: { type: String, required: true, trim: true },
   passwordHash: { type: String, required: true },
+  createdFrom: {
+    type: String,
+    enum: ["website", "mobile_app", "admin"],
+    default: "website",
+  },
   patientId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Patient",

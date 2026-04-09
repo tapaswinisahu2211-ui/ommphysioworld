@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'package:omphysioworld/screens/api_settings_screen.dart';
 import 'package:omphysioworld/services/app_api_service.dart';
 import 'package:omphysioworld/utils/form_validators.dart';
 
@@ -746,20 +745,6 @@ class _WebsiteAppointmentTabState extends State<WebsiteAppointmentTab> {
           body:
               'Fill in your details and preferred service. OPW will review your appointment request.',
         ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => const ApiSettingsScreen(),
-                ),
-              );
-            },
-            icon: const Icon(Icons.settings_ethernet_rounded),
-            label: const Text('Server settings'),
-          ),
-        ),
         const SizedBox(height: 16),
         const _BulletGroupCard(
           title: 'Booking Benefits',
@@ -1029,8 +1014,6 @@ class WebsiteContactTab extends StatelessWidget {
           body: 'Monday to Saturday, 9:00 AM to 7:00 PM',
           icon: Icons.schedule_rounded,
         ),
-        const SizedBox(height: 16),
-        const _SocialMediaButtons(),
         const SizedBox(height: 16),
         const _ContactFormCard(),
         const SizedBox(height: 16),
@@ -1321,11 +1304,11 @@ class _WebsiteFaqTabState extends State<WebsiteFaqTab> {
             ],
           ),
         const SizedBox(height: 4),
-          const _AccentInfoCard(
-            title: 'Need personal guidance?',
-            body:
-                'Use Live Chat if staff is online, or send your concern from Contact. After login, you can upload doctor notes, request an appointment, and follow OPW updates.',
-          ),
+        const _AccentInfoCard(
+          title: 'Need personal guidance?',
+          body:
+                'Use Live Chat if staff is online, or send your concern from Contact. After login, you can upload doctor notes and request an appointment.',
+        ),
       ],
     );
   }
@@ -1662,151 +1645,6 @@ class _FaqCardState extends State<_FaqCard> {
       ),
     );
   }
-}
-
-class _SocialMediaButtons extends StatelessWidget {
-  const _SocialMediaButtons();
-
-  static const _links = [
-    _SocialLink(
-      label: 'WhatsApp',
-      url: 'https://wa.me/918895555519',
-      badge: 'WA',
-      color: Color(0xFF16A34A),
-    ),
-    _SocialLink(
-      label: 'Call',
-      url: 'tel:+918895555519',
-      badge: 'Call',
-      color: Color(0xFF0284C7),
-    ),
-    _SocialLink(
-      label: 'Email',
-      url: 'mailto:contact@ommphysioworld.com',
-      badge: 'Mail',
-      color: Color(0xFF475569),
-    ),
-  ];
-
-  Future<void> _openLink(BuildContext context, String url) async {
-    final uri = Uri.parse(url);
-    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-
-    if (!opened && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to open this link right now.')),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0F0F172A),
-            blurRadius: 18,
-            offset: Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Social Media',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: const Color(0xFF0F172A),
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Connect quickly through call, WhatsApp, email, or social channels.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFF64748B),
-                  height: 1.45,
-                ),
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: _links.map((link) {
-              return InkWell(
-                borderRadius: BorderRadius.circular(999),
-                onTap: () => _openLink(context, link.url),
-                child: Ink(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 9,
-                  ),
-                  decoration: BoxDecoration(
-                    color: link.color.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: link.color.withValues(alpha: 0.24),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        height: 26,
-                        constraints: const BoxConstraints(minWidth: 26),
-                        alignment: Alignment.center,
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        decoration: BoxDecoration(
-                          color: link.color,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          link.badge,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        link.label,
-                        style: TextStyle(
-                          color: link.color,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SocialLink {
-  const _SocialLink({
-    required this.label,
-    required this.url,
-    required this.badge,
-    required this.color,
-  });
-
-  final String label;
-  final String url;
-  final String badge;
-  final Color color;
 }
 
 class _ContactFormCard extends StatefulWidget {

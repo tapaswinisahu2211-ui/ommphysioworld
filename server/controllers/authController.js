@@ -2,7 +2,7 @@ const User = require("../models/User");
 const PublicUser = require("../models/PublicUser");
 const Patient = require("../models/Patient");
 const { DEFAULT_ADMIN } = require("../config/defaults");
-const { sendMail } = require("../services/mailer");
+const { hasMailConfig, sendMail } = require("../services/mailer");
 const { ensureDefaultAdmin, serializeUser } = require("../utils/userHelpers");
 const { hashPassword, verifyPassword } = require("../utils/password");
 const { createSessionToken } = require("../utils/sessionToken");
@@ -19,10 +19,39 @@ const serializePublicUser = (user) => ({
   name: user.name,
   email: user.email,
   mobile: user.mobile,
+  createdFrom: user.createdFrom || "website",
   patientId: user.patientId ? user.patientId.toString() : "",
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,
 });
+
+const normalizeCreatedFrom = (value, fallback = "website") => {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+
+  if (["website", "mobile_app", "admin"].includes(normalized)) {
+    return normalized;
+  }
+
+  return fallback;
+};
+
+const formatCreatedFromLabel = (value) => {
+  switch (normalizeCreatedFrom(value, "website")) {
+    case "mobile_app":
+      return "Mobile App";
+    case "admin":
+      return "Admin";
+    default:
+      return "Website";
+  }
+};
+
+const generateTemporaryPassword = () =>
+  `OPW${Math.random().toString(36).slice(-4).toUpperCase()}${Date.now()
+    .toString()
+    .slice(-4)}`;
 
 const verifyUserPassword = (user, password) => {
   if (!user) {
@@ -46,7 +75,13 @@ const upgradeLegacyUserPassword = async (user, password) => {
   await user.save();
 };
 
-const findOrCreatePatientForPublicUser = async ({ name, email, mobile }) => {
+const findOrCreatePatientForPublicUser = async ({
+  name,
+  email,
+  mobile,
+  createdFrom,
+}) => {
+  const resolvedCreatedFrom = normalizeCreatedFrom(createdFrom, "website");
   const existingPatient = await Patient.findOne({ email });
 
   if (existingPatient) {
@@ -62,6 +97,11 @@ const findOrCreatePatientForPublicUser = async ({ name, email, mobile }) => {
       shouldSave = true;
     }
 
+    if (!existingPatient.createdFrom) {
+      existingPatient.createdFrom = resolvedCreatedFrom;
+      shouldSave = true;
+    }
+
     if (shouldSave) {
       await existingPatient.save();
     }
@@ -73,7 +113,8 @@ const findOrCreatePatientForPublicUser = async ({ name, email, mobile }) => {
     name,
     email,
     mobile,
-    notes: "Created from mobile app registration.",
+    createdFrom: resolvedCreatedFrom,
+    notes: `Created from ${formatCreatedFromLabel(resolvedCreatedFrom)} registration.`,
   });
 };
 
@@ -136,6 +177,7 @@ const registerPublicUser = async (req, res) => {
     const email = cleanEmail(req.body.email);
     const mobile = cleanPhone(req.body.mobile);
     const password = String(req.body.password || "");
+    const createdFrom = normalizeCreatedFrom(req.body.createdFrom, "website");
 
     if (!name || !email || !mobile || !password) {
       return res.status(400).json({
@@ -169,11 +211,13 @@ const registerPublicUser = async (req, res) => {
       email,
       mobile,
       passwordHash: hashPassword(password),
+      createdFrom,
     });
     const patient = await findOrCreatePatientForPublicUser({
       name,
       email,
       mobile,
+      createdFrom,
     });
 
     user.patientId = patient._id;
@@ -218,6 +262,7 @@ const loginPublicUser = async (req, res) => {
         name: user.name,
         email: user.email,
         mobile: user.mobile,
+        createdFrom: user.createdFrom || "website",
       });
       user.patientId = patient._id;
       await user.save();
@@ -252,33 +297,118 @@ const requestPasswordReset = async (req, res) => {
 
     const user = await PublicUser.findOne({ email });
 
-    if (user) {
-      try {
-        await sendMail({
-          from: process.env.EMAIL_USER,
-          to: "contact@ommphysioworld.com",
-          replyTo: email,
-          subject: `Password Reset Request - ${user.name}`,
-          text: `A public user requested password support.
+    if (!user) {
+      return res.json({
+        message:
+          "If the account exists, a temporary password has been sent to the registered email address.",
+      });
+    }
 
-Name: ${user.name}
-Email: ${user.email}
-Mobile: ${user.mobile}
-Requested At: ${new Date().toISOString()}
+    if (!hasMailConfig()) {
+      return res.status(503).json({
+        message:
+          "Password email is not configured right now. Please contact OPW support.",
+      });
+    }
+
+    const temporaryPassword = generateTemporaryPassword();
+    user.passwordHash = hashPassword(temporaryPassword);
+    await user.save();
+
+    try {
+      await sendMail({
+        from: process.env.EMAIL_USER,
+        to: user.email,
+        subject: "OPW password reset",
+        text: `Hello ${user.name},
+
+Your OMM Physio World account password has been reset.
+
+Temporary password: ${temporaryPassword}
+
+Please login and change your password after signing in.
+
+If you did not request this change, please contact OPW immediately.
 `,
-        });
-      } catch (emailError) {
-        console.log("Password reset notification email failed:", emailError);
-      }
+      });
+    } catch (emailError) {
+      console.log("Password reset email failed:", emailError);
+      return res.status(500).json({
+        message: "Unable to send the password email right now. Please try again shortly.",
+      });
     }
 
     return res.json({
       message:
-          "If the account exists, the clinic has been notified and will help with password access.",
+        "If the account exists, a temporary password has been sent to the registered email address.",
     });
   } catch (error) {
     console.log(error);
     return res.status(500).json({ message: "Failed to submit password reset request." });
+  }
+};
+
+const changePublicUserPassword = async (req, res) => {
+  try {
+    if (!req.auth || req.auth.type !== "patient") {
+      return res.status(401).json({ message: "Patient authentication is required." });
+    }
+
+    const oldPassword = String(req.body.oldPassword || "");
+    const newPassword = String(req.body.newPassword || "");
+    const confirmPassword = String(req.body.confirmPassword || "");
+
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({
+        message: "Old password, new password, and confirm password are required.",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: "New password must be at least 6 characters." });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ message: "New password and confirm password must match." });
+    }
+
+    const user = await PublicUser.findById(String(req.auth.sub || "").trim());
+
+    if (!user) {
+      return res.status(404).json({ message: "Patient account not found." });
+    }
+
+    if (!verifyPassword(oldPassword, user.passwordHash)) {
+      return res.status(401).json({ message: "Old password is incorrect." });
+    }
+
+    user.passwordHash = hashPassword(newPassword);
+    await user.save();
+
+    if (hasMailConfig()) {
+      try {
+        await sendMail({
+          from: process.env.EMAIL_USER,
+          to: user.email,
+          subject: "OPW password changed",
+          text: `Hello ${user.name},
+
+Your OMM Physio World account password has been changed successfully.
+
+New password: ${newPassword}
+
+If you did not make this change, please contact OPW immediately.
+`,
+        });
+      } catch (emailError) {
+        console.log("Password change email failed:", emailError);
+      }
+    }
+
+    return res.json({ message: "Password changed successfully." });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({ message: "Failed to change password." });
   }
 };
 
@@ -341,6 +471,7 @@ module.exports = {
   registerPublicUser,
   loginPublicUser,
   requestPasswordReset,
+  changePublicUserPassword,
   pingSession,
   logoutSession,
 };

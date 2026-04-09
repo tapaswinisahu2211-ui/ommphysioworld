@@ -22,6 +22,7 @@ export default function Patients() {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [modalError, setModalError] = useState("");
   const [form, setForm] = useState({
     id: null,
     name: "",
@@ -57,18 +58,20 @@ export default function Patients() {
     setShowModal(false);
     resetForm();
     setError("");
+    setModalError("");
   };
 
   const openAddModal = () => {
     resetForm();
     setError("");
+    setModalError("");
     setShowModal(true);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    setError("");
+    setModalError("");
 
     const validationError = firstValidationError([
       !form.name.trim() ? "Patient name is required." : "",
@@ -77,7 +80,7 @@ export default function Patients() {
     ]);
 
     if (validationError) {
-      setError(validationError);
+      setModalError(validationError);
       setSaving(false);
       return;
     }
@@ -100,7 +103,7 @@ export default function Patients() {
       await loadPatients();
       closeModal();
     } catch (saveError) {
-      setError(saveError.response?.data?.message || "Failed to save patient.");
+      setModalError(saveError.response?.data?.message || "Failed to save patient.");
     } finally {
       setSaving(false);
     }
@@ -109,6 +112,7 @@ export default function Patients() {
   const handleEdit = (patient) => {
     setForm(patient);
     setError("");
+    setModalError("");
     setShowModal(true);
   };
 
@@ -360,6 +364,12 @@ export default function Patients() {
                   </h3>
                 </div>
               </div>
+
+              {modalError ? (
+                <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  {modalError}
+                </div>
+              ) : null}
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <input

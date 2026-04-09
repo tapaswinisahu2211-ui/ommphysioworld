@@ -1,11 +1,15 @@
 const express = require("express");
-const { requireAuthenticatedSession } = require("../middleware/auth");
+const {
+  requireAuthenticatedSession,
+  requirePatientAuth,
+} = require("../middleware/auth");
 const { createRateLimiter } = require("../middleware/security");
 const {
   adminLogin,
   registerPublicUser,
   loginPublicUser,
   requestPasswordReset,
+  changePublicUserPassword,
   pingSession,
   logoutSession,
 } = require("../controllers/authController");
@@ -21,6 +25,7 @@ router.post("/admin/login", authRateLimiter, adminLogin);
 router.post("/auth/register", authRateLimiter, registerPublicUser);
 router.post("/auth/login", authRateLimiter, loginPublicUser);
 router.post("/auth/forgot-password", authRateLimiter, requestPasswordReset);
+router.post("/auth/change-password", requirePatientAuth, changePublicUserPassword);
 router.post("/session/ping", requireAuthenticatedSession, pingSession);
 router.post("/session/logout", requireAuthenticatedSession, logoutSession);
 

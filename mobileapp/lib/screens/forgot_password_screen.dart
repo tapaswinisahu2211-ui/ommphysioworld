@@ -56,7 +56,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
       _showMessage(
         response['message']?.toString() ??
-            'Password reset request submitted successfully.',
+            'A temporary password has been sent to your email.',
       );
       Navigator.of(context).pop();
     } on ApiException catch (error) {
@@ -69,7 +69,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         return;
       }
       _showMessage(
-        'Unable to connect to the local server. Please check that it is running.',
+        'Unable to connect right now. Please check your internet connection and try again.',
       );
     } finally {
       if (mounted) {
@@ -84,7 +84,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Widget build(BuildContext context) {
     return AuthScaffold(
       title: 'Reset your password',
-      subtitle: 'Enter your email address and we will notify the clinic support flow for password access.',
+      subtitle: 'Enter your login email and we will send a temporary password to that email address.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -112,7 +112,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         color: Colors.white,
                       ),
                     )
-                  : const Text('Request support'),
+                  : const Text('Send Password'),
             ),
           ),
           const SizedBox(height: 16),

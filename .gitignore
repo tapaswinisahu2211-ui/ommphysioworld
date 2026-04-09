@@ -10,4 +10,12 @@ mobileapp/.env
 
 build/
 dist/
-.vs/
+.vs/   
+
+
+Mongose
+mongosh -u opwadmin -p --authenticationDatabase admin
+use myapp
+show collections
+db.users.find().pretty()
+

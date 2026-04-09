@@ -68,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       _showMessage(
         response['message']?.toString() ??
-            'Login successful. You are now connected to the local server.',
+            'Login successful.',
       );
       final user = response['user'];
       if (user is Map<String, dynamic>) {
@@ -97,7 +97,7 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
       _showMessage(
-        'Unable to connect to the local server. Please check that it is running.',
+        'Unable to connect right now. Please check your internet connection and try again.',
       );
     } finally {
       if (mounted) {
@@ -112,7 +112,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return AuthScaffold(
       title: 'Welcome back',
-      subtitle: 'Login to continue your recovery journey with OMM Physio World.',
+      subtitle: 'Login to continue your care journey with Omm Physio World.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

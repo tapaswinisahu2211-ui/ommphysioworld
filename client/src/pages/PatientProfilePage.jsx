@@ -1,6 +1,7 @@
 import {
   Camera,
   CalendarDays,
+  KeyRound,
   Mail,
   Phone,
   Save,
@@ -12,6 +13,7 @@ import { useNavigate } from "react-router-dom";
 import PublicLayout from "../layout/PublicLayout";
 import API from "../services/api";
 import { clearPatientUser, getPatientUser, savePatientUser } from "../utils/patientAuth";
+import { cleanPhone, validatePhoneField } from "../utils/validation";
 
 const formatDate = (value) => {
   if (!value) {
@@ -39,15 +41,31 @@ export default function PatientProfilePage() {
     email: "",
     mobile: "",
     disease: "",
-    notes: "",
+  });
+  const [passwordForm, setPasswordForm] = useState({
+    oldPassword: "",
+    newPassword: "",
+    confirmPassword: "",
   });
   const [profileImage, setProfileImage] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState({ type: "", message: "" });
 
   const patientId = patientUser?.patientId || "";
+
+  const createdFromLabel = useMemo(() => {
+    switch (patient?.createdFrom) {
+      case "mobile_app":
+        return "Mobile App";
+      case "website":
+        return "Website";
+      default:
+        return "Admin";
+    }
+  }, [patient?.createdFrom]);
 
   const imageUrl = useMemo(() => {
     if (!patient?.profileImageUrl) {
@@ -73,7 +91,6 @@ export default function PatientProfilePage() {
         email: response.data.email || "",
         mobile: response.data.mobile || "",
         disease: response.data.disease || "",
-        notes: response.data.notes || "",
       });
       setStatus({ type: "", message: "" });
     } catch (error) {
@@ -104,15 +121,36 @@ export default function PatientProfilePage() {
   const handleSaveProfile = async (event) => {
     event.preventDefault();
 
+    if (!form.name.trim()) {
+      setStatus({ type: "error", message: "Full name is required." });
+      return;
+    }
+
+    if (form.name.trim().length < 2) {
+      setStatus({ type: "error", message: "Full name must be at least 2 characters." });
+      return;
+    }
+
+    const phoneError = validatePhoneField(form.mobile);
+    if (phoneError) {
+      setStatus({ type: "error", message: phoneError });
+      return;
+    }
+
     try {
       setSaving(true);
-      const response = await API.put(`/patients/${patientId}`, form);
+      const response = await API.put(`/patients/${patientId}`, {
+        name: form.name.trim(),
+        mobile: cleanPhone(form.mobile),
+        disease: form.disease.trim(),
+      });
       setPatient(response.data);
       const nextUser = {
         ...patientUser,
         name: response.data.name,
         email: response.data.email,
         mobile: response.data.mobile,
+        createdFrom: response.data.createdFrom,
       };
       savePatientUser(nextUser);
       setPatientUser(nextUser);
@@ -124,6 +162,48 @@ export default function PatientProfilePage() {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleChangePassword = async (event) => {
+    event.preventDefault();
+
+    if (!passwordForm.oldPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+      setStatus({ type: "error", message: "Please fill in all password fields." });
+      return;
+    }
+
+    if (passwordForm.newPassword.length < 6) {
+      setStatus({ type: "error", message: "New password must be at least 6 characters." });
+      return;
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setStatus({ type: "error", message: "New password and confirm password must match." });
+      return;
+    }
+
+    try {
+      setChangingPassword(true);
+      const response = await API.post("/auth/change-password", passwordForm);
+      setPasswordForm({
+        oldPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+      setStatus({
+        type: "success",
+        message:
+          response.data?.message ||
+          "Password changed successfully. The updated password has been sent to your email.",
+      });
+    } catch (error) {
+      setStatus({
+        type: "error",
+        message: error.response?.data?.message || "Failed to change password.",
+      });
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -257,66 +337,126 @@ export default function PatientProfilePage() {
                   icon={CalendarDays}
                   label={`Joined ${formatDate(patient?.createdAt)}`}
                 />
-                <InfoPill icon={ShieldCheck} label="Linked with your OPW patient record" />
+                <InfoPill icon={ShieldCheck} label={`Created from ${createdFromLabel}`} />
               </div>
             </div>
 
-            <form
-              onSubmit={handleSaveProfile}
-              className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm"
-            >
-              <h2 className="text-xl font-semibold text-slate-950">
-                Basic Patient Details
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-slate-500">
-                These details are connected to your OPW patient record and account.
-              </p>
-
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
-                <input
-                  className="input rounded-2xl border-slate-200 bg-slate-50"
-                  placeholder="Full Name"
-                  value={form.name}
-                  onChange={(event) => setForm({ ...form, name: event.target.value })}
-                  required
-                />
-                <input
-                  type="email"
-                  className="input rounded-2xl border-slate-200 bg-slate-50"
-                  placeholder="Email Address"
-                  value={form.email}
-                  onChange={(event) => setForm({ ...form, email: event.target.value })}
-                  required
-                />
-                <input
-                  className="input rounded-2xl border-slate-200 bg-slate-50"
-                  placeholder="Mobile Number"
-                  value={form.mobile}
-                  onChange={(event) => setForm({ ...form, mobile: event.target.value })}
-                  required
-                />
-                <input
-                  className="input rounded-2xl border-slate-200 bg-slate-50"
-                  placeholder="Disease / Concern"
-                  value={form.disease}
-                  onChange={(event) => setForm({ ...form, disease: event.target.value })}
-                />
-                <textarea
-                  className="input min-h-[150px] rounded-2xl border-slate-200 bg-slate-50 md:col-span-2"
-                  placeholder="Additional notes"
-                  value={form.notes}
-                  onChange={(event) => setForm({ ...form, notes: event.target.value })}
-                />
-              </div>
-
-              <button
-                disabled={saving}
-                className="mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+            <div className="grid gap-5">
+              <form
+                onSubmit={handleSaveProfile}
+                className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm"
               >
-                <Save size={18} />
-                {saving ? "Saving..." : "Save Profile"}
-              </button>
-            </form>
+                <h2 className="text-xl font-semibold text-slate-950">
+                  Patient Details
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  You can update your name, mobile number, and disease or concern here.
+                </p>
+
+                <div className="mt-6 grid gap-4 md:grid-cols-2">
+                  <input
+                    className="input rounded-2xl border-slate-200 bg-slate-50"
+                    placeholder="Full Name"
+                    value={form.name}
+                    onChange={(event) => setForm({ ...form, name: event.target.value })}
+                    required
+                  />
+                  <input
+                    type="email"
+                    className="input rounded-2xl border-slate-200 bg-slate-100 text-slate-400"
+                    placeholder="Email Address"
+                    value={form.email}
+                    disabled
+                    readOnly
+                  />
+                  <input
+                    className="input rounded-2xl border-slate-200 bg-slate-50"
+                    placeholder="Mobile Number"
+                    value={form.mobile}
+                    onChange={(event) => setForm({ ...form, mobile: event.target.value })}
+                    required
+                  />
+                  <input
+                    className="input rounded-2xl border-slate-200 bg-slate-50"
+                    placeholder="Disease / Concern"
+                    value={form.disease}
+                    onChange={(event) => setForm({ ...form, disease: event.target.value })}
+                  />
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  Created from: <span className="font-semibold text-slate-900">{createdFromLabel}</span>
+                </div>
+
+                <button
+                  disabled={saving}
+                  className="mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+                >
+                  <Save size={18} />
+                  {saving ? "Saving..." : "Save Profile"}
+                </button>
+              </form>
+
+              <form
+                onSubmit={handleChangePassword}
+                className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="rounded-2xl bg-sky-50 p-3 text-sky-700">
+                    <KeyRound size={20} />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-slate-950">
+                      Change Password
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Your updated password will also be sent to your email.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 grid gap-4">
+                  <input
+                    type="password"
+                    className="input rounded-2xl border-slate-200 bg-slate-50"
+                    placeholder="Old Password"
+                    value={passwordForm.oldPassword}
+                    onChange={(event) =>
+                      setPasswordForm({ ...passwordForm, oldPassword: event.target.value })
+                    }
+                  />
+                  <input
+                    type="password"
+                    className="input rounded-2xl border-slate-200 bg-slate-50"
+                    placeholder="New Password"
+                    value={passwordForm.newPassword}
+                    onChange={(event) =>
+                      setPasswordForm({ ...passwordForm, newPassword: event.target.value })
+                    }
+                  />
+                  <input
+                    type="password"
+                    className="input rounded-2xl border-slate-200 bg-slate-50"
+                    placeholder="Confirm New Password"
+                    value={passwordForm.confirmPassword}
+                    onChange={(event) =>
+                      setPasswordForm({
+                        ...passwordForm,
+                        confirmPassword: event.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <button
+                  disabled={changingPassword}
+                  className="mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-sky-700 px-6 py-4 text-sm font-semibold text-white hover:bg-sky-800 disabled:opacity-60"
+                >
+                  <KeyRound size={18} />
+                  {changingPassword ? "Updating..." : "Change Password"}
+                </button>
+              </form>
+            </div>
           </div>
         )}
       </section>

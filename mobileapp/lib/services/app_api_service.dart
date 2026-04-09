@@ -1,8 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:omphysioworld/storage/api_settings_storage.dart';
+import 'package:omphysioworld/config/api_config.dart';
 import 'package:omphysioworld/storage/patient_session_storage.dart';
 
 class ApiException implements Exception {
@@ -29,20 +30,15 @@ class AppUploadFile {
 class AppApiService {
   AppApiService({
     HttpClient? client,
-    ApiSettingsStorage? settingsStorage,
     PatientSessionStorage? patientSessionStorage,
   })  : _client = client ?? HttpClient(),
-        _settingsStorage = settingsStorage ?? ApiSettingsStorage(),
         _patientSessionStorage = patientSessionStorage ?? PatientSessionStorage();
 
   final HttpClient _client;
-  final ApiSettingsStorage _settingsStorage;
   final PatientSessionStorage _patientSessionStorage;
 
-  Future<Map<String, dynamic>> healthCheck({
-    String? baseUrlOverride,
-  }) {
-    return _getJson('/health', baseUrlOverride: baseUrlOverride);
+  Future<Map<String, dynamic>> healthCheck() {
+    return _getJson('/health');
   }
 
   Future<Map<String, dynamic>> login({
@@ -71,6 +67,7 @@ class AppApiService {
         'email': email,
         'mobile': mobile,
         'password': password,
+        'createdFrom': 'mobile_app',
       },
     );
   }
@@ -191,6 +188,37 @@ class AppApiService {
     return _getJson('/patients/$patientId');
   }
 
+  Future<Map<String, dynamic>> updatePatientProfile({
+    required String patientId,
+    required String name,
+    required String mobile,
+    required String disease,
+  }) {
+    return _putJson(
+      '/patients/$patientId',
+      {
+        'name': name,
+        'mobile': mobile,
+        'disease': disease,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> changePassword({
+    required String oldPassword,
+    required String newPassword,
+    required String confirmPassword,
+  }) {
+    return _postJson(
+      '/auth/change-password',
+      {
+        'oldPassword': oldPassword,
+        'newPassword': newPassword,
+        'confirmPassword': confirmPassword,
+      },
+    );
+  }
+
   Future<List<Map<String, dynamic>>> getServices() async {
     final response = await _getJson('/services');
     final data = response['data'];
@@ -221,7 +249,7 @@ class AppApiService {
       return value;
     }
 
-    final baseUrl = await _resolveBaseUrl(null);
+    final baseUrl = _resolveBaseUrl();
     return value.startsWith('/') ? '$baseUrl$value' : '$baseUrl/$value';
   }
 
@@ -281,26 +309,43 @@ class AppApiService {
 
   Future<Map<String, dynamic>> _postJson(
     String path,
-    Map<String, dynamic> payload, {
-    String? baseUrlOverride,
-  }) async {
-    final baseUrl = await _resolveBaseUrl(baseUrlOverride);
-    final request = await _client.postUrl(Uri.parse('$baseUrl$path'));
-    request.headers.contentType = ContentType.json;
-    await _applyAuthHeader(request);
-    request.write(jsonEncode(payload));
+    Map<String, dynamic> payload,
+  ) async {
+    return _guardRequest(() async {
+      final baseUrl = _resolveBaseUrl();
+      final request = await _client.postUrl(Uri.parse('$baseUrl$path'));
+      request.headers.contentType = ContentType.json;
+      await _applyAuthHeader(request);
+      request.write(jsonEncode(payload));
 
-    return _readJsonResponse(response: await request.close());
+      return _readJsonResponse(response: await request.close());
+    });
   }
 
   Future<Map<String, dynamic>> _getJson(
-    String path, {
-    String? baseUrlOverride,
-  }) async {
-    final baseUrl = await _resolveBaseUrl(baseUrlOverride);
-    final request = await _client.getUrl(Uri.parse('$baseUrl$path'));
-    await _applyAuthHeader(request);
-    return _readJsonResponse(response: await request.close());
+    String path,
+  ) async {
+    return _guardRequest(() async {
+      final baseUrl = _resolveBaseUrl();
+      final request = await _client.getUrl(Uri.parse('$baseUrl$path'));
+      await _applyAuthHeader(request);
+      return _readJsonResponse(response: await request.close());
+    });
+  }
+
+  Future<Map<String, dynamic>> _putJson(
+    String path,
+    Map<String, dynamic> payload,
+  ) async {
+    return _guardRequest(() async {
+      final baseUrl = _resolveBaseUrl();
+      final request = await _client.putUrl(Uri.parse('$baseUrl$path'));
+      request.headers.contentType = ContentType.json;
+      await _applyAuthHeader(request);
+      request.write(jsonEncode(payload));
+
+      return _readJsonResponse(response: await request.close());
+    });
   }
 
   Future<Map<String, dynamic>> _postMultipart(
@@ -308,38 +353,39 @@ class AppApiService {
     required Map<String, String> fields,
     required List<AppUploadFile> files,
     String fileFieldName = 'documents',
-    String? baseUrlOverride,
   }) async {
-    final baseUrl = await _resolveBaseUrl(baseUrlOverride);
-    final boundary = '----ommphysio-${DateTime.now().microsecondsSinceEpoch}';
-    final request = await _client.postUrl(Uri.parse('$baseUrl$path'));
-    request.headers.contentType = ContentType(
-      'multipart',
-      'form-data',
-      parameters: {'boundary': boundary},
-    );
-    await _applyAuthHeader(request);
-
-    for (final entry in fields.entries) {
-      _writeMultipartTextField(
-        request: request,
-        boundary: boundary,
-        name: entry.key,
-        value: entry.value,
+    return _guardRequest(() async {
+      final baseUrl = _resolveBaseUrl();
+      final boundary = '----ommphysio-${DateTime.now().microsecondsSinceEpoch}';
+      final request = await _client.postUrl(Uri.parse('$baseUrl$path'));
+      request.headers.contentType = ContentType(
+        'multipart',
+        'form-data',
+        parameters: {'boundary': boundary},
       );
-    }
+      await _applyAuthHeader(request);
 
-    for (final file in files) {
-      _writeMultipartFile(
-        request: request,
-        boundary: boundary,
-        fieldName: fileFieldName,
-        file: file,
-      );
-    }
+      for (final entry in fields.entries) {
+        _writeMultipartTextField(
+          request: request,
+          boundary: boundary,
+          name: entry.key,
+          value: entry.value,
+        );
+      }
 
-    request.add(utf8.encode('--$boundary--\r\n'));
-    return _readJsonResponse(response: await request.close());
+      for (final file in files) {
+        _writeMultipartFile(
+          request: request,
+          boundary: boundary,
+          fieldName: fileFieldName,
+          file: file,
+        );
+      }
+
+      request.add(utf8.encode('--$boundary--\r\n'));
+      return _readJsonResponse(response: await request.close());
+    });
   }
 
   void _writeMultipartTextField({
@@ -392,13 +438,36 @@ class AppApiService {
     return decodedBody;
   }
 
-  Future<String> _resolveBaseUrl(String? baseUrlOverride) async {
-    final candidate = baseUrlOverride?.trim() ?? '';
-    if (candidate.isNotEmpty) {
-      return candidate;
+  Future<T> _guardRequest<T>(Future<T> Function() request) async {
+    try {
+      return await request().timeout(const Duration(seconds: 25));
+    } on ApiException {
+      rethrow;
+    } on SocketException {
+      throw ApiException(
+        'No internet connection. Please check your network and try again.',
+      );
+    } on TimeoutException {
+      throw ApiException(
+        'OPW is taking too long to respond. Please try again in a moment.',
+      );
+    } on HandshakeException {
+      throw ApiException(
+        'Secure connection failed. Please try again shortly.',
+      );
+    } on HttpException {
+      throw ApiException(
+        'Unable to reach OPW right now. Please try again shortly.',
+      );
+    } on FormatException {
+      throw ApiException(
+        'Unexpected response from OPW. Please try again.',
+      );
     }
+  }
 
-    return _settingsStorage.resolveBaseUrl();
+  String _resolveBaseUrl() {
+    return ApiConfig.defaultBaseUrl;
   }
 
   Future<void> _applyAuthHeader(HttpClientRequest request) async {

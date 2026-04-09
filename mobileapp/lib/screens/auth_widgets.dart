@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'package:omphysioworld/screens/api_settings_screen.dart';
-
 class AuthScaffold extends StatelessWidget {
   const AuthScaffold({
     super.key,
@@ -43,23 +41,11 @@ class AuthScaffold extends StatelessWidget {
                       icon: Icons.arrow_back_rounded,
                       onPressed: () => Navigator.of(context).maybePop(),
                     ),
-                    const Spacer(),
-                    TextButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const ApiSettingsScreen(),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.settings_ethernet_rounded, size: 18),
-                      label: const Text('Server'),
-                    ),
                   ],
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 14),
                 Container(
-                  padding: const EdgeInsets.all(28),
+                  padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [
@@ -70,12 +56,12 @@ class AuthScaffold extends StatelessWidget {
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-                    borderRadius: BorderRadius.circular(34),
+                    borderRadius: BorderRadius.circular(28),
                     boxShadow: const [
                       BoxShadow(
                         color: Color(0x1A2563EB),
-                        blurRadius: 30,
-                        offset: Offset(0, 18),
+                        blurRadius: 24,
+                        offset: Offset(0, 14),
                       ),
                     ],
                   ),
@@ -83,30 +69,9 @@ class AuthScaffold extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        height: 72,
-                        width: 72,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.16),
-                              blurRadius: 22,
-                              offset: const Offset(0, 12),
-                            ),
-                          ],
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: Image.asset(
-                          'assets/images/opw.png',
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
+                          horizontal: 10,
+                          vertical: 6,
                         ),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.14),
@@ -116,45 +81,36 @@ class AuthScaffold extends StatelessWidget {
                           ),
                         ),
                         child: Text(
-                          'OMM PHYSIO WORLD',
+                          'OPW',
                           style: theme.textTheme.labelMedium?.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.w800,
-                            letterSpacing: 1.2,
+                            letterSpacing: 1,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 14),
                       Text(
                         title,
                         style: theme.textTheme.headlineMedium?.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.w800,
-                          height: 1.05,
+                          height: 1,
+                          fontSize: 30,
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                       Text(
                         subtitle,
                         style: theme.textTheme.bodyLarge?.copyWith(
                           color: const Color(0xFFE0F2FE),
-                          height: 1.6,
+                          height: 1.45,
                         ),
-                      ),
-                      const SizedBox(height: 20),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: const [
-                          _InfoChip(label: 'Secure Access'),
-                          _InfoChip(label: 'Mobile Friendly'),
-                          _InfoChip(label: 'Fast Booking'),
-                        ],
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 18),
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(

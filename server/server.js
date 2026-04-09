@@ -65,6 +65,7 @@ const ContactMessage = require("./models/ContactMessage");
 const Feedback = require("./models/Feedback");
 const JobRequirement = require("./models/JobRequirement");
 const Patient = require("./models/Patient");
+const PublicUser = require("./models/PublicUser");
 const Service = require("./models/Service");
 const StaffApplication = require("./models/StaffApplication");
 const User = require("./models/User");
@@ -154,6 +155,7 @@ const serializePatient = (patient) => ({
   name: patient.name,
   email: patient.email,
   mobile: patient.mobile,
+  createdFrom: patient.createdFrom || "admin",
   disease: patient.disease || "",
   notes: patient.notes || "",
   profileImageUrl: patient.profileImageData
@@ -210,6 +212,17 @@ const serializePatient = (patient) => ({
   createdAt: patient.createdAt,
   updatedAt: patient.updatedAt,
 });
+
+const formatPatientCreatedFrom = (value) => {
+  switch (String(value || "").trim()) {
+    case "mobile_app":
+      return "Mobile App";
+    case "website":
+      return "Website";
+    default:
+      return "Admin";
+  }
+};
 
 const serializeJobRequirement = (requirement) => ({
   id: requirement._id.toString(),
@@ -1518,7 +1531,23 @@ app.post("/api/patients", requireStaffAuth, async (req, res) => {
       return res.status(400).json({ message: "Please enter a valid 10-digit mobile number." });
     }
 
-    const patient = await Patient.create({ name, email, mobile });
+    const existingPatient = await Patient.findOne({
+      $or: [{ email }, { mobile }],
+    });
+
+    if (existingPatient) {
+      return res.status(409).json({
+        message: "A patient with this email or mobile number already exists.",
+      });
+    }
+
+    const patient = await Patient.create({
+      name,
+      email,
+      mobile,
+      createdFrom: "admin",
+      notes: "Created from Admin registration.",
+    });
     res.status(201).json(serializePatient(patient));
   } catch (error) {
     console.log(error);
@@ -1543,6 +1572,12 @@ app.put("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
       return res.status(400).json({ message: "Name is required." });
     }
 
+    if (req.auth?.type === "patient" && email !== undefined && email !== patient.email) {
+      return res.status(400).json({
+        message: "Email address cannot be changed from your profile.",
+      });
+    }
+
     if (email !== undefined && !isValidEmail(email)) {
       return res.status(400).json({ message: "Please enter a valid email address." });
     }
@@ -1551,13 +1586,25 @@ app.put("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
       return res.status(400).json({ message: "Please enter a valid 10-digit mobile number." });
     }
 
+    if (req.auth?.type === "staff") {
+      patient.email = email ?? patient.email;
+    }
     patient.name = name ?? patient.name;
-    patient.email = email ?? patient.email;
     patient.mobile = mobile ?? patient.mobile;
     patient.disease = disease ?? patient.disease;
     patient.notes = notes ?? patient.notes;
 
     await patient.save();
+
+    await PublicUser.updateMany(
+      { patientId: patient._id },
+      {
+        $set: {
+          name: patient.name,
+          mobile: patient.mobile,
+        },
+      }
+    );
 
     res.json(serializePatient(patient));
   } catch (error) {
@@ -2925,6 +2972,16 @@ app.post("/api/users", requireAdminAuth, async (req, res) => {
       return res.status(400).json({ message: "Password must be at least 6 characters." });
     }
 
+    const existingUser = await User.findOne({
+      $or: [{ email: cleanUserEmail }, { mobile: cleanUserMobile }],
+    });
+
+    if (existingUser) {
+      return res.status(409).json({
+        message: "A staff member with this email or mobile number already exists.",
+      });
+    }
+
     const resolvedRole = role || "Staff";
     const user = await User.create({
       name: cleanName,
@@ -2943,6 +3000,11 @@ app.post("/api/users", requireAdminAuth, async (req, res) => {
     res.status(201).json(serializeUser(user));
   } catch (error) {
     console.log(error);
+    if (error?.code === 11000) {
+      return res.status(409).json({
+        message: "A staff member with this email already exists.",
+      });
+    }
     res.status(500).json({ message: "Failed to create staff member." });
   }
 });

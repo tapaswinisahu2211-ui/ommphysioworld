@@ -6,6 +6,30 @@ abstract class AppLaunchStorage {
   Future<void> setOnboardingSeen();
 }
 
+class DeferredSharedPrefsLaunchStorage implements AppLaunchStorage {
+  DeferredSharedPrefsLaunchStorage();
+
+  static const _onboardingKey = 'has_seen_onboarding';
+
+  Future<SharedPreferences>? _preferencesFuture;
+
+  Future<SharedPreferences> _getPreferences() {
+    return _preferencesFuture ??= SharedPreferences.getInstance();
+  }
+
+  @override
+  Future<bool> shouldShowOnboarding() async {
+    final preferences = await _getPreferences();
+    return !(preferences.getBool(_onboardingKey) ?? false);
+  }
+
+  @override
+  Future<void> setOnboardingSeen() async {
+    final preferences = await _getPreferences();
+    await preferences.setBool(_onboardingKey, true);
+  }
+}
+
 class SharedPrefsLaunchStorage implements AppLaunchStorage {
   SharedPrefsLaunchStorage(this._preferences);
 

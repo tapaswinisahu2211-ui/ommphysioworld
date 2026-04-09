@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import 'package:omphysioworld/screens/api_settings_screen.dart';
 import 'package:omphysioworld/screens/login_screen.dart';
 import 'package:omphysioworld/screens/patient_chat_panel.dart';
 import 'package:omphysioworld/screens/patient_dashboard_screen.dart';
@@ -17,12 +15,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
-  static final Uri _whatsappUrl = Uri.parse('https://wa.me/918895555519');
-  static final Uri _youtubeUrl = Uri.parse('https://www.youtube.com/');
-  static final Uri _facebookUrl = Uri.parse('https://www.facebook.com/');
-  static final Uri _instagramUrl = Uri.parse('https://www.instagram.com/');
-  static final Uri _xUrl = Uri.parse('https://x.com/');
-
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final _sessionStorage = PatientSessionStorage();
   Map<String, dynamic>? _patientUser;
@@ -126,14 +118,6 @@ class _HomeScreenState extends State<HomeScreen>
     Navigator.of(context).pop();
   }
 
-  void _openServerSettings() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const ApiSettingsScreen(),
-      ),
-    );
-  }
-
   void _jumpToTab(int index) {
     setState(() {
       _tabResetKeys[index]++;
@@ -148,13 +132,6 @@ class _HomeScreenState extends State<HomeScreen>
       _tabResetKeys[contactIndex]++;
     });
     _tabController.animateTo(contactIndex);
-  }
-
-  Future<void> _openSocialLink(Uri url) async {
-    await launchUrl(
-      url,
-      mode: LaunchMode.externalApplication,
-    );
   }
 
   @override
@@ -236,15 +213,7 @@ class _HomeScreenState extends State<HomeScreen>
                             ),
                           ),
                         ),
-                        const SizedBox(height: 18),
-                        Text(
-                          'OmmPhysio World',
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
+                        const SizedBox(height: 14),
                         Text(
                           'Baripada, Odisha\nDr. Tapaswini Sahu\nMonday to Saturday, 9:00 AM to 7:00 PM',
                           style: theme.textTheme.bodyMedium?.copyWith(
@@ -359,57 +328,6 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                     const SizedBox(height: 12),
                   ],
-                  OutlinedButton.icon(
-                    onPressed: _openServerSettings,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Color(0x80FFFFFF)),
-                      minimumSize: const Size.fromHeight(52),
-                    ),
-                    icon: const Icon(Icons.settings_ethernet_rounded),
-                    label: const Text('Server'),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    'Follow us',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.8,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      _SocialBadgeButton(
-                        assetPath: 'assets/images/social/facebook.png',
-                        title: 'Facebook',
-                        onTap: () => _openSocialLink(_facebookUrl),
-                      ),
-                      _SocialBadgeButton(
-                        assetPath: 'assets/images/social/instagram.png',
-                        title: 'Instagram',
-                        onTap: () => _openSocialLink(_instagramUrl),
-                      ),
-                      _SocialBadgeButton(
-                        assetPath: 'assets/images/social/x.png',
-                        title: 'X',
-                        onTap: () => _openSocialLink(_xUrl),
-                      ),
-                      _SocialBadgeButton(
-                        assetPath: 'assets/images/social/youtube.png',
-                        title: 'YouTube',
-                        onTap: () => _openSocialLink(_youtubeUrl),
-                      ),
-                      _SocialBadgeButton(
-                        assetPath: 'assets/images/social/whatsapp.png',
-                        title: 'WhatsApp',
-                        onTap: () => _openSocialLink(_whatsappUrl),
-                      ),
-                    ],
-                  ),
                 ],
               ),
             ),
@@ -487,11 +405,6 @@ class _HomeScreenState extends State<HomeScreen>
                               ],
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          _TopCircleButton(
-                            icon: Icons.settings_ethernet_rounded,
-                            onPressed: _openServerSettings,
-                          ),
                         ],
                       ),
                       const SizedBox(height: 16),
@@ -527,7 +440,8 @@ class _HomeScreenState extends State<HomeScreen>
                                   const SizedBox(height: 8),
                                   Text(
                                     'Move better with structured care, better posture, and guided recovery.',
-                                    style: theme.textTheme.titleMedium?.copyWith(
+                                    style:
+                                        theme.textTheme.titleMedium?.copyWith(
                                       color: Colors.white,
                                       fontWeight: FontWeight.w800,
                                       height: 1.2,
@@ -649,6 +563,8 @@ class _DrawerActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return InkWell(
       borderRadius: BorderRadius.circular(24),
       onTap: onTap,
@@ -658,7 +574,9 @@ class _DrawerActionTile extends StatelessWidget {
           color: selected ? Colors.white : Colors.white.withValues(alpha: 0.10),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: selected ? Colors.white : Colors.white.withValues(alpha: 0.08),
+            color: selected
+                ? Colors.white
+                : Colors.white.withValues(alpha: 0.08),
           ),
         ),
         child: Row(
@@ -681,10 +599,10 @@ class _DrawerActionTile extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: selected ? const Color(0xFF0F172A) : Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: theme.textTheme.titleSmall?.copyWith(
+                  color: selected ? const Color(0xFF0F172A) : Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],
@@ -725,58 +643,6 @@ class _BackgroundOrb extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             gradient: RadialGradient(colors: colors),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SocialBadgeButton extends StatelessWidget {
-  const _SocialBadgeButton({
-    required this.assetPath,
-    required this.title,
-    required this.onTap,
-  });
-
-  final String assetPath;
-  final String title;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: title,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(999),
-          child: Ink(
-            height: 52,
-            width: 52,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.14),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.14),
-                  blurRadius: 14,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(6),
-              child: Image.asset(
-                assetPath,
-                fit: BoxFit.cover,
-              ),
-            ),
           ),
         ),
       ),

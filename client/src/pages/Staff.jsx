@@ -42,6 +42,7 @@ export default function Staff() {
   const [staffList, setStaffList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [modalError, setModalError] = useState("");
   const [form, setForm] = useState({
     id: null,
     name: "",
@@ -93,18 +94,20 @@ export default function Staff() {
     setShowModal(false);
     resetForm();
     setError("");
+    setModalError("");
   };
 
   const openAddModal = () => {
     resetForm();
     setError("");
+    setModalError("");
     setShowModal(true);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
-    setError("");
+    setModalError("");
 
     const validationError = firstValidationError([
       !form.name.trim() ? "Staff name is required." : "",
@@ -116,7 +119,7 @@ export default function Staff() {
     ]);
 
     if (validationError) {
-      setError(validationError);
+      setModalError(validationError);
       setSaving(false);
       return;
     }
@@ -149,7 +152,9 @@ export default function Staff() {
       await loadStaff();
       closeModal();
     } catch (saveError) {
-      setError(saveError.response?.data?.message || "Failed to save staff member.");
+      setModalError(
+        saveError.response?.data?.message || "Failed to save staff member."
+      );
     } finally {
       setSaving(false);
     }
@@ -158,6 +163,7 @@ export default function Staff() {
   const handleEdit = (staff) => {
     setForm({ ...staff, password: "" });
     setError("");
+    setModalError("");
     setShowModal(true);
   };
 
@@ -503,6 +509,12 @@ export default function Staff() {
                   {form.id ? "Edit Staff" : "Add Staff"}
                 </h3>
               </div>
+
+              {modalError ? (
+                <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  {modalError}
+                </div>
+              ) : null}
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <input

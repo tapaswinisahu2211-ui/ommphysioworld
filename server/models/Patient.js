@@ -83,6 +83,11 @@ const patientSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   email: { type: String, required: true, trim: true, lowercase: true },
   mobile: { type: String, required: true, trim: true },
+  createdFrom: {
+    type: String,
+    enum: ["website", "mobile_app", "admin"],
+    default: "admin",
+  },
   disease: { type: String, default: "", trim: true },
   notes: { type: String, default: "", trim: true },
   profileImageData: { type: Buffer, default: null },

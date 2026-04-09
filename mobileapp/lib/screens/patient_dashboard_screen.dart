@@ -35,6 +35,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
   List<AppUploadFile> _selectedDocuments = [];
   List<Map<String, dynamic>> _appointmentRequests = [];
   List<Map<String, dynamic>> _services = [];
+  DateTime? _notificationsSeenAt;
   bool _isLoadingPatient = false;
   bool _isSubmittingNote = false;
   bool _isSubmittingAppointment = false;
@@ -54,6 +55,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
         setState(() {});
       }
     });
+    _loadNotificationsSeenAt();
     _refreshPatient();
   }
 
@@ -70,6 +72,17 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
+  }
+
+  Future<void> _loadNotificationsSeenAt() async {
+    final seenAt = await _sessionStorage.getNotificationsSeenAt(_patientId);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _notificationsSeenAt = seenAt?.toLocal();
+    });
   }
 
   void _selectDashboardTab(int index) {
@@ -150,6 +163,18 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
         });
       }
     }
+  }
+
+  Future<void> _markNotificationsSeen() async {
+    final now = DateTime.now();
+    await _sessionStorage.saveNotificationsSeenAt(_patientId, now);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _notificationsSeenAt = now;
+    });
   }
 
   Future<void> _pickClinicalDocuments() async {
@@ -385,6 +410,53 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
     return _formatDisplayDate(parsed.toLocal());
   }
 
+  DateTime? _parseNotificationDate(dynamic value) {
+    final rawValue = value?.toString().trim() ?? '';
+    if (rawValue.isEmpty) {
+      return null;
+    }
+
+    final parsed = DateTime.tryParse(rawValue);
+    return parsed?.toLocal();
+  }
+
+  DateTime? _firstValidDate(Iterable<dynamic> values) {
+    for (final value in values) {
+      final parsed = _parseNotificationDate(value);
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+
+    return null;
+  }
+
+  String _formatNotificationTime(DateTime? value) {
+    if (value == null) {
+      return 'Recent update';
+    }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final targetDay = DateTime(value.year, value.month, value.day);
+    final difference = today.difference(targetDay).inDays;
+
+    final hour = value.hour % 12 == 0 ? 12 : value.hour % 12;
+    final minute = value.minute.toString().padLeft(2, '0');
+    final suffix = value.hour >= 12 ? 'PM' : 'AM';
+    final timeLabel = '$hour:$minute $suffix';
+
+    if (difference == 0) {
+      return 'Today, $timeLabel';
+    }
+
+    if (difference == 1) {
+      return 'Yesterday, $timeLabel';
+    }
+
+    return '${_formatDisplayDate(value)} | $timeLabel';
+  }
+
   List<Map<String, dynamic>> _listFromPatient(String key) {
     final value = _patient?[key];
     if (value is List) {
@@ -441,6 +513,290 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
           count + ((plan['payments'] is List) ? (plan['payments'] as List).length : 0),
     );
     return _payments.length + sessionPayments;
+  }
+
+  List<_PatientNotification> get _notifications {
+    final notifications = <_PatientNotification>[];
+
+    for (final note in _clinicalNotes) {
+      final addedByType = note['addedByType']?.toString() ?? '';
+      if (addedByType == 'patient') {
+        continue;
+      }
+
+      final title = note['title']?.toString().trim().isNotEmpty == true
+          ? note['title'].toString().trim()
+          : 'New clinical note from OPW';
+      final body = note['note']?.toString().trim().isNotEmpty == true
+          ? note['note'].toString().trim()
+          : 'OPW added a clinical note to your recovery record.';
+
+      notifications.add(
+        _PatientNotification(
+          title: title,
+          body: body,
+          timestamp: _firstValidDate([
+            note['updatedAt'],
+            note['createdAt'],
+          ]),
+          icon: Icons.note_alt_rounded,
+          color: const Color(0xFF2563EB),
+        ),
+      );
+    }
+
+    for (final request in _appointmentRequests) {
+      final status = request['status']?.toString().toLowerCase() ?? 'pending';
+      if (status == 'pending') {
+        continue;
+      }
+
+      final service = request['service']?.toString().trim().isNotEmpty == true
+          ? request['service'].toString().trim()
+          : 'Appointment';
+      final decisionNote = request['decisionNote']?.toString().trim() ?? '';
+      final confirmedDate = request['confirmedDate']?.toString().trim() ?? '';
+      final confirmedTime = request['confirmedTime']?.toString().trim() ?? '';
+      final scheduleText = confirmedDate.isEmpty
+          ? ''
+          : confirmedTime.isEmpty
+              ? confirmedDate
+              : '$confirmedDate at $confirmedTime';
+
+      notifications.add(
+        _PatientNotification(
+          title: switch (status) {
+            'approved' => '$service confirmed',
+            'rescheduled' => '$service rescheduled',
+            'completed' => '$service marked done',
+            'cancelled' => '$service cancelled',
+            _ => '$service updated',
+          },
+          body: [
+            if (scheduleText.isNotEmpty) 'Schedule: $scheduleText',
+            if (decisionNote.isNotEmpty) 'OPW note: $decisionNote',
+            if (scheduleText.isEmpty && decisionNote.isEmpty)
+              'OPW updated your appointment request.',
+          ].join('\n'),
+          timestamp: _firstValidDate([
+            request['updatedAt'],
+            request['createdAt'],
+            request['confirmedDate'],
+          ]),
+          icon: status == 'rescheduled'
+              ? Icons.update_rounded
+              : status == 'cancelled'
+                  ? Icons.cancel_rounded
+                  : status == 'completed'
+                      ? Icons.task_alt_rounded
+                      : Icons.event_available_rounded,
+          color: status == 'cancelled'
+              ? const Color(0xFFDC2626)
+              : status == 'completed'
+                  ? const Color(0xFF059669)
+                  : const Color(0xFF0891B2),
+        ),
+      );
+    }
+
+    for (final plan in _treatmentPlans) {
+      final treatmentLabel = plan['treatmentTypes'] is List &&
+              (plan['treatmentTypes'] as List).isNotEmpty
+          ? (plan['treatmentTypes'] as List).join(', ')
+          : 'Session plan';
+      final fromDate = plan['fromDate']?.toString().trim() ?? '';
+      final toDate = plan['toDate']?.toString().trim() ?? '';
+      final scheduleText = fromDate.isEmpty && toDate.isEmpty
+          ? 'OPW added a session plan to your account.'
+          : 'Plan period: ${fromDate.isEmpty ? 'not set' : fromDate} to ${toDate.isEmpty ? 'not set' : toDate}';
+
+      notifications.add(
+        _PatientNotification(
+          title: 'Session plan updated',
+          body: '$treatmentLabel\n$scheduleText',
+          timestamp: _firstValidDate([
+            plan['updatedAt'],
+            plan['createdAt'],
+            plan['fromDate'],
+          ]),
+          icon: Icons.healing_rounded,
+          color: const Color(0xFF0F766E),
+        ),
+      );
+    }
+
+    for (final payment in _payments) {
+      notifications.add(
+        _PatientNotification(
+          title: 'Payment update added',
+          body:
+              '${_formatMoney(payment['amount'])} | ${payment['method']?.toString() ?? 'Payment'}',
+          timestamp: _firstValidDate([
+            payment['updatedAt'],
+            payment['createdAt'],
+          ]),
+          icon: Icons.payments_rounded,
+          color: const Color(0xFFF97316),
+        ),
+      );
+    }
+
+    for (final plan in _treatmentPlans) {
+      final treatmentLabel = plan['treatmentTypes'] is List &&
+              (plan['treatmentTypes'] as List).isNotEmpty
+          ? (plan['treatmentTypes'] as List).join(', ')
+          : 'Treatment';
+      final planPayments = (plan['payments'] is List)
+          ? (plan['payments'] as List).whereType<Map<String, dynamic>>().toList()
+          : const <Map<String, dynamic>>[];
+
+      for (final payment in planPayments) {
+        notifications.add(
+          _PatientNotification(
+            title: 'Treatment payment updated',
+            body:
+                '${_formatMoney(payment['amount'])} | $treatmentLabel',
+            timestamp: _firstValidDate([
+              payment['updatedAt'],
+              payment['createdAt'],
+            ]),
+            icon: Icons.receipt_long_rounded,
+            color: const Color(0xFFF97316),
+          ),
+        );
+      }
+    }
+
+    notifications.sort(
+      (a, b) => (b.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0))
+          .compareTo(a.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0)),
+    );
+
+    return notifications;
+  }
+
+  int get _unreadNotificationCount {
+    final seenAt = _notificationsSeenAt;
+    if (seenAt == null) {
+      return _notifications.length;
+    }
+
+    return _notifications.where((item) {
+      final timestamp = item.timestamp;
+      return timestamp == null || timestamp.isAfter(seenAt);
+    }).length;
+  }
+
+  Future<void> _openNotificationsSheet() async {
+    final notifications = _notifications;
+    await _markNotificationsSeen();
+    if (!mounted) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final theme = Theme.of(context);
+        return DraggableScrollableSheet(
+          initialChildSize: 0.72,
+          minChildSize: 0.45,
+          maxChildSize: 0.92,
+          builder: (context, controller) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFFF8FBFF),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 12),
+                  Container(
+                    height: 5,
+                    width: 56,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFCBD5E1),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 18, 22, 16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Notifications',
+                                style: theme.textTheme.headlineSmall?.copyWith(
+                                  color: const Color(0xFF0F172A),
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                notifications.isEmpty
+                                    ? 'No OPW updates yet.'
+                                    : '${notifications.length} OPW updates in your account',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: const Color(0xFF64748B),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: notifications.isEmpty
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 28),
+                              child: Text(
+                                'OPW updates for notes, appointments, sessions, and payments will appear here.',
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  color: const Color(0xFF64748B),
+                                  height: 1.5,
+                                ),
+                              ),
+                            ),
+                          )
+                        : ListView.separated(
+                            controller: controller,
+                            padding: const EdgeInsets.fromLTRB(22, 0, 22, 24),
+                            itemCount: notifications.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 12),
+                            itemBuilder: (context, index) {
+                              final item = notifications[index];
+                              final isUnread = _notificationsSeenAt == null ||
+                                  item.timestamp == null ||
+                                  item.timestamp!.isAfter(_notificationsSeenAt!);
+                              return _NotificationTile(
+                                item: item,
+                                isUnread: isUnread,
+                                formatTime: _formatNotificationTime,
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Widget _buildTabList(List<Widget> children) {
@@ -545,6 +901,11 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
             onPressed: () => _scaffoldKey.currentState?.openDrawer(),
           ),
           const Spacer(),
+          _NotificationButton(
+            count: _unreadNotificationCount,
+            onPressed: _openNotificationsSheet,
+          ),
+          const SizedBox(width: 10),
           _RoundButton(
             icon: Icons.refresh_rounded,
             onPressed: _refreshPatient,
@@ -2022,6 +2383,170 @@ class _RecordTileShell extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(child: child),
+        ],
+      ),
+    );
+  }
+}
+
+class _PatientNotification {
+  const _PatientNotification({
+    required this.title,
+    required this.body,
+    required this.icon,
+    required this.color,
+    this.timestamp,
+  });
+
+  final String title;
+  final String body;
+  final DateTime? timestamp;
+  final IconData icon;
+  final Color color;
+}
+
+class _NotificationButton extends StatelessWidget {
+  const _NotificationButton({
+    required this.count,
+    required this.onPressed,
+  });
+
+  final int count;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        _RoundButton(
+          icon: Icons.notifications_rounded,
+          onPressed: onPressed,
+        ),
+        if (count > 0)
+          Positioned(
+            right: -2,
+            top: -2,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 22),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFFDC2626),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: Colors.white, width: 2),
+              ),
+              child: Text(
+                count > 99 ? '99+' : '$count',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _NotificationTile extends StatelessWidget {
+  const _NotificationTile({
+    required this.item,
+    required this.isUnread,
+    required this.formatTime,
+  });
+
+  final _PatientNotification item;
+  final bool isUnread;
+  final String Function(DateTime? value) formatTime;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: isUnread ? const Color(0xFFBFDBFE) : const Color(0xFFE2E8F0),
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A0F172A),
+            blurRadius: 18,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 48,
+            width: 48,
+            decoration: BoxDecoration(
+              color: item.color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(
+              item.icon,
+              color: item.color,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.title,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: const Color(0xFF0F172A),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    if (isUnread) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        height: 10,
+                        width: 10,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF2563EB),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  item.body,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF475569),
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  formatTime(item.timestamp),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: const Color(0xFF64748B),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );

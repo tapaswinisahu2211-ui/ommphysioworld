@@ -1,4 +1,4 @@
-import { LockKeyhole, LogIn, UserPlus } from "lucide-react";
+import { LockKeyhole, LogIn, Mail, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import PublicLayout from "../layout/PublicLayout";
@@ -14,6 +14,7 @@ import {
 
 export default function PatientAuthPage({ mode = "login" }) {
   const isRegister = mode === "register";
+  const isForgot = mode === "forgot";
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/patient-dashboard";
@@ -25,16 +26,27 @@ export default function PatientAuthPage({ mode = "login" }) {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
-    if (getPatientUser()) {
+    if (!isForgot && getPatientUser()) {
       navigate(redirectTo, { replace: true });
     }
-  }, [navigate, redirectTo]);
+  }, [isForgot, navigate, redirectTo]);
 
   const copy = useMemo(
     () =>
-      isRegister
+      isForgot
+        ? {
+            eyebrow: "Forgot Password",
+            title: "Get a temporary password on your email.",
+            text: "Enter your patient login email and OPW will send a temporary password to your inbox.",
+            button: "Send Password",
+            switchText: "Remember your password?",
+            switchLink: "Back to login",
+            switchPath: `/patient-login?redirect=${encodeURIComponent(redirectTo)}`,
+          }
+        : isRegister
         ? {
             eyebrow: "Patient Register",
             title: "Create your OMM Physio World patient account.",
@@ -53,21 +65,24 @@ export default function PatientAuthPage({ mode = "login" }) {
             switchLink: "Register",
             switchPath: `/patient-register?redirect=${encodeURIComponent(redirectTo)}`,
           },
-    [isRegister, redirectTo]
+    [isForgot, isRegister, redirectTo]
   );
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSubmitting(true);
     setError("");
+    setNotice("");
 
     const validationError = firstValidationError([
-      isRegister && !form.name.trim() ? "Full name is required." : "",
-      isRegister && form.name.trim().length < 2 ? "Full name must be at least 2 characters." : "",
+      !isForgot && isRegister && !form.name.trim() ? "Full name is required." : "",
+      !isForgot && isRegister && form.name.trim().length < 2 ? "Full name must be at least 2 characters." : "",
       validateEmailField(form.email),
-      isRegister ? validatePhoneField(form.mobile) : "",
-      !form.password ? "Password is required." : "",
-      form.password && form.password.length < 6 ? "Password must be at least 6 characters." : "",
+      !isForgot && isRegister ? validatePhoneField(form.mobile) : "",
+      !isForgot && !form.password ? "Password is required." : "",
+      !isForgot && form.password && form.password.length < 6
+        ? "Password must be at least 6 characters."
+        : "",
     ]);
 
     if (validationError) {
@@ -77,25 +92,36 @@ export default function PatientAuthPage({ mode = "login" }) {
     }
 
     try {
-      const endpoint = isRegister ? "/auth/register" : "/auth/login";
-      const payload = isRegister
-        ? {
-            name: form.name.trim(),
-            email: cleanEmail(form.email),
-            mobile: cleanPhone(form.mobile),
-            password: form.password,
-          }
-        : {
-            email: cleanEmail(form.email),
-            password: form.password,
-          };
+      if (isForgot) {
+        const response = await API.post("/auth/forgot-password", {
+          email: cleanEmail(form.email),
+        });
+        setNotice(
+          response.data?.message ||
+            "If your email is registered, a temporary password has been sent."
+        );
+      } else {
+        const endpoint = isRegister ? "/auth/register" : "/auth/login";
+        const payload = isRegister
+          ? {
+              name: form.name.trim(),
+              email: cleanEmail(form.email),
+              mobile: cleanPhone(form.mobile),
+              password: form.password,
+              createdFrom: "website",
+            }
+          : {
+              email: cleanEmail(form.email),
+              password: form.password,
+            };
 
-      const response = await API.post(endpoint, payload);
-      savePatientUser({
-        ...response.data.user,
-        token: response.data.token,
-      });
-      navigate(redirectTo, { replace: true });
+        const response = await API.post(endpoint, payload);
+        savePatientUser({
+          ...response.data.user,
+          token: response.data.token,
+        });
+        navigate(redirectTo, { replace: true });
+      }
     } catch (submitError) {
       setError(
         submitError.response?.data?.message ||
@@ -114,7 +140,13 @@ export default function PatientAuthPage({ mode = "login" }) {
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_34%)]" />
             <div className="relative z-10">
               <div className="inline-flex rounded-2xl bg-white/10 p-4">
-                {isRegister ? <UserPlus size={28} /> : <LockKeyhole size={28} />}
+                {isForgot ? (
+                  <Mail size={28} />
+                ) : isRegister ? (
+                  <UserPlus size={28} />
+                ) : (
+                  <LockKeyhole size={28} />
+                )}
               </div>
               <p className="mt-8 text-sm uppercase tracking-[0.25em] text-white/60">
                 {copy.eyebrow}
@@ -127,13 +159,19 @@ export default function PatientAuthPage({ mode = "login" }) {
               </p>
               <div className="mt-8 grid gap-3 text-sm text-white/80">
                 <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3">
-                  Request appointments only after login
+                  {isForgot
+                    ? "Temporary password goes to the patient login email"
+                    : "Request appointments only after login"}
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3">
-                  Patient account is linked with your OPW patient record
+                  {isForgot
+                    ? "Use the received password to login and change it from profile"
+                    : "Patient account is linked with your OPW patient record"}
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3">
-                  Mobile and web access use the same patient account
+                  {isForgot
+                    ? "Website and mobile both use the same patient account"
+                    : "Mobile and web access use the same patient account"}
                 </div>
               </div>
             </div>
@@ -146,6 +184,12 @@ export default function PatientAuthPage({ mode = "login" }) {
             <p className="mt-2 text-sm leading-6 text-slate-500">
               Continue to book appointment after account access.
             </p>
+
+            {notice ? (
+              <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                {notice}
+              </div>
+            ) : null}
 
             {error ? (
               <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -186,25 +230,44 @@ export default function PatientAuthPage({ mode = "login" }) {
                 }
                 required
               />
-              <input
-                type="password"
-                className="input rounded-2xl border-slate-200 bg-slate-50"
-                placeholder="Password"
-                value={form.password}
-                onChange={(event) =>
-                  setForm({ ...form, password: event.target.value })
-                }
-                required
-                minLength={6}
-              />
+              {!isForgot ? (
+                <input
+                  type="password"
+                  className="input rounded-2xl border-slate-200 bg-slate-50"
+                  placeholder="Password"
+                  value={form.password}
+                  onChange={(event) =>
+                    setForm({ ...form, password: event.target.value })
+                  }
+                  required
+                  minLength={6}
+                />
+              ) : null}
               <button
                 disabled={submitting}
                 className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-5 py-4 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isRegister ? <UserPlus size={18} /> : <LogIn size={18} />}
+                {isForgot ? (
+                  <Mail size={18} />
+                ) : isRegister ? (
+                  <UserPlus size={18} />
+                ) : (
+                  <LogIn size={18} />
+                )}
                 {submitting ? "Please wait..." : copy.button}
               </button>
             </form>
+
+            {!isRegister && !isForgot ? (
+              <p className="mt-4 text-center text-sm text-slate-500">
+                <Link
+                  className="font-semibold text-sky-700"
+                  to={`/patient-forgot-password?redirect=${encodeURIComponent(redirectTo)}`}
+                >
+                  Forgot password?
+                </Link>
+              </p>
+            ) : null}
 
             <p className="mt-6 text-center text-sm text-slate-500">
               {copy.switchText}{" "}

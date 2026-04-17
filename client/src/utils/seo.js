@@ -1,4 +1,4 @@
-const siteName = "OmmPhysio World";
+﻿const siteName = "Omm Physio World";
 const clinicAddress =
   "City clinic road, near davaindia, Baripada";
 const clinicPhone = "+91 88955 55519";
@@ -40,3 +40,4 @@ export const createBreadcrumbSchema = (items) => ({
     item: item.path,
   })),
 });
+

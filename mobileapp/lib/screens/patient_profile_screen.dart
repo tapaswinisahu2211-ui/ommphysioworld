@@ -603,7 +603,7 @@ class _ProfileAvatar extends StatelessWidget {
               : Image.network(
                   imageUrl,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Center(
+                  errorBuilder: (_, _, _) => Center(
                     child: Text(
                       initial,
                       style: Theme.of(context).textTheme.displaySmall?.copyWith(

@@ -1,4 +1,4 @@
-import {
+﻿import {
   BarChart3,
   BriefcaseMedical,
   ClipboardList,
@@ -69,7 +69,7 @@ export default function Sidebar({ collapsed, onNavigate }) {
                 <p className="text-xs uppercase tracking-[0.24em] text-white/45">
                   {adminUser ? "Admin Suite" : "Staff Suite"}
                 </p>
-                <h1 className="text-lg font-semibold text-white">OmmPhysio World</h1>
+                <h1 className="text-lg font-semibold text-white">Omm Physio World</h1>
               </div>
             )}
           </div>
@@ -164,3 +164,4 @@ export default function Sidebar({ collapsed, onNavigate }) {
     </aside>
   );
 }
+

@@ -775,7 +775,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
                             controller: controller,
                             padding: const EdgeInsets.fromLTRB(22, 0, 22, 24),
                             itemCount: notifications.length,
-                            separatorBuilder: (_, __) =>
+                            separatorBuilder: (_, _) =>
                                 const SizedBox(height: 12),
                             itemBuilder: (context, index) {
                               final item = notifications[index];
@@ -1283,7 +1283,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
       child: Column(
         children: [
           DropdownButtonFormField<String>(
-            value: _selectedService.isEmpty ? null : _selectedService,
+            initialValue: _selectedService.isEmpty ? null : _selectedService,
             isExpanded: true,
             decoration: const InputDecoration(
               labelText: 'Service needed',

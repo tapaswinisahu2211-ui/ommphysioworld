@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const multer = require("multer");
@@ -438,7 +438,7 @@ const getAppointmentScheduleKey = (appointment) =>
   ).slice(0, 10);
 
 app.get("/", (req, res) => {
-  res.send("OmmPhysio World API is running.");
+  res.send("Omm Physio World API is running.");
 });
 
 const mapChatAttachments = (files = []) =>
@@ -451,7 +451,7 @@ const mapChatAttachments = (files = []) =>
 app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
-    message: "OmmPhysio World API is running.",
+    message: "Omm Physio World API is running.",
     timestamp: new Date().toISOString(),
   });
 });
@@ -3272,3 +3272,4 @@ const startServer = async () => {
 };
 
 startServer();
+

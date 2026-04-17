@@ -1,4 +1,4 @@
-import { Clock3, Download, LogOut, MapPin, Menu, Phone, UserCircle2, X } from "lucide-react";
+﻿import { Clock3, Download, LogOut, MapPin, Menu, Phone, UserCircle2, X } from "lucide-react";
 import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import logoImage from "../assets/opw.png";
@@ -20,42 +20,42 @@ const copy = {
     reachClinic: "Reach Clinic",
     downloadApp: "Download our app",
     bookNow: "Book Now",
-    clinicName: "OmmPhysio World",
+    clinicName: "Omm Physio World",
     doctor: "Dr. Tapaswini Sahu",
   },
   hi: {
     nav: [
-      { label: "Home", path: "/" },
-      { label: "About", path: "/about" },
-      { label: "Services", path: "/care" },
+      { label: "à¤¹à¥‹à¤®", path: "/" },
+      { label: "à¤¹à¤®à¤¾à¤°à¥‡ à¤¬à¤¾à¤°à¥‡ à¤®à¥‡à¤‚", path: "/about" },
+      { label: "à¤¸à¥‡à¤µà¤¾à¤à¤‚", path: "/care" },
       { label: "FAQ", path: "/faq" },
-      { label: "Career", path: "/career/requirements" },
-      { label: "Contact", path: "/contact" },
+      { label: "à¤•à¤°à¤¿à¤¯à¤°", path: "/career/requirements" },
+      { label: "à¤¸à¤‚à¤ªà¤°à¥à¤•", path: "/contact" },
     ],
-    hours: "Monday to Saturday, 9:00 AM to 7:00 PM",
-    location: "Baripada, Odisha",
-    reachClinic: "Reach Clinic",
-    downloadApp: "Download our app",
-    bookNow: "Book Now",
-    clinicName: "OmmPhysio World",
-    doctor: "Dr. Tapaswini Sahu",
+    hours: "à¤¸à¥‹à¤®à¤µà¤¾à¤° à¤¸à¥‡ à¤¶à¤¨à¤¿à¤µà¤¾à¤°, à¤¸à¥à¤¬à¤¹ 9:00 à¤¸à¥‡ à¤¶à¤¾à¤® 7:00",
+    location: "à¤¬à¤¾à¤°à¥€à¤ªà¤¦à¤¾, à¤“à¤¡à¤¿à¤¶à¤¾",
+    reachClinic: "à¤•à¥à¤²à¤¿à¤¨à¤¿à¤• à¤ªà¤¹à¥à¤‚à¤šà¥‡à¤‚",
+    downloadApp: "à¤¹à¤®à¤¾à¤°à¤¾ à¤à¤ª à¤¡à¤¾à¤‰à¤¨à¤²à¥‹à¤¡ à¤•à¤°à¥‡à¤‚",
+    bookNow: "à¤…à¤­à¥€ à¤¬à¥à¤• à¤•à¤°à¥‡à¤‚",
+    clinicName: "Omm Physio World",
+    doctor: "à¤¡à¥‰. à¤¤à¤ªà¤¸à¥à¤µà¤¿à¤¨à¥€ à¤¸à¤¾à¤¹à¥‚",
   },
   or: {
     nav: [
-      { label: "Home", path: "/" },
-      { label: "About", path: "/about" },
-      { label: "Services", path: "/care" },
+      { label: "à¬¹à­‹à¬®", path: "/" },
+      { label: "à¬†à¬® à¬¬à¬¿à¬·à­Ÿà¬°à­‡", path: "/about" },
+      { label: "à¬¸à­‡à¬¬à¬¾", path: "/care" },
       { label: "FAQ", path: "/faq" },
-      { label: "Career", path: "/career/requirements" },
-      { label: "Contact", path: "/contact" },
+      { label: "à¬•à­à­Ÿà¬¾à¬°à¬¿à¬†à¬°", path: "/career/requirements" },
+      { label: "à¬¯à­‹à¬—à¬¾à¬¯à­‹à¬—", path: "/contact" },
     ],
-    hours: "Monday to Saturday, 9:00 AM to 7:00 PM",
-    location: "Baripada, Odisha",
-    reachClinic: "Reach Clinic",
-    downloadApp: "Download our app",
-    bookNow: "Book Now",
-    clinicName: "OmmPhysio World",
-    doctor: "Dr. Tapaswini Sahu",
+    hours: "à¬¸à­‹à¬®à¬¬à¬¾à¬°à¬°à­ à¬¶à¬¨à¬¿à¬¬à¬¾à¬°, à¬¸à¬•à¬¾à¬³ 9:00 à¬°à­ à¬¸à¬¨à­à¬§à­à­Ÿà¬¾ 7:00",
+    location: "à¬¬à¬¾à¬°à¬¿à¬ªà¬¦à¬¾, à¬“à¬¡à¬¿à¬¶à¬¾",
+    reachClinic: "à¬•à­à¬²à¬¿à¬¨à¬¿à¬•à­ à¬ªà¬¹à¬žà­à¬šà¬¨à­à¬¤à­",
+    downloadApp: "à¬†à¬® à¬†à¬ªà­ à¬¡à¬¾à¬‰à¬¨à¬²à­‹à¬¡à­ à¬•à¬°à¬¨à­à¬¤à­",
+    bookNow: "à¬à¬¬à­‡ à¬¬à­à¬•à­ à¬•à¬°à¬¨à­à¬¤à­",
+    clinicName: "Omm Physio World",
+    doctor: "à¬¡à¬¼à¬¾. à¬¤à¬ªà¬¸à­à­±à¬¿à¬¨à­€ à¬¸à¬¾à¬¹à­",
   },
 };
 
@@ -66,8 +66,34 @@ export default function PublicNavbar() {
   const navigate = useNavigate();
   const { language } = useLanguage();
   const t = copy[language] || copy.en;
+  const dashboardLabel =
+    language === "hi"
+      ? "à¤¡à¥ˆà¤¶à¤¬à¥‹à¤°à¥à¤¡"
+      : language === "or"
+        ? "à¬¡à­à­Ÿà¬¾à¬¶à¬¬à­‹à¬°à­à¬¡"
+        : "Dashboard";
+  const loginLabel =
+    language === "hi" ? "à¤²à¥‰à¤—à¤¿à¤¨" : language === "or" ? "à¬²à¬—à¬‡à¬¨" : "Login";
+  const registerLabel =
+    language === "hi"
+      ? "à¤°à¤œà¤¿à¤¸à¥à¤Ÿà¤°"
+      : language === "or"
+        ? "à¬¨à¬¿à¬¬à¬¨à­à¬§à¬¨"
+        : "Register";
+  const profileLabel =
+    language === "hi"
+      ? "à¤ªà¥à¤°à¥‹à¤«à¤¾à¤‡à¤²"
+      : language === "or"
+        ? "à¬ªà­à¬°à­‹à¬«à¬¾à¬‡à¬²à­"
+        : "Profile";
+  const logoutLabel =
+    language === "hi"
+      ? "à¤²à¥‰à¤—à¤†à¤‰à¤Ÿ"
+      : language === "or"
+        ? "à¬²à¬—à¬†à¬‰à¬Ÿà­"
+        : "Logout";
   const visibleNav = patientUser
-    ? [...t.nav, { label: "Dashboard", path: "/patient-dashboard" }]
+    ? [...t.nav, { label: dashboardLabel, path: "/patient-dashboard" }]
     : t.nav;
 
   const handleLogout = () => {
@@ -133,7 +159,7 @@ export default function PublicNavbar() {
               <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full">
                 <img
                   src={logoImage}
-                  alt="OmmPhysio World logo"
+                  alt="Omm Physio World logo"
                   className="h-full w-full object-contain"
                 />
               </div>
@@ -194,7 +220,7 @@ export default function PublicNavbar() {
                         className="flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
                       >
                         <UserCircle2 size={17} />
-                        Profile
+                        {profileLabel}
                       </Link>
                       <button
                         type="button"
@@ -202,7 +228,7 @@ export default function PublicNavbar() {
                         className="flex w-full items-center gap-2 rounded-2xl px-4 py-3 text-left text-sm font-medium text-rose-600 hover:bg-rose-50"
                       >
                         <LogOut size={17} />
-                        Logout
+                        {logoutLabel}
                       </button>
                     </div>
                   ) : null}
@@ -213,13 +239,13 @@ export default function PublicNavbar() {
                     to="/patient-register?redirect=/patient-dashboard"
                     className="rounded-full border border-sky-200 bg-sky-50 px-4 py-2.5 text-sm font-medium text-sky-700 hover:bg-sky-100"
                   >
-                    Register
+                    {registerLabel}
                   </Link>
                   <Link
                     to="/patient-login?redirect=/patient-dashboard"
                     className="rounded-full bg-slate-950 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-slate-900/15 hover:bg-slate-800"
                   >
-                    Login
+                    {loginLabel}
                   </Link>
                 </>
               )}
@@ -272,7 +298,7 @@ export default function PublicNavbar() {
                     className="rounded-2xl bg-slate-950 px-4 py-3 text-center text-sm font-medium text-white"
                     onClick={() => setOpen(false)}
                   >
-                    Dashboard
+                    {dashboardLabel}
                   </Link>
                 ) : (
                   <Link
@@ -280,7 +306,7 @@ export default function PublicNavbar() {
                     className="rounded-2xl bg-slate-950 px-4 py-3 text-center text-sm font-medium text-white"
                     onClick={() => setOpen(false)}
                   >
-                    Login
+                    {loginLabel}
                   </Link>
                 )}
               </div>
@@ -288,30 +314,30 @@ export default function PublicNavbar() {
                 <>
                   <Link
                     to="/patient-profile"
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-center text-sm font-medium text-sky-700"
-                    onClick={() => setOpen(false)}
-                  >
-                    <UserCircle2 size={18} />
-                    Profile
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-center text-sm font-medium text-rose-600"
-                  >
-                    <LogOut size={18} />
-                    Logout
-                  </button>
-                </>
-              ) : (
-                <Link
-                  to="/patient-register?redirect=/patient-dashboard"
-                  className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-center text-sm font-medium text-sky-700"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-center text-sm font-medium text-sky-700"
                   onClick={() => setOpen(false)}
                 >
-                  Register
+                  <UserCircle2 size={18} />
+                  {profileLabel}
                 </Link>
-              )}
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-center text-sm font-medium text-rose-600"
+                >
+                  <LogOut size={18} />
+                  {logoutLabel}
+                </button>
+              </>
+            ) : (
+              <Link
+                to="/patient-register?redirect=/patient-dashboard"
+                className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-center text-sm font-medium text-sky-700"
+                onClick={() => setOpen(false)}
+              >
+                {registerLabel}
+              </Link>
+            )}
             </div>
           </div>
         )}
@@ -319,3 +345,4 @@ export default function PublicNavbar() {
     </header>
   );
 }
+

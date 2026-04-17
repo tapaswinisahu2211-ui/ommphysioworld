@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+﻿import { Link } from "react-router-dom";
 import { Download } from "lucide-react";
 import logoImage from "../assets/opw.png";
 import whatsappIcon from "../assets/social/whatsapp.png";
@@ -12,25 +12,25 @@ import { getPatientUser } from "../utils/patientAuth";
 const followLinks = [
   {
     label: "Facebook",
-    href: "https://www.facebook.com/",
+    href: "https://www.facebook.com/people/OMM-Physio-WORLD/61568267476454",
     icon: facebookIcon,
     tone: "border-white/10 bg-white/5 hover:bg-white/10",
   },
   {
     label: "Instagram",
-    href: "https://www.instagram.com/",
+    href: "https://www.instagram.com/omm_physio_world?igsh=MTZ2YmdpcTZyN2w0cQ==",
     icon: instagramIcon,
     tone: "border-white/10 bg-white/5 hover:bg-white/10",
   },
   {
     label: "X",
-    href: "https://x.com/",
+    href: "https://x.com/ommphysioworld",
     icon: xIcon,
     tone: "border-white/10 bg-white/5 hover:bg-white/10",
   },
   {
     label: "YouTube",
-    href: "https://www.youtube.com/",
+    href: "https://www.youtube.com/@Ommphysioworld",
     icon: youtubeIcon,
     tone: "border-white/10 bg-white/5 hover:bg-white/10",
   },
@@ -50,7 +50,7 @@ const copy = {
       "Get support for pain relief, posture correction, rehabilitation, and guided recovery in Baripada.",
     cta: "Request Appointment",
     downloadApp: "Download our app",
-    clinicName: "OmmPhysio World",
+    clinicName: "Omm Physio World",
     clinicType: "Physiotherapy Clinic",
     description:
       "Physiotherapy care for pain relief, posture correction, rehabilitation, and long-term recovery support.",
@@ -64,44 +64,44 @@ const copy = {
     followUs: "Follow us",
   },
   hi: {
-    ready: "OPW Care",
-    title: "Plan your next step with our physiotherapy team.",
+    ready: "OPW à¤•à¥‡à¤¯à¤°",
+    title: "à¤¹à¤®à¤¾à¤°à¥€ à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤Ÿà¥€à¤® à¤•à¥‡ à¤¸à¤¾à¤¥ à¤…à¤ªà¤¨à¥‡ à¤…à¤—à¤²à¥‡ à¤•à¤¦à¤® à¤•à¥€ à¤¯à¥‹à¤œà¤¨à¤¾ à¤¬à¤¨à¤¾à¤‡à¤à¥¤",
     text:
-      "Get support for pain relief, posture correction, rehabilitation, and guided recovery in Baripada.",
-    cta: "Request Appointment",
-    downloadApp: "Download our app",
-    clinicName: "OmmPhysio World",
-    clinicType: "Physiotherapy Clinic",
+      "à¤¦à¤°à¥à¤¦ à¤¸à¥‡ à¤°à¤¾à¤¹à¤¤, à¤ªà¥‹à¤¸à¥à¤Ÿà¤° à¤¸à¥à¤§à¤¾à¤°, à¤ªà¥à¤¨à¤°à¥à¤µà¤¾à¤¸ à¤”à¤° à¤¨à¤¿à¤°à¥à¤¦à¥‡à¤¶à¤¿à¤¤ à¤°à¤¿à¤•à¤µà¤°à¥€ à¤•à¥‡ à¤²à¤¿à¤ à¤¬à¤¾à¤°à¥€à¤ªà¤¦à¤¾ à¤®à¥‡à¤‚ à¤¸à¤¹à¤¾à¤¯à¤¤à¤¾ à¤ªà¤¾à¤à¤‚à¥¤",
+    cta: "à¤…à¤ªà¥‰à¤‡à¤‚à¤Ÿà¤®à¥‡à¤‚à¤Ÿ à¤…à¤¨à¥à¤°à¥‹à¤§ à¤•à¤°à¥‡à¤‚",
+    downloadApp: "à¤¹à¤®à¤¾à¤°à¤¾ à¤à¤ª à¤¡à¤¾à¤‰à¤¨à¤²à¥‹à¤¡ à¤•à¤°à¥‡à¤‚",
+    clinicName: "Omm Physio World",
+    clinicType: "à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤•à¥à¤²à¤¿à¤¨à¤¿à¤•",
     description:
-      "Physiotherapy care for pain relief, posture correction, rehabilitation, and long-term recovery support.",
-    explore: "Explore",
-    contact: "Contact",
-    home: "Home",
-    about: "About",
-    services: "Services",
+      "à¤¦à¤°à¥à¤¦ à¤¸à¥‡ à¤°à¤¾à¤¹à¤¤, à¤ªà¥‹à¤¸à¥à¤Ÿà¤° à¤¸à¥à¤§à¤¾à¤°, à¤ªà¥à¤¨à¤°à¥à¤µà¤¾à¤¸ à¤”à¤° à¤²à¤‚à¤¬à¥€ à¤…à¤µà¤§à¤¿ à¤•à¥€ à¤°à¤¿à¤•à¤µà¤°à¥€ à¤¸à¤¹à¤¾à¤¯à¤¤à¤¾ à¤•à¥‡ à¤²à¤¿à¤ à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤¦à¥‡à¤–à¤­à¤¾à¤²à¥¤",
+    explore: "à¤à¤•à¥à¤¸à¤ªà¥à¤²à¥‹à¤°",
+    contact: "à¤¸à¤‚à¤ªà¤°à¥à¤•",
+    home: "à¤¹à¥‹à¤®",
+    about: "à¤¹à¤®à¤¾à¤°à¥‡ à¤¬à¤¾à¤°à¥‡ à¤®à¥‡à¤‚",
+    services: "à¤¸à¥‡à¤µà¤¾à¤à¤‚",
     faq: "FAQ",
-    career: "Career",
-    followUs: "Follow us",
+    career: "à¤•à¤°à¤¿à¤¯à¤°",
+    followUs: "à¤¹à¤®à¥‡à¤‚ à¤«à¥‰à¤²à¥‹ à¤•à¤°à¥‡à¤‚",
   },
   or: {
-    ready: "OPW Care",
-    title: "Plan your next step with our physiotherapy team.",
+    ready: "OPW à¬•à­‡à­Ÿà¬¾à¬°",
+    title: "à¬†à¬® à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬Ÿà¬¿à¬®à­ à¬¸à¬¹ à¬†à¬ªà¬£à¬™à­à¬•à¬° à¬ªà¬°à¬¬à¬°à­à¬¤à­à¬¤à­€ à¬ªà¬¦à¬•à­à¬·à­‡à¬ª à¬¯à­‹à¬œà¬¨à¬¾ à¬•à¬°à¬¨à­à¬¤à­à¥¤",
     text:
-      "Get support for pain relief, posture correction, rehabilitation, and guided recovery in Baripada.",
-    cta: "Request Appointment",
-    downloadApp: "Download our app",
-    clinicName: "OmmPhysio World",
-    clinicType: "Physiotherapy Clinic",
+      "à¬¬à¬¾à¬°à¬¿à¬ªà¬¦à¬¾à¬°à­‡ à¬¬à­‡à¬¦à¬¨à¬¾ à¬°à¬¾à¬¹à¬¤, à¬ªà­‹à¬·à­à¬šà¬° à¬¸à­à¬§à¬¾à¬°, à¬ªà­à¬¨à¬°à­à¬¬à¬¾à¬¸ à¬à¬¬à¬‚ à¬¨à¬¿à¬°à­à¬¦à­à¬¦à­‡à¬¶à¬¿à¬¤ à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬ªà¬¾à¬‡à¬ à¬¸à¬¹à¬¯à­‹à¬— à¬ªà¬¾à¬†à¬¨à­à¬¤à­à¥¤",
+    cta: "à¬…à¬ªà¬à¬£à­à¬Ÿà¬®à­‡à¬£à­à¬Ÿ à¬…à¬¨à­à¬°à­‹à¬§ à¬•à¬°à¬¨à­à¬¤à­",
+    downloadApp: "à¬†à¬® à¬†à¬ªà­ à¬¡à¬¾à¬‰à¬¨à¬²à­‹à¬¡à­ à¬•à¬°à¬¨à­à¬¤à­",
+    clinicName: "Omm Physio World",
+    clinicType: "à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬•à­à¬²à¬¿à¬¨à¬¿à¬•à­",
     description:
-      "Physiotherapy care for pain relief, posture correction, rehabilitation, and long-term recovery support.",
-    explore: "Explore",
-    contact: "Contact",
-    home: "Home",
-    about: "About",
-    services: "Services",
+      "à¬¬à­‡à¬¦à¬¨à¬¾ à¬°à¬¾à¬¹à¬¤, à¬ªà­‹à¬·à­à¬šà¬° à¬¸à­à¬§à¬¾à¬°, à¬ªà­à¬¨à¬°à­à¬¬à¬¾à¬¸ à¬à¬¬à¬‚ à¬¦à­€à¬°à­à¬˜à¬®à¬¿à¬†à¬¦à¬¿ à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬¸à¬¹à¬¯à­‹à¬— à¬ªà¬¾à¬‡à¬ à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬¸à­‡à¬¬à¬¾à¥¤",
+    explore: "à¬à¬•à­à¬¸à¬ªà­à¬²à­‹à¬°",
+    contact: "à¬¯à­‹à¬—à¬¾à¬¯à­‹à¬—",
+    home: "à¬¹à­‹à¬®",
+    about: "à¬†à¬® à¬¬à¬¿à¬·à­Ÿà¬°à­‡",
+    services: "à¬¸à­‡à¬¬à¬¾",
     faq: "FAQ",
-    career: "Career",
-    followUs: "Follow us",
+    career: "à¬•à­à­Ÿà¬¾à¬°à¬¿à¬†à¬°",
+    followUs: "à¬†à¬®à¬•à­ à¬«à¬²à­‹ à¬•à¬°à¬¨à­à¬¤à­",
   },
 };
 
@@ -156,7 +156,7 @@ export default function PublicFooter() {
               <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full">
                 <img
                   src={logoImage}
-                  alt="OmmPhysio World logo"
+                  alt="Omm Physio World logo"
                   className="h-full w-full object-contain"
                 />
               </div>
@@ -238,3 +238,4 @@ export default function PublicFooter() {
     </footer>
   );
 }
+

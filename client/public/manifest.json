@@ -1,6 +1,6 @@
-{
+﻿{
   "short_name": "OPW",
-  "name": "OmmPhysio World",
+  "name": "Omm Physio World",
   "icons": [
     {
       "src": "favicon.png",
@@ -23,3 +23,4 @@
   "theme_color": "#000000",
   "background_color": "#ffffff"
 }
+

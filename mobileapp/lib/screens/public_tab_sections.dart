@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -17,7 +17,7 @@ class WebsiteHomeTab extends StatelessWidget {
           eyebrow: 'Modern physiotherapy care for everyday movement',
           title: 'Relief that starts with the right movement plan.',
           body:
-              'Personalized recovery programs for pain management, posture correction, and confident daily mobility at OmmPhysio World.',
+              'Personalized recovery programs for pain management, posture correction, and confident daily mobility at Omm Physio World.',
           chips: [
             'Dr. Tapaswini Sahu',
             'Baripada, Odisha',
@@ -72,7 +72,7 @@ class WebsiteAboutTab extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
       children: const [
         _SectionTitle(
-          eyebrow: 'About OmmPhysio World',
+          eyebrow: 'About Omm Physio World',
           title: 'Recovery care that feels calm, modern, and deeply personal.',
         ),
         SizedBox(height: 12),
@@ -808,7 +808,7 @@ class _WebsiteAppointmentTabState extends State<WebsiteAppointmentTab> {
               ),
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
-                value: _selectedService.isEmpty ? null : _selectedService,
+                initialValue: _selectedService.isEmpty ? null : _selectedService,
                 isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'Service Needed',
@@ -1057,7 +1057,7 @@ class _WebsiteFaqTabState extends State<WebsiteFaqTab> {
       category: 'Rehab',
       question: 'Do you support post-injury rehabilitation?',
       answer:
-          'Yes. OmmPhysio World supports guided rehabilitation after sprain, strain, sports injury, weakness, or mobility restriction. Rehab usually includes pain control, movement retraining, strengthening, and gradual return to activity.',
+          'Yes. Omm Physio World supports guided rehabilitation after sprain, strain, sports injury, weakness, or mobility restriction. Rehab usually includes pain control, movement retraining, strengthening, and gradual return to activity.',
       keywords: ['injury', 'rehab', 'sports', 'sprain', 'weakness'],
     ),
     _FaqItem(
@@ -2434,3 +2434,4 @@ class _MetricData {
   final String value;
   final String label;
 }
+

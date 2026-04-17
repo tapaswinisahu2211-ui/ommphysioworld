@@ -1,4 +1,4 @@
-import { ArrowRight, BriefcaseBusiness, MapPin, Users } from "lucide-react";
+﻿import { ArrowRight, BriefcaseBusiness, MapPin, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Seo from "../components/Seo";
@@ -37,13 +37,13 @@ export default function CareerRequirementsPage() {
   return (
     <PublicLayout>
       <Seo
-        title="Career Requirements at OmmPhysio World"
-        description="Explore open staff requirements at OmmPhysio World and review role details before applying."
+        title="Career Requirements at Omm Physio World"
+        description="Explore open staff requirements at Omm Physio World and review role details before applying."
         path="/career/requirements"
         schema={[
           createMedicalBusinessSchema({
             description:
-              "Public job requirement listings for clinic, reception, therapist, and support roles at OmmPhysio World.",
+              "Public job requirement listings for clinic, reception, therapist, and support roles at Omm Physio World.",
             path: "/career/requirements",
             pageName: "Career Requirements",
           }),
@@ -59,7 +59,7 @@ export default function CareerRequirementsPage() {
         <div className="rounded-[36px] bg-gradient-to-r from-slate-950 via-cyan-950 to-emerald-900 px-8 py-10 text-white shadow-[0_30px_80px_rgba(15,23,42,0.18)]">
           <p className="text-sm uppercase tracking-[0.24em] text-white/60">Career Requirement</p>
           <h1 className="mt-4 text-4xl font-semibold tracking-tight">
-            Current openings at OmmPhysio World
+            Current openings at Omm Physio World
           </h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-white/75">
             Review the latest employee requirements, role expectations, and clinic work details
@@ -202,3 +202,4 @@ export default function CareerRequirementsPage() {
     </PublicLayout>
   );
 }
+

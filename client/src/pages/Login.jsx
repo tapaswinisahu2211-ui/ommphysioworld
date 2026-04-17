@@ -1,4 +1,4 @@
-import { ArrowLeft } from "lucide-react";
+﻿import { ArrowLeft } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import API from "../services/api";
@@ -42,7 +42,7 @@ export default function Login() {
       {/* LEFT SIDE */}
       <div className="motion-panel hidden w-1/2 items-center justify-center bg-blue-600 text-white md:flex">
         <div className="animate-slide-up">
-          <h1 className="text-4xl font-bold mb-4">OmmPhysio World</h1>
+          <h1 className="text-4xl font-bold mb-4">Omm Physio World</h1>
           <p className="text-lg">
             Admin Panel for managing appointments & services
           </p>
@@ -128,3 +128,4 @@ export default function Login() {
     </div>
   );
 }
+

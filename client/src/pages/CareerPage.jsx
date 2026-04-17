@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, FileText, Send } from "lucide-react";
+﻿import { BriefcaseBusiness, FileText, Send } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Seo from "../components/Seo";
@@ -51,9 +51,6 @@ const copy = {
   hi: {},
   or: {},
 };
-
-copy.hi = copy.en;
-copy.or = copy.en;
 
 export default function CareerPage() {
   const { language } = useLanguage();
@@ -143,13 +140,13 @@ export default function CareerPage() {
   return (
     <PublicLayout>
       <Seo
-        title="Career Opportunities at OmmPhysio World"
-        description="Apply for staff roles at OmmPhysio World. Submit your details and resume for physiotherapy, reception, assistant, and clinic support opportunities."
+        title="Career Opportunities at Omm Physio World"
+        description="Apply for staff roles at Omm Physio World. Submit your details and resume for physiotherapy, reception, assistant, and clinic support opportunities."
         path="/career"
         schema={[
           createMedicalBusinessSchema({
             description:
-              "Career and staff application page for physiotherapy, reception, assistant, and support roles at OmmPhysio World.",
+              "Career and staff application page for physiotherapy, reception, assistant, and support roles at Omm Physio World.",
             path: "/career",
             pageName: "Career",
           }),
@@ -297,3 +294,4 @@ export default function CareerPage() {
     </PublicLayout>
   );
 }
+

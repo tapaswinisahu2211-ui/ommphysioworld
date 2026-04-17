@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 import 'package:omphysioworld/screens/login_screen.dart';
 import 'package:omphysioworld/screens/patient_chat_panel.dart';
@@ -239,7 +239,7 @@ class _HomeScreenState extends State<HomeScreen>
                     child: ListView.separated(
                       itemCount: _tabs.length,
                       padding: EdgeInsets.zero,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
                       itemBuilder: (context, index) {
                         final tab = _tabs[index];
                         final selected = _tabController.index == index;
@@ -388,7 +388,7 @@ class _HomeScreenState extends State<HomeScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'OmmPhysio World',
+                                  'Omm Physio World',
                                   style: theme.textTheme.titleLarge?.copyWith(
                                     color: const Color(0xFF0F172A),
                                     fontWeight: FontWeight.w800,
@@ -563,8 +563,6 @@ class _DrawerActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return InkWell(
       borderRadius: BorderRadius.circular(24),
       onTap: onTap,
@@ -599,7 +597,7 @@ class _DrawerActionTile extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: theme.textTheme.titleSmall?.copyWith(
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   color: selected ? const Color(0xFF0F172A) : Colors.white,
                   fontWeight: FontWeight.w700,
                 ),
@@ -656,3 +654,4 @@ class _WebsiteTab {
   final String label;
   final IconData icon;
 }
+

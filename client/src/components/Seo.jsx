@@ -1,8 +1,8 @@
-import { useEffect } from "react";
+﻿import { useEffect } from "react";
 
-const DEFAULT_TITLE = "OmmPhysio World | Physiotherapy Clinic in Baripada";
+const DEFAULT_TITLE = "Omm Physio World | Physiotherapy Clinic in Baripada";
 const DEFAULT_DESCRIPTION =
-  "OmmPhysio World offers physiotherapy care in Baripada for pain relief, posture correction, rehabilitation, and guided recovery.";
+  "Omm Physio World offers physiotherapy care in Baripada for pain relief, posture correction, rehabilitation, and guided recovery.";
 const DEFAULT_IMAGE = "/logo512.png";
 
 const normalizeSchemaUrls = (value, origin) => {
@@ -72,9 +72,9 @@ export default function Seo({
     const origin = window.location.origin;
     const canonicalUrl = new URL(path, origin).toString();
     const imageUrl = new URL(image, origin).toString();
-    const fullTitle = title.includes("OmmPhysio World")
+    const fullTitle = title.includes("Omm Physio World")
       ? title
-      : `${title} | OmmPhysio World`;
+      : `${title} | Omm Physio World`;
 
     document.title = fullTitle;
 
@@ -144,3 +144,4 @@ export default function Seo({
 
   return null;
 }
+

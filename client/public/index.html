@@ -19,6 +19,99 @@
     <meta name="twitter:title" content="Omm Physio World | Physiotherapy Clinic in Baripada" />
     <meta name="twitter:description" content="Physiotherapy care in Baripada for pain relief, posture support, rehabilitation, and recovery guidance." />
     <meta name="twitter:image" content="%PUBLIC_URL%/logo512.png" />
+    <script>
+      (function () {
+        function looksCorrupted(text) {
+          return /(?:à¤|à¥|à¬|â€¦|â€|Ã|Â)/.test(text || "");
+        }
+
+        function repairText(text) {
+          if (!looksCorrupted(text)) {
+            return text;
+          }
+
+          try {
+            return decodeURIComponent(escape(text));
+          } catch (error) {
+            return text;
+          }
+        }
+
+        function repairAttributes(element) {
+          if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+            return;
+          }
+
+          ["title", "placeholder", "aria-label"].forEach(function (attr) {
+            var value = element.getAttribute(attr);
+            if (value && looksCorrupted(value)) {
+              element.setAttribute(attr, repairText(value));
+            }
+          });
+        }
+
+        function repairNode(node) {
+          if (!node) {
+            return;
+          }
+
+          if (node.nodeType === Node.TEXT_NODE) {
+            if (looksCorrupted(node.nodeValue)) {
+              node.nodeValue = repairText(node.nodeValue);
+            }
+            return;
+          }
+
+          if (node.nodeType !== Node.ELEMENT_NODE) {
+            return;
+          }
+
+          repairAttributes(node);
+
+          var walker = document.createTreeWalker(
+            node,
+            NodeFilter.SHOW_TEXT,
+            null
+          );
+
+          var currentTextNode;
+          while ((currentTextNode = walker.nextNode())) {
+            if (looksCorrupted(currentTextNode.nodeValue)) {
+              currentTextNode.nodeValue = repairText(currentTextNode.nodeValue);
+            }
+          }
+
+          node.querySelectorAll("*").forEach(repairAttributes);
+        }
+
+        function installRepairObserver() {
+          repairNode(document.body);
+
+          var observer = new MutationObserver(function (mutations) {
+            mutations.forEach(function (mutation) {
+              if (mutation.type === "characterData") {
+                repairNode(mutation.target);
+                return;
+              }
+
+              mutation.addedNodes.forEach(repairNode);
+            });
+          });
+
+          observer.observe(document.documentElement, {
+            childList: true,
+            subtree: true,
+            characterData: true
+          });
+        }
+
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", installRepairObserver);
+        } else {
+          installRepairObserver();
+        }
+      })();
+    </script>
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <!--
       manifest.json provides metadata used when your web app is installed on a

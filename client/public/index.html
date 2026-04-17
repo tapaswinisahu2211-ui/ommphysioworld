@@ -50,65 +50,55 @@
           });
         }
 
-        function repairNode(node) {
-          if (!node) {
+        function repairNode(root) {
+          if (!root) {
             return;
           }
 
-          if (node.nodeType === Node.TEXT_NODE) {
-            if (looksCorrupted(node.nodeValue)) {
-              node.nodeValue = repairText(node.nodeValue);
+          if (root.nodeType === Node.TEXT_NODE) {
+            if (looksCorrupted(root.nodeValue)) {
+              root.nodeValue = repairText(root.nodeValue);
             }
             return;
           }
 
-          if (node.nodeType !== Node.ELEMENT_NODE) {
+          if (root.nodeType !== Node.ELEMENT_NODE) {
             return;
           }
 
-          repairAttributes(node);
+          repairAttributes(root);
 
           var walker = document.createTreeWalker(
-            node,
+            root,
             NodeFilter.SHOW_TEXT,
             null
           );
 
-          var currentTextNode;
-          while ((currentTextNode = walker.nextNode())) {
-            if (looksCorrupted(currentTextNode.nodeValue)) {
-              currentTextNode.nodeValue = repairText(currentTextNode.nodeValue);
+          var textNode;
+          while ((textNode = walker.nextNode())) {
+            if (looksCorrupted(textNode.nodeValue)) {
+              textNode.nodeValue = repairText(textNode.nodeValue);
             }
           }
 
-          node.querySelectorAll("*").forEach(repairAttributes);
+          root.querySelectorAll("*").forEach(repairAttributes);
         }
 
-        function installRepairObserver() {
+        function runRepairPass() {
           repairNode(document.body);
+        }
 
-          var observer = new MutationObserver(function (mutations) {
-            mutations.forEach(function (mutation) {
-              if (mutation.type === "characterData") {
-                repairNode(mutation.target);
-                return;
-              }
-
-              mutation.addedNodes.forEach(repairNode);
-            });
-          });
-
-          observer.observe(document.documentElement, {
-            childList: true,
-            subtree: true,
-            characterData: true
+        function scheduleRepairPasses() {
+          runRepairPass();
+          [300, 1200, 2500].forEach(function (delay) {
+            window.setTimeout(runRepairPass, delay);
           });
         }
 
         if (document.readyState === "loading") {
-          document.addEventListener("DOMContentLoaded", installRepairObserver);
+          document.addEventListener("DOMContentLoaded", scheduleRepairPasses);
         } else {
-          installRepairObserver();
+          scheduleRepairPasses();
         }
       })();
     </script>

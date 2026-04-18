@@ -549,8 +549,8 @@ export default function PatientDashboardPage() {
   return (
     <PublicLayout>
       <Seo
-        title="Patient Dashboard"
-        description="View your OPW patient dashboard with appointments, therapy, sessions, payments, and orders."
+        title="My Account"
+        description="View your OPW patient account with appointments, therapy, sessions, payments, and orders."
         path="/patient-dashboard"
         robots="noindex, nofollow"
       />
@@ -560,7 +560,7 @@ export default function PatientDashboardPage() {
           <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-xs uppercase tracking-[0.24em] text-white/60">
-                Patient Dashboard
+                My Account
               </p>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight">
                 Welcome, {patientUser.name || "Patient"}

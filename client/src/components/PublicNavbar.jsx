@@ -29,7 +29,7 @@ export default function PublicNavbar() {
   const [cartCount, setCartCount] = useState(() => getShopCartItemCount());
   const navigate = useNavigate();
   const t = copy;
-  const dashboardLabel = "Dashboard";
+  const dashboardLabel = "My Account";
   const loginLabel = "Login";
   const registerLabel = "Register";
   const profileLabel = "Profile";

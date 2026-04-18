@@ -1,4 +1,4 @@
-﻿import { Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Download } from "lucide-react";
 import logoImage from "../assets/opw.png";
 import whatsappIcon from "../assets/social/whatsapp.png";
@@ -6,7 +6,6 @@ import youtubeIcon from "../assets/social/youtube.png";
 import xIcon from "../assets/social/x.png";
 import instagramIcon from "../assets/social/instagram.png";
 import facebookIcon from "../assets/social/facebook.png";
-import { useLanguage } from "../context/LanguageContext";
 import { getPatientUser } from "../utils/patientAuth";
 
 const followLinks = [
@@ -43,71 +42,28 @@ const followLinks = [
 ];
 
 const copy = {
-  en: {
-    ready: "OPW Care",
-    title: "Plan your next step with our physiotherapy team.",
-    text:
-      "Get support for pain relief, posture correction, rehabilitation, and guided recovery in Baripada.",
-    cta: "Request Appointment",
-    downloadApp: "Download our app",
-    clinicName: "Omm Physio World",
-    clinicType: "Physiotherapy Clinic",
-    description:
-      "Physiotherapy care for pain relief, posture correction, rehabilitation, and long-term recovery support.",
-    explore: "Explore",
-    contact: "Contact",
-    home: "Home",
-    about: "About",
-    services: "Services",
-    faq: "FAQ",
-    career: "Career",
-    followUs: "Follow us",
-  },
-  hi: {
-    ready: "OPW à¤•à¥‡à¤¯à¤°",
-    title: "à¤¹à¤®à¤¾à¤°à¥€ à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤Ÿà¥€à¤® à¤•à¥‡ à¤¸à¤¾à¤¥ à¤…à¤ªà¤¨à¥‡ à¤…à¤—à¤²à¥‡ à¤•à¤¦à¤® à¤•à¥€ à¤¯à¥‹à¤œà¤¨à¤¾ à¤¬à¤¨à¤¾à¤‡à¤à¥¤",
-    text:
-      "à¤¦à¤°à¥à¤¦ à¤¸à¥‡ à¤°à¤¾à¤¹à¤¤, à¤ªà¥‹à¤¸à¥à¤Ÿà¤° à¤¸à¥à¤§à¤¾à¤°, à¤ªà¥à¤¨à¤°à¥à¤µà¤¾à¤¸ à¤”à¤° à¤¨à¤¿à¤°à¥à¤¦à¥‡à¤¶à¤¿à¤¤ à¤°à¤¿à¤•à¤µà¤°à¥€ à¤•à¥‡ à¤²à¤¿à¤ à¤¬à¤¾à¤°à¥€à¤ªà¤¦à¤¾ à¤®à¥‡à¤‚ à¤¸à¤¹à¤¾à¤¯à¤¤à¤¾ à¤ªà¤¾à¤à¤‚à¥¤",
-    cta: "à¤…à¤ªà¥‰à¤‡à¤‚à¤Ÿà¤®à¥‡à¤‚à¤Ÿ à¤…à¤¨à¥à¤°à¥‹à¤§ à¤•à¤°à¥‡à¤‚",
-    downloadApp: "à¤¹à¤®à¤¾à¤°à¤¾ à¤à¤ª à¤¡à¤¾à¤‰à¤¨à¤²à¥‹à¤¡ à¤•à¤°à¥‡à¤‚",
-    clinicName: "Omm Physio World",
-    clinicType: "à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤•à¥à¤²à¤¿à¤¨à¤¿à¤•",
-    description:
-      "à¤¦à¤°à¥à¤¦ à¤¸à¥‡ à¤°à¤¾à¤¹à¤¤, à¤ªà¥‹à¤¸à¥à¤Ÿà¤° à¤¸à¥à¤§à¤¾à¤°, à¤ªà¥à¤¨à¤°à¥à¤µà¤¾à¤¸ à¤”à¤° à¤²à¤‚à¤¬à¥€ à¤…à¤µà¤§à¤¿ à¤•à¥€ à¤°à¤¿à¤•à¤µà¤°à¥€ à¤¸à¤¹à¤¾à¤¯à¤¤à¤¾ à¤•à¥‡ à¤²à¤¿à¤ à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤¦à¥‡à¤–à¤­à¤¾à¤²à¥¤",
-    explore: "à¤à¤•à¥à¤¸à¤ªà¥à¤²à¥‹à¤°",
-    contact: "à¤¸à¤‚à¤ªà¤°à¥à¤•",
-    home: "à¤¹à¥‹à¤®",
-    about: "à¤¹à¤®à¤¾à¤°à¥‡ à¤¬à¤¾à¤°à¥‡ à¤®à¥‡à¤‚",
-    services: "à¤¸à¥‡à¤µà¤¾à¤à¤‚",
-    faq: "FAQ",
-    career: "à¤•à¤°à¤¿à¤¯à¤°",
-    followUs: "à¤¹à¤®à¥‡à¤‚ à¤«à¥‰à¤²à¥‹ à¤•à¤°à¥‡à¤‚",
-  },
-  or: {
-    ready: "OPW à¬•à­‡à­Ÿà¬¾à¬°",
-    title: "à¬†à¬® à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬Ÿà¬¿à¬®à­ à¬¸à¬¹ à¬†à¬ªà¬£à¬™à­à¬•à¬° à¬ªà¬°à¬¬à¬°à­à¬¤à­à¬¤à­€ à¬ªà¬¦à¬•à­à¬·à­‡à¬ª à¬¯à­‹à¬œà¬¨à¬¾ à¬•à¬°à¬¨à­à¬¤à­à¥¤",
-    text:
-      "à¬¬à¬¾à¬°à¬¿à¬ªà¬¦à¬¾à¬°à­‡ à¬¬à­‡à¬¦à¬¨à¬¾ à¬°à¬¾à¬¹à¬¤, à¬ªà­‹à¬·à­à¬šà¬° à¬¸à­à¬§à¬¾à¬°, à¬ªà­à¬¨à¬°à­à¬¬à¬¾à¬¸ à¬à¬¬à¬‚ à¬¨à¬¿à¬°à­à¬¦à­à¬¦à­‡à¬¶à¬¿à¬¤ à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬ªà¬¾à¬‡à¬ à¬¸à¬¹à¬¯à­‹à¬— à¬ªà¬¾à¬†à¬¨à­à¬¤à­à¥¤",
-    cta: "à¬…à¬ªà¬à¬£à­à¬Ÿà¬®à­‡à¬£à­à¬Ÿ à¬…à¬¨à­à¬°à­‹à¬§ à¬•à¬°à¬¨à­à¬¤à­",
-    downloadApp: "à¬†à¬® à¬†à¬ªà­ à¬¡à¬¾à¬‰à¬¨à¬²à­‹à¬¡à­ à¬•à¬°à¬¨à­à¬¤à­",
-    clinicName: "Omm Physio World",
-    clinicType: "à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬•à­à¬²à¬¿à¬¨à¬¿à¬•à­",
-    description:
-      "à¬¬à­‡à¬¦à¬¨à¬¾ à¬°à¬¾à¬¹à¬¤, à¬ªà­‹à¬·à­à¬šà¬° à¬¸à­à¬§à¬¾à¬°, à¬ªà­à¬¨à¬°à­à¬¬à¬¾à¬¸ à¬à¬¬à¬‚ à¬¦à­€à¬°à­à¬˜à¬®à¬¿à¬†à¬¦à¬¿ à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬¸à¬¹à¬¯à­‹à¬— à¬ªà¬¾à¬‡à¬ à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬¸à­‡à¬¬à¬¾à¥¤",
-    explore: "à¬à¬•à­à¬¸à¬ªà­à¬²à­‹à¬°",
-    contact: "à¬¯à­‹à¬—à¬¾à¬¯à­‹à¬—",
-    home: "à¬¹à­‹à¬®",
-    about: "à¬†à¬® à¬¬à¬¿à¬·à­Ÿà¬°à­‡",
-    services: "à¬¸à­‡à¬¬à¬¾",
-    faq: "FAQ",
-    career: "à¬•à­à­Ÿà¬¾à¬°à¬¿à¬†à¬°",
-    followUs: "à¬†à¬®à¬•à­ à¬«à¬²à­‹ à¬•à¬°à¬¨à­à¬¤à­",
-  },
+  ready: "OPW Care",
+  title: "Plan your next step with our physiotherapy team.",
+  text:
+    "Get support for pain relief, posture correction, rehabilitation, and guided recovery in Baripada.",
+  cta: "Request Appointment",
+  downloadApp: "Download our app",
+  clinicName: "Omm Physio World",
+  clinicType: "Physiotherapy Clinic",
+  description:
+    "Physiotherapy care for pain relief, posture correction, rehabilitation, and long-term recovery support.",
+  explore: "Explore",
+  contact: "Contact",
+  home: "Home",
+  about: "About",
+  services: "Services",
+  faq: "FAQ",
+  career: "Career",
+  followUs: "Follow us",
 };
 
 export default function PublicFooter() {
-  const { language } = useLanguage();
-  const t = copy[language] || copy.en;
+  const t = copy;
   const patientUser = getPatientUser();
 
   return (

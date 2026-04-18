@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import {
   Clock3,
   Mail,
@@ -8,7 +8,6 @@ import {
 } from "lucide-react";
 import Seo from "../components/Seo";
 import PublicLayout from "../layout/PublicLayout";
-import { useLanguage } from "../context/LanguageContext";
 import API from "../services/api";
 import { createBreadcrumbSchema, createMedicalBusinessSchema } from "../utils/seo";
 import {
@@ -35,62 +34,25 @@ const socialLinks = [
 ];
 
 const copy = {
-  en: {
-    eyebrow: "Contact",
-    title: "Reach the clinic easily and plan your visit with confidence.",
-    text: "Whether you need help choosing the right therapy service or want to confirm clinic timings, we are here to help.",
-    cards: [
-      { title: "Clinic Address", detail: "City clinic road, near davaindia, Baripada" },
-      { title: "Contact Details", detail: "+91 88955 55519 / contact@ommphysioworld.com" },
-      { title: "Doctor", detail: "Dr. Tapaswini Sahu" },
-      { title: "Working Hours", detail: "Monday to Saturday, 9:00 AM to 7:00 PM" },
-    ],
-    directionsTitle: "Need directions?",
-    directionsText: "Use the map or open the exact clinic area in Google Maps for faster navigation.",
-    openMaps: "Open in Google Maps",
-    findUs: "Find Us",
-    mapTitle: "Visit the clinic with live map directions",
-    iframeTitle: "Omm Physio World location map",
-  },
-  hi: {
-    eyebrow: "à¤¸à¤‚à¤ªà¤°à¥à¤•",
-    title: "à¤•à¥à¤²à¤¿à¤¨à¤¿à¤• à¤¤à¤• à¤†à¤¸à¤¾à¤¨à¥€ à¤¸à¥‡ à¤ªà¤¹à¥à¤‚à¤šà¥‡à¤‚ à¤”à¤° à¤…à¤ªà¤¨à¥€ à¤µà¤¿à¤œà¤¿à¤Ÿ à¤†à¤¤à¥à¤®à¤µà¤¿à¤¶à¥à¤µà¤¾à¤¸ à¤¸à¥‡ à¤ªà¥à¤²à¤¾à¤¨ à¤•à¤°à¥‡à¤‚à¥¤",
-    text: "à¤šà¤¾à¤¹à¥‡ à¤†à¤ªà¤•à¥‹ à¤¸à¤¹à¥€ à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤¸à¥‡à¤µà¤¾ à¤šà¥à¤¨à¤¨à¥‡ à¤®à¥‡à¤‚ à¤®à¤¦à¤¦ à¤šà¤¾à¤¹à¤¿à¤ à¤¯à¤¾ à¤•à¥à¤²à¤¿à¤¨à¤¿à¤• à¤•à¤¾ à¤¸à¤®à¤¯ à¤œà¤¾à¤¨à¤¨à¤¾ à¤¹à¥‹, à¤¹à¤® à¤†à¤ªà¤•à¥€ à¤¸à¤¹à¤¾à¤¯à¤¤à¤¾ à¤•à¥‡ à¤²à¤¿à¤ à¤¯à¤¹à¤¾à¤‚ à¤¹à¥ˆà¤‚à¥¤",
-    cards: [
-      { title: "à¤•à¥à¤²à¤¿à¤¨à¤¿à¤• à¤ªà¤¤à¤¾", detail: "à¤¸à¤¿à¤Ÿà¥€ à¤•à¥à¤²à¤¿à¤¨à¤¿à¤• à¤°à¥‹à¤¡, à¤¦à¤µà¤¾à¤‡à¤‚à¤¡à¤¿à¤¯à¤¾ à¤•à¥‡ à¤ªà¤¾à¤¸, à¤¦à¥‡à¤‰à¤²à¤¸à¤¾à¤¹à¥€, à¤­à¤‚à¤œà¤ªà¥à¤°, à¤¬à¤¾à¤°à¤¿à¤ªà¤¦à¤¾, à¤“à¤¡à¤¿à¤¶à¤¾ 757001" },
-      { title: "à¤¸à¤‚à¤ªà¤°à¥à¤• à¤µà¤¿à¤µà¤°à¤£", detail: "+91 88955 55519 / contact@ommphysioworld.com" },
-      { title: "à¤¡à¥‰à¤•à¥à¤Ÿà¤°", detail: "à¤¡à¥‰. à¤¤à¤ªà¤¸à¥à¤µà¤¿à¤¨à¥€ à¤¸à¤¾à¤¹à¥‚" },
-      { title: "à¤•à¤¾à¤°à¥à¤¯ à¤¸à¤®à¤¯", detail: "à¤¸à¥‹à¤®à¤µà¤¾à¤° à¤¸à¥‡ à¤¶à¤¨à¤¿à¤µà¤¾à¤°, à¤¸à¥à¤¬à¤¹ 9:00 à¤¬à¤œà¥‡ à¤¸à¥‡ à¤¶à¤¾à¤® 7:00 à¤¬à¤œà¥‡ à¤¤à¤•" },
-    ],
-    directionsTitle: "à¤°à¤¾à¤¸à¥à¤¤à¤¾ à¤šà¤¾à¤¹à¤¿à¤?",
-    directionsText: "à¤¤à¥‡à¤œà¤¼ à¤¨à¥‡à¤µà¤¿à¤—à¥‡à¤¶à¤¨ à¤•à¥‡ à¤²à¤¿à¤ à¤®à¥ˆà¤ª à¤•à¤¾ à¤‰à¤ªà¤¯à¥‹à¤— à¤•à¤°à¥‡à¤‚ à¤¯à¤¾ Google Maps à¤®à¥‡à¤‚ à¤•à¥à¤²à¤¿à¤¨à¤¿à¤• à¤•à¤¾ à¤¸à¤Ÿà¥€à¤• à¤¸à¥à¤¥à¤¾à¤¨ à¤–à¥‹à¤²à¥‡à¤‚à¥¤",
-    openMaps: "Google Maps à¤®à¥‡à¤‚ à¤–à¥‹à¤²à¥‡à¤‚",
-    findUs: "à¤¹à¤®à¥‡à¤‚ à¤–à¥‹à¤œà¥‡à¤‚",
-    mapTitle: "à¤²à¤¾à¤‡à¤µ à¤®à¥ˆà¤ª à¤¦à¤¿à¤¶à¤¾-à¤¨à¤¿à¤°à¥à¤¦à¥‡à¤¶ à¤•à¥‡ à¤¸à¤¾à¤¥ à¤•à¥à¤²à¤¿à¤¨à¤¿à¤• à¤†à¤à¤‚",
-    iframeTitle: "à¤“à¤®à¤«à¤¿à¤œà¤¿à¤¯à¥‹ à¤µà¤°à¥à¤²à¥à¤¡ à¤²à¥‹à¤•à¥‡à¤¶à¤¨ à¤®à¥ˆà¤ª",
-  },
-  or: {
-    eyebrow: "à¬¯à­‹à¬—à¬¾à¬¯à­‹à¬—",
-    title: "à¬•à­à¬²à¬¿à¬¨à¬¿à¬•à¬•à­ à¬¸à¬¹à¬œà¬°à­‡ à¬ªà¬¹à¬žà­à¬šà¬¨à­à¬¤à­ à¬à¬¬à¬‚ à¬†à¬ªà¬£à¬™à­à¬• à¬­à¬¿à¬œà¬¿à¬Ÿà­ à¬¨à¬¿à¬¶à­à¬šà¬¿à¬¤à¬¤à¬¾ à¬¸à¬¹ à¬ªà­à¬²à¬¾à¬¨ à¬•à¬°à¬¨à­à¬¤à­à¥¤",
-    text: "à¬ à¬¿à¬•à­ à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬¸à­‡à¬¬à¬¾ à¬šà­Ÿà¬¨ à¬•à¬°à¬¿à¬¬à¬¾à¬°à­‡ à¬¸à¬¾à¬¹à¬¾à¬¯à­à­Ÿ à¬¦à¬°à¬•à¬¾à¬° à¬¹à­‡à¬‰ à¬•à¬¿à¬®à­à¬¬à¬¾ à¬•à­à¬²à¬¿à¬¨à¬¿à¬•à¬° à¬¸à¬®à­Ÿ à¬¨à¬¿à¬¶à­à¬šà¬¿à¬¤ à¬•à¬°à¬¿à¬¬à¬¾à¬•à­ à¬šà¬¾à¬¹à­à¬à¬¥à¬¿à¬²à­‡, à¬†à¬®à­‡ à¬¸à¬¹à¬¾à­Ÿà¬¤à¬¾ à¬ªà¬¾à¬‡à¬ à¬à¬ à¬¾à¬°à­‡ à¬…à¬›à­à¥¤",
-    cards: [
-      { title: "à¬•à­à¬²à¬¿à¬¨à¬¿à¬• à¬ à¬¿à¬•à¬£à¬¾", detail: "à¬¸à¬¿à¬Ÿà¬¿ à¬•à­à¬²à¬¿à¬¨à¬¿à¬• à¬°à­‹à¬¡à­, à¬¦à¬¬à¬¾à¬‡à¬£à­à¬¡à¬¿à¬† à¬ªà¬¾à¬–à¬°à­‡, à¬¦à­‡à¬‰à¬²à¬¸à¬¾à¬¹à¬¿, à¬­à¬žà­à¬œà¬ªà­à¬°, à¬¬à¬¾à¬°à¬¿à¬ªà¬¦à¬¾, à¬“à¬¡à¬¿à¬¶à¬¾ 757001" },
-      { title: "à¬¯à­‹à¬—à¬¾à¬¯à­‹à¬— à¬¬à¬¿à¬¬à¬°à¬£à­€", detail: "+91 88955 55519 / contact@ommphysioworld.com" },
-      { title: "à¬¡à¬¾à¬•à­à¬¤à¬°", detail: "à¬¡à¬¾. à¬¤à¬ªà¬¸à­à­±à¬¿à¬¨à­€ à¬¸à¬¾à¬¹à­" },
-      { title: "à¬•à¬¾à¬°à­à¬¯à­à­Ÿ à¬¸à¬®à­Ÿ", detail: "à¬¸à­‹à¬®à¬¬à¬¾à¬°à¬°à­ à¬¶à¬¨à¬¿à¬¬à¬¾à¬°, à¬¸à¬•à¬¾à¬³ 9:00 à¬°à­ à¬¸à¬¨à­à¬§à­à­Ÿà¬¾ 7:00 à¬ªà¬°à­à¬¯à­à­Ÿà¬¨à­à¬¤" },
-    ],
-    directionsTitle: "à¬°à¬¾à¬¸à­à¬¤à¬¾ à¬¦à¬°à¬•à¬¾à¬° à¬•à¬¿?",
-    directionsText: "à¬¤à­à­±à¬°à¬¿à¬¤ à¬¨à¬¾à¬­à¬¿à¬—à­‡à¬¸à¬¨ à¬ªà¬¾à¬‡à¬ à¬®à¬¾à¬ªà­ à¬¬à­à­Ÿà¬¬à¬¹à¬¾à¬° à¬•à¬°à¬¨à­à¬¤à­ à¬•à¬¿à¬®à­à¬¬à¬¾ Google Maps à¬°à­‡ à¬ à¬¿à¬•à­ à¬•à­à¬²à¬¿à¬¨à¬¿à¬• à¬…à¬žà­à¬šà¬³ à¬–à­‹à¬²à¬¨à­à¬¤à­à¥¤",
-    openMaps: "Google Maps à¬°à­‡ à¬–à­‹à¬²à¬¨à­à¬¤à­",
-    findUs: "à¬†à¬®à¬•à­ à¬–à­‹à¬œà¬¨à­à¬¤à­",
-    mapTitle: "à¬²à¬¾à¬‡à¬­à­ à¬®à¬¾à¬ªà­ à¬¦à¬¿à¬—à¬¨à¬¿à¬°à­à¬¦à­à¬¦à­‡à¬¶ à¬¸à¬¹à¬¿à¬¤ à¬•à­à¬²à¬¿à¬¨à¬¿à¬•à¬•à­ à¬†à¬¸à¬¨à­à¬¤à­",
-    iframeTitle: "à¬“à¬®à­â€Œà¬«à¬¿à¬œà¬¿à¬“ à­±à¬¾à¬°à­à¬²à­à¬¡ à¬²à­‹à¬•à­‡à¬¸à¬¨ à¬®à¬¾à¬ªà­",
-  },
+  eyebrow: "Contact",
+  title: "Reach the clinic easily and plan your visit with confidence.",
+  text: "Whether you need help choosing the right therapy service or want to confirm clinic timings, we are here to help.",
+  cards: [
+    { title: "Clinic Address", detail: "City clinic road, near davaindia, Baripada" },
+    { title: "Contact Details", detail: "+91 88955 55519 / contact@ommphysioworld.com" },
+    { title: "Doctor", detail: "Dr. Tapaswini Sahu" },
+    { title: "Working Hours", detail: "Monday to Saturday, 9:00 AM to 7:00 PM" },
+  ],
+  directionsTitle: "Need directions?",
+  directionsText: "Use the map or open the exact clinic area in Google Maps for faster navigation.",
+  openMaps: "Open in Google Maps",
+  findUs: "Find Us",
+  mapTitle: "Visit the clinic with live map directions",
+  iframeTitle: "Omm Physio World location map",
 };
 
 export default function ContactPage() {
-  const { language } = useLanguage();
-  const t = copy[language] || copy.en;
+  const t = copy;
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -365,4 +327,3 @@ export default function ContactPage() {
     </PublicLayout>
   );
 }
-

@@ -1,10 +1,9 @@
-﻿import { CalendarDays, CheckCircle2, ShieldCheck } from "lucide-react";
+import { CalendarDays, CheckCircle2, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Seo from "../components/Seo";
 import PublicLayout from "../layout/PublicLayout";
 import API from "../services/api";
-import { useLanguage } from "../context/LanguageContext";
 import { clearPatientUser, getPatientUser } from "../utils/patientAuth";
 import { createBreadcrumbSchema, createMedicalBusinessSchema } from "../utils/seo";
 import {
@@ -17,81 +16,32 @@ import {
 } from "../utils/validation";
 
 const copy = {
-  en: {
-    benefits: ["Quick appointment request flow", "Friendly follow-up confirmation", "Easy service and date selection"],
-    eyebrow: "Book Appointment",
-    title: "Start your recovery journey with a calm, simple booking flow.",
-    text: "Fill in your details and preferred service. The OPW team will review your request.",
-    flexibleTiming: "Flexible Timing",
-    flexibleTimingText: "Choose a date that works for your visit.",
-    directDelivery: "Clinic Review",
-    directDeliveryText: "Your request goes to the OPW team for confirmation.",
-    formTitle: "Appointment Request Form",
-    formText: "Share your details and the OPW team will review your appointment request.",
-    submitted: "Your appointment request has been sent successfully.",
-    fallbackError: "Unable to submit the appointment request right now.",
-    fullName: "Full Name",
-    email: "Email Address",
-    phone: "Phone Number",
-    service: "Service Needed",
-    uploadLabel: "Upload Image or PDF",
-    uploadHelp: "You can choose a prescription, report, scan, or related image. The selected file will be sent with the appointment email.",
-    message: "Tell us about your pain, injury, or concern",
-    submitting: "Submitting...",
-    submit: "Submit Request",
-  },
-  hi: {
-    benefits: ["à¤¤à¥à¤µà¤°à¤¿à¤¤ à¤…à¤ªà¥‰à¤‡à¤‚à¤Ÿà¤®à¥‡à¤‚à¤Ÿ à¤…à¤¨à¥à¤°à¥‹à¤§ à¤ªà¥à¤°à¤•à¥à¤°à¤¿à¤¯à¤¾", "à¤®à¤¿à¤¤à¥à¤°à¤µà¤¤ à¤«à¥‰à¤²à¥‹-à¤…à¤ª à¤ªà¥à¤·à¥à¤Ÿà¤¿", "à¤†à¤¸à¤¾à¤¨ à¤¸à¥‡à¤µà¤¾ à¤”à¤° à¤¤à¤¾à¤°à¥€à¤– à¤šà¤¯à¤¨"],
-    eyebrow: "à¤…à¤ªà¥‰à¤‡à¤‚à¤Ÿà¤®à¥‡à¤‚à¤Ÿ à¤¬à¥à¤• à¤•à¤°à¥‡à¤‚",
-    title: "à¤¶à¤¾à¤‚à¤¤ à¤”à¤° à¤¸à¤°à¤² à¤¬à¥à¤•à¤¿à¤‚à¤— à¤ªà¥à¤°à¤•à¥à¤°à¤¿à¤¯à¤¾ à¤•à¥‡ à¤¸à¤¾à¤¥ à¤…à¤ªà¤¨à¥€ à¤°à¤¿à¤•à¤µà¤°à¥€ à¤¯à¤¾à¤¤à¥à¤°à¤¾ à¤¶à¥à¤°à¥‚ à¤•à¤°à¥‡à¤‚à¥¤",
-    text: "à¤…à¤ªà¤¨à¥€ à¤œà¤¾à¤¨à¤•à¤¾à¤°à¥€ à¤”à¤° à¤ªà¤¸à¤‚à¤¦à¥€à¤¦à¤¾ à¤¸à¥‡à¤µà¤¾ à¤­à¤°à¥‡à¤‚à¥¤ à¤¯à¤¹ à¤«à¥‰à¤°à¥à¤® à¤…à¤¬ à¤¸à¥€à¤§à¥‡ à¤•à¥à¤²à¤¿à¤¨à¤¿à¤• à¤ˆà¤®à¥‡à¤² à¤ªà¤° à¤…à¤ªà¥‰à¤‡à¤‚à¤Ÿà¤®à¥‡à¤‚à¤Ÿ à¤…à¤¨à¥à¤°à¥‹à¤§ à¤­à¥‡à¤œà¤¤à¤¾ à¤¹à¥ˆà¥¤",
-    flexibleTiming: "à¤²à¤šà¥€à¤²à¤¾ à¤¸à¤®à¤¯",
-    flexibleTimingText: "à¤…à¤ªà¤¨à¥€ à¤µà¤¿à¤œà¤¿à¤Ÿ à¤•à¥‡ à¤²à¤¿à¤ à¤‰à¤ªà¤¯à¥à¤•à¥à¤¤ à¤¤à¤¾à¤°à¥€à¤– à¤šà¥à¤¨à¥‡à¤‚à¥¤",
-    directDelivery: "à¤¸à¥€à¤§à¤¾ à¤ˆà¤®à¥‡à¤² à¤¡à¤¿à¤²à¥€à¤µà¤°à¥€",
-    directDeliveryText: "à¤†à¤ªà¤•à¤¾ à¤…à¤¨à¥à¤°à¥‹à¤§ à¤¸à¥€à¤§à¥‡ à¤•à¥à¤²à¤¿à¤¨à¤¿à¤• à¤‡à¤¨à¤¬à¥‰à¤•à¥à¤¸ à¤®à¥‡à¤‚ à¤œà¤¾à¤¤à¤¾ à¤¹à¥ˆà¥¤",
-    formTitle: "à¤…à¤ªà¥‰à¤‡à¤‚à¤Ÿà¤®à¥‡à¤‚à¤Ÿ à¤…à¤¨à¥à¤°à¥‹à¤§ à¤«à¥‰à¤°à¥à¤®",
-    formText: "à¤…à¤ªà¤¨à¥€ à¤œà¤¾à¤¨à¤•à¤¾à¤°à¥€ à¤¸à¤¾à¤à¤¾ à¤•à¤°à¥‡à¤‚ à¤”à¤° à¤¹à¤® à¤…à¤ªà¥‰à¤‡à¤‚à¤Ÿà¤®à¥‡à¤‚à¤Ÿ à¤…à¤¨à¥à¤°à¥‹à¤§ à¤¸à¥€à¤§à¥‡ contact@ommphysioworld.com à¤ªà¤° à¤­à¥‡à¤œà¥‡à¤‚à¤—à¥‡à¥¤",
-    submitted: "à¤†à¤ªà¤•à¤¾ à¤…à¤ªà¥‰à¤‡à¤‚à¤Ÿà¤®à¥‡à¤‚à¤Ÿ à¤…à¤¨à¥à¤°à¥‹à¤§ à¤¸à¤«à¤²à¤¤à¤¾à¤ªà¥‚à¤°à¥à¤µà¤• à¤­à¥‡à¤œ à¤¦à¤¿à¤¯à¤¾ à¤—à¤¯à¤¾ à¤¹à¥ˆà¥¤",
-    fallbackError: "à¤‡à¤¸ à¤¸à¤®à¤¯ à¤…à¤ªà¥‰à¤‡à¤‚à¤Ÿà¤®à¥‡à¤‚à¤Ÿ à¤…à¤¨à¥à¤°à¥‹à¤§ à¤­à¥‡à¤œà¤¾ à¤¨à¤¹à¥€à¤‚ à¤œà¤¾ à¤¸à¤•à¤¾à¥¤",
-    fullName: "à¤ªà¥‚à¤°à¤¾ à¤¨à¤¾à¤®",
-    email: "à¤ˆà¤®à¥‡à¤² à¤ªà¤¤à¤¾",
-    phone: "à¤«à¥‹à¤¨ à¤¨à¤‚à¤¬à¤°",
-    service: "à¤†à¤µà¤¶à¥à¤¯à¤• à¤¸à¥‡à¤µà¤¾",
-    uploadLabel: "à¤‡à¤®à¥‡à¤œ à¤¯à¤¾ PDF à¤…à¤ªà¤²à¥‹à¤¡ à¤•à¤°à¥‡à¤‚",
-    uploadHelp: "à¤†à¤ª à¤ªà¥à¤°à¤¿à¤¸à¥à¤•à¥à¤°à¤¿à¤ªà¥à¤¶à¤¨, à¤°à¤¿à¤ªà¥‹à¤°à¥à¤Ÿ, à¤¸à¥à¤•à¥ˆà¤¨ à¤¯à¤¾ à¤¸à¤‚à¤¬à¤‚à¤§à¤¿à¤¤ à¤‡à¤®à¥‡à¤œ à¤šà¥à¤¨ à¤¸à¤•à¤¤à¥‡ à¤¹à¥ˆà¤‚à¥¤ à¤šà¤¯à¤¨à¤¿à¤¤ à¤«à¤¼à¤¾à¤‡à¤² à¤…à¤ªà¥‰à¤‡à¤‚à¤Ÿà¤®à¥‡à¤‚à¤Ÿ à¤ˆà¤®à¥‡à¤² à¤•à¥‡ à¤¸à¤¾à¤¥ à¤­à¥‡à¤œà¥€ à¤œà¤¾à¤à¤—à¥€à¥¤",
-    message: "à¤…à¤ªà¤¨à¥‡ à¤¦à¤°à¥à¤¦, à¤šà¥‹à¤Ÿ à¤¯à¤¾ à¤¸à¤®à¤¸à¥à¤¯à¤¾ à¤•à¥‡ à¤¬à¤¾à¤°à¥‡ à¤®à¥‡à¤‚ à¤¬à¤¤à¤¾à¤à¤‚",
-    submitting: "à¤­à¥‡à¤œà¤¾ à¤œà¤¾ à¤°à¤¹à¤¾ à¤¹à¥ˆ...",
-    submit: "à¤…à¤¨à¥à¤°à¥‹à¤§ à¤­à¥‡à¤œà¥‡à¤‚",
-  },
-  or: {
-    benefits: ["à¬¤à­à­±à¬°à¬¿à¬¤ à¬…à¬ªà¬à¬¨à­à¬Ÿà¬®à­‡à¬£à­à¬Ÿ à¬…à¬¨à­à¬°à­‹à¬§ à¬ªà­à¬°à¬•à­à¬°à¬¿à­Ÿà¬¾", "à¬¸à¬¹à¬œ à¬«à¬²à­‹-à¬…à¬ªà­ à¬¨à¬¿à¬¶à­à¬šà¬¿à¬¤à¬¤à¬¾", "à¬¸à¬¹à¬œ à¬¸à­‡à¬¬à¬¾ à¬“ à¬¤à¬¾à¬°à¬¿à¬– à¬šà­Ÿà¬¨"],
-    eyebrow: "à¬…à¬ªà¬à¬¨à­à¬Ÿà¬®à­‡à¬£à­à¬Ÿ à¬¬à­à¬•à­ à¬•à¬°à¬¨à­à¬¤à­",
-    title: "à¬¶à¬¾à¬¨à­à¬¤ à¬“ à¬¸à¬¹à¬œ à¬¬à­à¬•à¬¿à¬‚ à¬ªà­à¬°à¬•à­à¬°à¬¿à­Ÿà¬¾ à¬¸à¬¹à¬¿à¬¤ à¬†à¬ªà¬£à¬™à­à¬• à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬¯à¬¾à¬¤à­à¬°à¬¾ à¬†à¬°à¬®à­à¬­ à¬•à¬°à¬¨à­à¬¤à­à¥¤",
-    text: "à¬†à¬ªà¬£à¬™à­à¬• à¬¬à¬¿à¬¬à¬°à¬£à­€ à¬à¬¬à¬‚ à¬ªà¬¸à¬¨à­à¬¦à¬° à¬¸à­‡à¬¬à¬¾ à¬­à¬°à¬¨à­à¬¤à­à¥¤ à¬à¬¹à¬¿ à¬«à¬°à­à¬® à¬à¬¬à­‡ à¬¸à¬¿à¬§à¬¾à¬¸à¬³à¬– à¬•à­à¬²à¬¿à¬¨à¬¿à¬• à¬‡à¬®à­‡à¬²à¬•à­ à¬…à¬ªà¬à¬¨à­à¬Ÿà¬®à­‡à¬£à­à¬Ÿ à¬…à¬¨à­à¬°à­‹à¬§ à¬ªà¬ à¬¾à¬à¥¤",
-    flexibleTiming: "à¬²à¬šà¬¿à¬³à¬¾ à¬¸à¬®à­Ÿ",
-    flexibleTimingText: "à¬†à¬ªà¬£à¬™à­à¬• à¬­à¬¿à¬œà¬¿à¬Ÿà­ à¬ªà¬¾à¬‡à¬ à¬‰à¬šà¬¿à¬¤ à¬¤à¬¾à¬°à¬¿à¬– à¬¬à¬¾à¬›à¬¨à­à¬¤à­à¥¤",
-    directDelivery: "à¬¸à¬¿à¬§à¬¾à¬¸à¬³à¬– à¬‡à¬®à­‡à¬² à¬¡à¬¿à¬²à¬¿à¬­à¬°à¬¿",
-    directDeliveryText: "à¬†à¬ªà¬£à¬™à­à¬• à¬…à¬¨à­à¬°à­‹à¬§ à¬¸à¬¿à¬§à¬¾ à¬•à­à¬²à¬¿à¬¨à¬¿à¬• à¬‡à¬¨à¬¬à¬•à­à¬¸à¬•à­ à¬¯à¬¾à¬à¥¤",
-    formTitle: "à¬…à¬ªà¬à¬¨à­à¬Ÿà¬®à­‡à¬£à­à¬Ÿ à¬…à¬¨à­à¬°à­‹à¬§ à¬«à¬°à­à¬®",
-    formText: "à¬†à¬ªà¬£à¬™à­à¬• à¬¬à¬¿à¬¬à¬°à¬£à­€ à¬¶à­‡à­Ÿà¬¾à¬° à¬•à¬°à¬¨à­à¬¤à­ à¬à¬¬à¬‚ à¬†à¬®à­‡ à¬…à¬ªà¬à¬¨à­à¬Ÿà¬®à­‡à¬£à­à¬Ÿ à¬…à¬¨à­à¬°à­‹à¬§à¬•à­ à¬¸à¬¿à¬§à¬¾ contact@ommphysioworld.com à¬•à­ à¬ªà¬ à¬¾à¬‡à¬¬à­à¥¤",
-    submitted: "à¬†à¬ªà¬£à¬™à­à¬• à¬…à¬ªà¬à¬¨à­à¬Ÿà¬®à­‡à¬£à­à¬Ÿ à¬…à¬¨à­à¬°à­‹à¬§ à¬¸à¬«à¬³à¬¤à¬¾à¬° à¬¸à¬¹ à¬ªà¬ à¬¾à¬¯à¬¾à¬‡à¬›à¬¿à¥¤",
-    fallbackError: "à¬à¬¹à¬¿ à¬¸à¬®à­Ÿà¬°à­‡ à¬…à¬ªà¬à¬¨à­à¬Ÿà¬®à­‡à¬£à­à¬Ÿ à¬…à¬¨à­à¬°à­‹à¬§ à¬ªà¬ à¬¾à¬‡ à¬ªà¬¾à¬°à¬¿à¬²à­ à¬¨à¬¾à¬¹à¬¿à¬à¥¤",
-    fullName: "à¬ªà­à¬°à¬¾ à¬¨à¬¾à¬®",
-    email: "à¬‡à¬®à­‡à¬² à¬ à¬¿à¬•à¬£à¬¾",
-    phone: "à¬«à­‹à¬¨ à¬¨à¬®à­à¬¬à¬°",
-    service: "à¬¦à¬°à¬•à¬¾à¬° à¬¸à­‡à¬¬à¬¾",
-    uploadLabel: "à¬›à¬¬à¬¿ à¬•à¬¿à¬®à­à¬¬à¬¾ PDF à¬…à¬ªà¬²à­‹à¬¡à­ à¬•à¬°à¬¨à­à¬¤à­",
-    uploadHelp: "à¬†à¬ªà¬£ à¬ªà­à¬°à­‡à¬¸à¬•à­à¬°à¬¿à¬ªà­à¬¸à¬¨, à¬°à¬¿à¬ªà­‹à¬°à­à¬Ÿ, à¬¸à­à¬•à¬¾à¬¨ à¬•à¬¿à¬®à­à¬¬à¬¾ à¬¸à¬®à­à¬¬à¬¨à­à¬§à¬¿à¬¤ à¬›à¬¬à¬¿ à¬¬à¬¾à¬›à¬¿ à¬ªà¬¾à¬°à¬¿à¬¬à­‡à¥¤ à¬šà­Ÿà¬¨ à¬•à¬°à¬¾ à¬«à¬¾à¬‡à¬²à­ à¬…à¬ªà¬à¬¨à­à¬Ÿà¬®à­‡à¬£à­à¬Ÿ à¬‡à¬®à­‡à¬² à¬¸à¬¹ à¬ªà¬ à¬¾à¬¯à¬¿à¬¬à¥¤",
-    message: "à¬†à¬ªà¬£à¬™à­à¬• à¬¬à­‡à¬¦à¬¨à¬¾, à¬†à¬˜à¬¾à¬¤ à¬•à¬¿à¬®à­à¬¬à¬¾ à¬šà¬¿à¬¨à­à¬¤à¬¾ à¬¬à¬¿à¬·à­Ÿà¬°à­‡ à¬•à­à¬¹à¬¨à­à¬¤à­",
-    submitting: "à¬ªà¬ à¬¾à¬¯à¬¾à¬‰à¬›à¬¿...",
-    submit: "à¬…à¬¨à­à¬°à­‹à¬§ à¬ªà¬ à¬¾à¬¨à­à¬¤à­",
-  },
+  benefits: ["Quick appointment request flow", "Friendly follow-up confirmation", "Easy service and date selection"],
+  eyebrow: "Book Appointment",
+  title: "Start your recovery journey with a calm, simple booking flow.",
+  text: "Fill in your details and preferred service. The OPW team will review your request.",
+  flexibleTiming: "Flexible Timing",
+  flexibleTimingText: "Choose a date that works for your visit.",
+  directDelivery: "Clinic Review",
+  directDeliveryText: "Your request goes to the OPW team for confirmation.",
+  formTitle: "Appointment Request Form",
+  formText: "Share your details and the OPW team will review your appointment request.",
+  submitted: "Your appointment request has been sent successfully.",
+  fallbackError: "Unable to submit the appointment request right now.",
+  fullName: "Full Name",
+  email: "Email Address",
+  phone: "Phone Number",
+  service: "Service Needed",
+  uploadLabel: "Upload Image or PDF",
+  uploadHelp: "You can choose a prescription, report, scan, or related image. The selected file will be sent with the appointment email.",
+  message: "Tell us about your pain, injury, or concern",
+  submitting: "Submitting...",
+  submit: "Submit Request",
 };
 
 export default function BookAppointmentPage() {
-  const { language } = useLanguage();
   const navigate = useNavigate();
-  const t = copy[language] || copy.en;
+  const t = copy;
   const [patientUser, setPatientUser] = useState(() => getPatientUser());
   const [form, setForm] = useState({
     name: patientUser?.name || "",
@@ -384,4 +334,3 @@ export default function BookAppointmentPage() {
     </PublicLayout>
   );
 }
-

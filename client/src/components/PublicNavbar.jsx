@@ -1,62 +1,24 @@
-﻿import { Clock3, Download, LogOut, MapPin, Menu, Phone, UserCircle2, X } from "lucide-react";
+import { Clock3, Download, LogOut, MapPin, Menu, Phone, UserCircle2, X } from "lucide-react";
 import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import logoImage from "../assets/opw.png";
-import { useLanguage } from "../context/LanguageContext";
 import { clearPatientUser, getPatientUser } from "../utils/patientAuth";
 
 const copy = {
-  en: {
-    nav: [
-      { label: "Home", path: "/" },
-      { label: "About", path: "/about" },
-      { label: "Services", path: "/care" },
-      { label: "FAQ", path: "/faq" },
-      { label: "Career", path: "/career/requirements" },
-      { label: "Contact", path: "/contact" },
-    ],
-    hours: "Monday to Saturday, 9:00 AM to 7:00 PM",
-    location: "Baripada, Odisha",
-    reachClinic: "Reach Clinic",
-    downloadApp: "Download our app",
-    bookNow: "Book Now",
-    clinicName: "Omm Physio World",
-    doctor: "Dr. Tapaswini Sahu",
-  },
-  hi: {
-    nav: [
-      { label: "à¤¹à¥‹à¤®", path: "/" },
-      { label: "à¤¹à¤®à¤¾à¤°à¥‡ à¤¬à¤¾à¤°à¥‡ à¤®à¥‡à¤‚", path: "/about" },
-      { label: "à¤¸à¥‡à¤µà¤¾à¤à¤‚", path: "/care" },
-      { label: "FAQ", path: "/faq" },
-      { label: "à¤•à¤°à¤¿à¤¯à¤°", path: "/career/requirements" },
-      { label: "à¤¸à¤‚à¤ªà¤°à¥à¤•", path: "/contact" },
-    ],
-    hours: "à¤¸à¥‹à¤®à¤µà¤¾à¤° à¤¸à¥‡ à¤¶à¤¨à¤¿à¤µà¤¾à¤°, à¤¸à¥à¤¬à¤¹ 9:00 à¤¸à¥‡ à¤¶à¤¾à¤® 7:00",
-    location: "à¤¬à¤¾à¤°à¥€à¤ªà¤¦à¤¾, à¤“à¤¡à¤¿à¤¶à¤¾",
-    reachClinic: "à¤•à¥à¤²à¤¿à¤¨à¤¿à¤• à¤ªà¤¹à¥à¤‚à¤šà¥‡à¤‚",
-    downloadApp: "à¤¹à¤®à¤¾à¤°à¤¾ à¤à¤ª à¤¡à¤¾à¤‰à¤¨à¤²à¥‹à¤¡ à¤•à¤°à¥‡à¤‚",
-    bookNow: "à¤…à¤­à¥€ à¤¬à¥à¤• à¤•à¤°à¥‡à¤‚",
-    clinicName: "Omm Physio World",
-    doctor: "à¤¡à¥‰. à¤¤à¤ªà¤¸à¥à¤µà¤¿à¤¨à¥€ à¤¸à¤¾à¤¹à¥‚",
-  },
-  or: {
-    nav: [
-      { label: "à¬¹à­‹à¬®", path: "/" },
-      { label: "à¬†à¬® à¬¬à¬¿à¬·à­Ÿà¬°à­‡", path: "/about" },
-      { label: "à¬¸à­‡à¬¬à¬¾", path: "/care" },
-      { label: "FAQ", path: "/faq" },
-      { label: "à¬•à­à­Ÿà¬¾à¬°à¬¿à¬†à¬°", path: "/career/requirements" },
-      { label: "à¬¯à­‹à¬—à¬¾à¬¯à­‹à¬—", path: "/contact" },
-    ],
-    hours: "à¬¸à­‹à¬®à¬¬à¬¾à¬°à¬°à­ à¬¶à¬¨à¬¿à¬¬à¬¾à¬°, à¬¸à¬•à¬¾à¬³ 9:00 à¬°à­ à¬¸à¬¨à­à¬§à­à­Ÿà¬¾ 7:00",
-    location: "à¬¬à¬¾à¬°à¬¿à¬ªà¬¦à¬¾, à¬“à¬¡à¬¿à¬¶à¬¾",
-    reachClinic: "à¬•à­à¬²à¬¿à¬¨à¬¿à¬•à­ à¬ªà¬¹à¬žà­à¬šà¬¨à­à¬¤à­",
-    downloadApp: "à¬†à¬® à¬†à¬ªà­ à¬¡à¬¾à¬‰à¬¨à¬²à­‹à¬¡à­ à¬•à¬°à¬¨à­à¬¤à­",
-    bookNow: "à¬à¬¬à­‡ à¬¬à­à¬•à­ à¬•à¬°à¬¨à­à¬¤à­",
-    clinicName: "Omm Physio World",
-    doctor: "à¬¡à¬¼à¬¾. à¬¤à¬ªà¬¸à­à­±à¬¿à¬¨à­€ à¬¸à¬¾à¬¹à­",
-  },
+  nav: [
+    { label: "Home", path: "/" },
+    { label: "About", path: "/about" },
+    { label: "Services", path: "/care" },
+    { label: "FAQ", path: "/faq" },
+    { label: "Career", path: "/career/requirements" },
+    { label: "Contact", path: "/contact" },
+  ],
+  hours: "Monday to Saturday, 9:00 AM to 7:00 PM",
+  location: "Baripada, Odisha",
+  reachClinic: "Reach Clinic",
+  downloadApp: "Download our app",
+  clinicName: "Omm Physio World",
+  doctor: "Dr. Tapaswini Sahu",
 };
 
 export default function PublicNavbar() {
@@ -64,34 +26,12 @@ export default function PublicNavbar() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [patientUser, setPatientUser] = useState(() => getPatientUser());
   const navigate = useNavigate();
-  const { language } = useLanguage();
-  const t = copy[language] || copy.en;
-  const dashboardLabel =
-    language === "hi"
-      ? "à¤¡à¥ˆà¤¶à¤¬à¥‹à¤°à¥à¤¡"
-      : language === "or"
-        ? "à¬¡à­à­Ÿà¬¾à¬¶à¬¬à­‹à¬°à­à¬¡"
-        : "Dashboard";
-  const loginLabel =
-    language === "hi" ? "à¤²à¥‰à¤—à¤¿à¤¨" : language === "or" ? "à¬²à¬—à¬‡à¬¨" : "Login";
-  const registerLabel =
-    language === "hi"
-      ? "à¤°à¤œà¤¿à¤¸à¥à¤Ÿà¤°"
-      : language === "or"
-        ? "à¬¨à¬¿à¬¬à¬¨à­à¬§à¬¨"
-        : "Register";
-  const profileLabel =
-    language === "hi"
-      ? "à¤ªà¥à¤°à¥‹à¤«à¤¾à¤‡à¤²"
-      : language === "or"
-        ? "à¬ªà­à¬°à­‹à¬«à¬¾à¬‡à¬²à­"
-        : "Profile";
-  const logoutLabel =
-    language === "hi"
-      ? "à¤²à¥‰à¤—à¤†à¤‰à¤Ÿ"
-      : language === "or"
-        ? "à¬²à¬—à¬†à¬‰à¬Ÿà­"
-        : "Logout";
+  const t = copy;
+  const dashboardLabel = "Dashboard";
+  const loginLabel = "Login";
+  const registerLabel = "Register";
+  const profileLabel = "Profile";
+  const logoutLabel = "Logout";
   const visibleNav = patientUser
     ? [...t.nav, { label: dashboardLabel, path: "/patient-dashboard" }]
     : t.nav;

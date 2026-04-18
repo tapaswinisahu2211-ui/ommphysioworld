@@ -1,4 +1,4 @@
-﻿import { ArrowRight, BriefcaseBusiness, MapPin, Users } from "lucide-react";
+import { ArrowRight, BriefcaseBusiness, MapPin, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Seo from "../components/Seo";
@@ -62,8 +62,7 @@ export default function CareerRequirementsPage() {
             Current openings at Omm Physio World
           </h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-white/75">
-            Review the latest employee requirements, role expectations, and clinic work details
-            before applying.
+            Review the latest employee requirements, role expectations, and clinic work details before applying.
           </p>
         </div>
 
@@ -185,8 +184,7 @@ export default function CareerRequirementsPage() {
             <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center shadow-sm">
               <p className="text-lg font-semibold text-slate-900">We are not hiring right now</p>
               <p className="mt-2 text-sm text-slate-500">
-                We do not have any active job posts at the moment, but you can still share your
-                details and resume with us for future opportunities.
+                We do not have any active job posts at the moment, but you can still share your details and resume with us for future opportunities.
               </p>
               <Link
                 to="/career"
@@ -202,4 +200,3 @@ export default function CareerRequirementsPage() {
     </PublicLayout>
   );
 }
-

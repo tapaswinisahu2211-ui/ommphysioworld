@@ -1,82 +1,33 @@
-﻿import { Award, HeartHandshake, ShieldCheck, Stethoscope } from "lucide-react";
+import { Award, HeartHandshake, ShieldCheck, Stethoscope } from "lucide-react";
 import { Link } from "react-router-dom";
 import Seo from "../components/Seo";
 import PublicLayout from "../layout/PublicLayout";
-import { useLanguage } from "../context/LanguageContext";
 import { createBreadcrumbSchema, createMedicalBusinessSchema } from "../utils/seo";
 import doctorImage from "../assets/dr-tapaswini-sahu.jpg";
 import aboutTreatmentImage from "../assets/about-treatment.jpeg";
 
 const copy = {
-  en: {
-    eyebrow: "About Omm Physio World",
-    title: "Recovery care that feels calm, modern, and deeply personal.",
-    text: "We support patients with physiotherapy care that blends expert treatment, honest guidance, and a reassuring environment. From pain relief to rehabilitation and posture support, our goal is to help every patient move with more confidence.",
-    doctor: "Doctor",
-    doctorText: "Dedicated to thoughtful physiotherapy support, guided recovery, and long-term patient wellbeing.",
-    cta: "Book Your Visit",
-    whyChoose: "Why Patients Choose Us",
-    patientCentered: "Patient-centered",
-    patientCenteredText: "We explain clearly, treat thoughtfully, and keep care plans realistic.",
-    metrics: [
-      { label: "Years of care", value: "6+" },
-      { label: "Guided plans", value: "200+" },
-      { label: "Patient trust", value: "High" },
-    ],
-    values: [
-      { title: "Compassionate Care", text: "We focus on listening carefully and creating treatment journeys that feel human, clear, and encouraging." },
-      { title: "Clinical Precision", text: "Every therapy plan is shaped around patient condition, movement goals, and practical day-to-day improvement." },
-      { title: "Trusted Guidance", text: "We aim to be a long-term recovery partner, not just a quick appointment provider." },
-    ],
-    clinicAlt: "Modern therapy clinic interior",
-    supportAlt: "Patient receiving physiotherapy support",
-  },
-  hi: {
-    eyebrow: "à¤“à¤®à¤«à¤¿à¤œà¤¿à¤¯à¥‹ à¤µà¤°à¥à¤²à¥à¤¡ à¤•à¥‡ à¤¬à¤¾à¤°à¥‡ à¤®à¥‡à¤‚",
-    title: "à¤°à¤¿à¤•à¤µà¤°à¥€ à¤•à¥‡à¤¯à¤° à¤œà¥‹ à¤¶à¤¾à¤‚à¤¤, à¤†à¤§à¥à¤¨à¤¿à¤• à¤”à¤° à¤µà¥à¤¯à¤•à¥à¤¤à¤¿à¤—à¤¤ à¤®à¤¹à¤¸à¥‚à¤¸ à¤¹à¥‹à¤¤à¥€ à¤¹à¥ˆà¥¤",
-    text: "à¤¹à¤® à¤®à¤°à¥€à¤œà¥‹à¤‚ à¤•à¥‹ à¤à¤¸à¥€ à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤¦à¥‡à¤–à¤­à¤¾à¤² à¤¦à¥‡à¤¤à¥‡ à¤¹à¥ˆà¤‚ à¤œà¤¿à¤¸à¤®à¥‡à¤‚ à¤µà¤¿à¤¶à¥‡à¤·à¤œà¥à¤ž à¤‰à¤ªà¤šà¤¾à¤°, à¤ˆà¤®à¤¾à¤¨à¤¦à¤¾à¤° à¤®à¤¾à¤°à¥à¤—à¤¦à¤°à¥à¤¶à¤¨ à¤”à¤° à¤­à¤°à¥‹à¤¸à¥‡à¤®à¤‚à¤¦ à¤µà¤¾à¤¤à¤¾à¤µà¤°à¤£ à¤¶à¤¾à¤®à¤¿à¤² à¤¹à¥ˆà¥¤ à¤¦à¤°à¥à¤¦ à¤¸à¥‡ à¤°à¤¾à¤¹à¤¤, à¤ªà¥à¤¨à¤°à¥à¤µà¤¾à¤¸ à¤”à¤° à¤ªà¥‹à¤¶à¥à¤šà¤° à¤¸à¤ªà¥‹à¤°à¥à¤Ÿ à¤¤à¤•, à¤¹à¤®à¤¾à¤°à¤¾ à¤²à¤•à¥à¤·à¥à¤¯ à¤¹à¤° à¤®à¤°à¥€à¤œ à¤•à¥‹ à¤…à¤§à¤¿à¤• à¤†à¤¤à¥à¤®à¤µà¤¿à¤¶à¥à¤µà¤¾à¤¸ à¤•à¥‡ à¤¸à¤¾à¤¥ à¤šà¤²à¤¨à¥‡ à¤®à¥‡à¤‚ à¤®à¤¦à¤¦ à¤•à¤°à¤¨à¤¾ à¤¹à¥ˆà¥¤",
-    doctor: "à¤¡à¥‰à¤•à¥à¤Ÿà¤°",
-    doctorText: "à¤¸à¥‹à¤š-à¤¸à¤®à¤à¤•à¤° à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤¸à¤¹à¤¾à¤¯à¤¤à¤¾, à¤®à¤¾à¤°à¥à¤—à¤¦à¤°à¥à¤¶à¤¿à¤¤ à¤°à¤¿à¤•à¤µà¤°à¥€ à¤”à¤° à¤¦à¥€à¤°à¥à¤˜à¤•à¤¾à¤²à¤¿à¤• à¤®à¤°à¥€à¤œ à¤•à¤²à¥à¤¯à¤¾à¤£ à¤•à¥‡ à¤²à¤¿à¤ à¤¸à¤®à¤°à¥à¤ªà¤¿à¤¤à¥¤",
-    cta: "à¤…à¤ªà¤¨à¥€ à¤µà¤¿à¤œà¤¿à¤Ÿ à¤¬à¥à¤• à¤•à¤°à¥‡à¤‚",
-    whyChoose: "à¤®à¤°à¥€à¤œ à¤¹à¤®à¥‡à¤‚ à¤•à¥à¤¯à¥‹à¤‚ à¤šà¥à¤¨à¤¤à¥‡ à¤¹à¥ˆà¤‚",
-    patientCentered: "à¤®à¤°à¥€à¤œ-à¤•à¥‡à¤‚à¤¦à¥à¤°à¤¿à¤¤",
-    patientCenteredText: "à¤¹à¤® à¤¸à¥à¤ªà¤·à¥à¤Ÿ à¤¸à¤®à¤à¤¾à¤¤à¥‡ à¤¹à¥ˆà¤‚, à¤¸à¥‹à¤š-à¤¸à¤®à¤à¤•à¤° à¤‰à¤ªà¤šà¤¾à¤° à¤•à¤°à¤¤à¥‡ à¤¹à¥ˆà¤‚ à¤”à¤° à¤•à¥‡à¤¯à¤° à¤ªà¥à¤²à¤¾à¤¨ à¤•à¥‹ à¤µà¥à¤¯à¤¾à¤µà¤¹à¤¾à¤°à¤¿à¤• à¤°à¤–à¤¤à¥‡ à¤¹à¥ˆà¤‚à¥¤",
-    metrics: [
-      { label: "à¤¦à¥‡à¤–à¤­à¤¾à¤² à¤•à¥‡ à¤µà¤°à¥à¤·", value: "6+" },
-      { label: "à¤®à¤¾à¤°à¥à¤—à¤¦à¤°à¥à¤¶à¤¿à¤¤ à¤ªà¥à¤²à¤¾à¤¨", value: "200+" },
-      { label: "à¤®à¤°à¥€à¤œà¥‹à¤‚ à¤•à¤¾ à¤­à¤°à¥‹à¤¸à¤¾", value: "à¤‰à¤šà¥à¤š" },
-    ],
-    values: [
-      { title: "à¤¸à¤¹à¤¾à¤¨à¥à¤­à¥‚à¤¤à¤¿à¤ªà¥‚à¤°à¥à¤£ à¤¦à¥‡à¤–à¤­à¤¾à¤²", text: "à¤¹à¤® à¤§à¥à¤¯à¤¾à¤¨ à¤¸à¥‡ à¤¸à¥à¤¨à¤¨à¥‡ à¤”à¤° à¤à¤¸à¥‡ à¤‰à¤ªà¤šà¤¾à¤° à¤®à¤¾à¤°à¥à¤— à¤¬à¤¨à¤¾à¤¨à¥‡ à¤ªà¤° à¤§à¥à¤¯à¤¾à¤¨ à¤¦à¥‡à¤¤à¥‡ à¤¹à¥ˆà¤‚ à¤œà¥‹ à¤®à¤¾à¤¨à¤µà¥€à¤¯, à¤¸à¥à¤ªà¤·à¥à¤Ÿ à¤”à¤° à¤‰à¤¤à¥à¤¸à¤¾à¤¹à¤µà¤°à¥à¤§à¤• à¤²à¤—à¥‡à¤‚à¥¤" },
-      { title: "à¤•à¥à¤²à¤¿à¤¨à¤¿à¤•à¤² à¤¸à¤Ÿà¥€à¤•à¤¤à¤¾", text: "à¤¹à¤° à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤ªà¥à¤²à¤¾à¤¨ à¤®à¤°à¥€à¤œ à¤•à¥€ à¤¸à¥à¤¥à¤¿à¤¤à¤¿, à¤®à¥‚à¤µà¤®à¥‡à¤‚à¤Ÿ à¤²à¤•à¥à¤·à¥à¤¯ à¤”à¤° à¤°à¥‹à¤œà¤®à¤°à¥à¤°à¤¾ à¤•à¥‡ à¤µà¥à¤¯à¤¾à¤µà¤¹à¤¾à¤°à¤¿à¤• à¤¸à¥à¤§à¤¾à¤° à¤•à¥‡ à¤…à¤¨à¥à¤¸à¤¾à¤° à¤¬à¤¨à¤¾à¤¯à¤¾ à¤œà¤¾à¤¤à¤¾ à¤¹à¥ˆà¥¤" },
-      { title: "à¤µà¤¿à¤¶à¥à¤µà¤¸à¤¨à¥€à¤¯ à¤®à¤¾à¤°à¥à¤—à¤¦à¤°à¥à¤¶à¤¨", text: "à¤¹à¤® à¤•à¥‡à¤µà¤² à¤à¤• à¤œà¤²à¥à¤¦à¥€ à¤…à¤ªà¥‰à¤‡à¤‚à¤Ÿà¤®à¥‡à¤‚à¤Ÿ à¤¦à¥‡à¤¨à¥‡ à¤µà¤¾à¤²à¥‡ à¤¨à¤¹à¥€à¤‚, à¤¬à¤²à¥à¤•à¤¿ à¤¦à¥€à¤°à¥à¤˜à¤•à¤¾à¤²à¤¿à¤• à¤°à¤¿à¤•à¤µà¤°à¥€ à¤¸à¤¾à¤¥à¥€ à¤¬à¤¨à¤¨à¤¾ à¤šà¤¾à¤¹à¤¤à¥‡ à¤¹à¥ˆà¤‚à¥¤" },
-    ],
-    clinicAlt: "à¤†à¤§à¥à¤¨à¤¿à¤• à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤•à¥à¤²à¤¿à¤¨à¤¿à¤• à¤•à¤¾ à¤…à¤‚à¤¦à¤°à¥‚à¤¨à¥€ à¤¦à¥ƒà¤¶à¥à¤¯",
-    supportAlt: "à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤¸à¤¹à¤¾à¤¯à¤¤à¤¾ à¤ªà¥à¤°à¤¾à¤ªà¥à¤¤ à¤•à¤°à¤¤à¤¾ à¤®à¤°à¥€à¤œ",
-  },
-  or: {
-    eyebrow: "à¬“à¬®à­â€Œà¬«à¬¿à¬œà¬¿à¬“ à­±à¬¾à¬°à­à¬²à­à¬¡ à¬¬à¬¿à¬·à­Ÿà¬°à­‡",
-    title: "à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬¸à­‡à¬¬à¬¾ à¬¯à¬¾à¬¹à¬¾ à¬¶à¬¾à¬¨à­à¬¤, à¬†à¬§à­à¬¨à¬¿à¬• à¬à¬¬à¬‚ à¬¨à¬¿à¬œà¬¸à­à­± à¬²à¬¾à¬—à­‡à¥¤",
-    text: "à¬†à¬®à­‡ à¬°à­‹à¬—à­€à¬®à¬¾à¬¨à¬™à­à¬•à­ à¬à¬®à¬¿à¬¤à¬¿ à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬¸à­‡à¬¬à¬¾ à¬¦à­‡à¬‰à¬›à­ à¬¯à­‡à¬‰à¬à¬¥à¬¿à¬°à­‡ à¬¦à¬•à­à¬· à¬šà¬¿à¬•à¬¿à¬¤à­à¬¸à¬¾, à¬¸à¬¤à­à­Ÿà¬¨à¬¿à¬·à­à¬  à¬®à¬¾à¬°à­à¬—à¬¦à¬°à­à¬¶à¬¨ à¬“ à¬­à¬°à¬¸à¬¾à¬¯à­‹à¬—à­à­Ÿ à¬ªà¬°à¬¿à¬¬à­‡à¬¶ à¬°à¬¹à¬¿à¬›à¬¿à¥¤ à¬¬à­‡à¬¦à¬¨à¬¾à¬°à­ à¬°à¬¾à¬¹à¬¾à¬¤à¬°à­ à¬†à¬°à¬®à­à¬­ à¬•à¬°à¬¿ à¬°à¬¿à¬¹à¬¾à¬¬à­ à¬“ à¬ªà­‹à¬·à­à¬šà¬° à¬¸à¬¹à¬¾à­Ÿà¬¤à¬¾ à¬ªà¬°à­à¬¯à­à­Ÿà¬¨à­à¬¤, à¬†à¬® à¬²à¬•à­à¬·à­à­Ÿ à¬ªà­à¬°à¬¤à­à­Ÿà­‡à¬• à¬°à­‹à¬—à­€à¬™à­à¬•à­ à¬…à¬§à¬¿à¬• à¬†à¬¤à­à¬®à¬¬à¬¿à¬¶à­à­±à¬¾à¬¸ à¬¸à¬¹ à¬šà¬³à¬¨ à¬•à¬°à¬¿à¬¬à¬¾à¬°à­‡ à¬¸à¬¾à¬¹à¬¾à¬¯à­à­Ÿ à¬•à¬°à¬¿à¬¬à¬¾à¥¤",
-    doctor: "à¬¡à¬¾à¬•à­à¬¤à¬°",
-    doctorText: "à¬šà¬¿à¬¨à­à¬¤à¬¾à¬¶à­€à¬³ à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬¸à¬¹à¬¾à­Ÿà¬¤à¬¾, à¬®à¬¾à¬°à­à¬—à¬¦à¬°à­à¬¶à¬¿à¬¤ à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬à¬¬à¬‚ à¬¦à­€à¬°à­à¬˜à¬•à¬¾à¬³à­€à¬¨ à¬°à­‹à¬—à­€ à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬ªà¬¾à¬‡à¬ à¬¸à¬®à¬°à­à¬ªà¬¿à¬¤à¥¤",
-    cta: "à¬†à¬ªà¬£à¬™à­à¬• à¬­à¬¿à¬œà¬¿à¬Ÿà­ à¬¬à­à¬•à­ à¬•à¬°à¬¨à­à¬¤à­",
-    whyChoose: "à¬°à­‹à¬—à­€à¬®à¬¾à¬¨à­‡ à¬†à¬®à¬•à­ à¬•à¬¾à¬¹à¬¿à¬à¬•à¬¿ à¬¬à¬¾à¬›à¬¨à­à¬¤à¬¿",
-    patientCentered: "à¬°à­‹à¬—à­€-à¬•à­‡à¬¨à­à¬¦à­à¬°à¬¿à¬•",
-    patientCenteredText: "à¬†à¬®à­‡ à¬¸à­à¬ªà¬·à­à¬Ÿà¬­à¬¾à¬¬à­‡ à¬¬à­à¬à¬¾à¬‰à¬›à­, à¬­à¬¾à¬¬à¬¿à¬šà¬¿à¬¨à­à¬¤à¬¿à¬¤ à¬­à¬¾à¬¬à¬°à­‡ à¬šà¬¿à¬•à¬¿à¬¤à­à¬¸à¬¾ à¬•à¬°à­à¬›à­ à¬à¬¬à¬‚ à¬•à­‡à¬°à­ à¬ªà­à¬²à¬¾à¬¨à¬•à­ à¬¬à­à­Ÿà¬¬à¬¹à¬¾à¬°à¬¿à¬• à¬°à¬–à­à¬›à­à¥¤",
-    metrics: [
-      { label: "à¬¸à­‡à¬¬à¬¾à¬° à¬¬à¬°à­à¬·", value: "6+" },
-      { label: "à¬®à¬¾à¬°à­à¬—à¬¦à¬°à­à¬¶à¬¿à¬¤ à¬ªà­à¬²à¬¾à¬¨", value: "200+" },
-      { label: "à¬°à­‹à¬—à­€ à¬¬à¬¿à¬¶à­à­±à¬¾à¬¸", value: "à¬‰à¬šà­à¬š" },
-    ],
-    values: [
-      { title: "à¬¸à¬¹à¬¾à¬¨à­à¬­à­‚à¬¤à¬¿à¬®à­‚à¬³à¬• à¬¸à­‡à¬¬à¬¾", text: "à¬†à¬®à­‡ à¬§à­à­Ÿà¬¾à¬¨à¬¦à­‡à¬‡ à¬¶à­à¬£à¬¿à¬¬à¬¾ à¬à¬¬à¬‚ à¬à¬®à¬¿à¬¤à¬¿ à¬Ÿà­à¬°à¬¿à¬Ÿà¬®à­‡à¬£à­à¬Ÿ à¬¯à¬¾à¬¤à­à¬°à¬¾ à¬¸à­ƒà¬·à­à¬Ÿà¬¿ à¬•à¬°à¬¿à¬¬à¬¾à¬°à­‡ à¬§à­à­Ÿà¬¾à¬¨ à¬¦à­‡à¬‰à¬›à­ à¬¯à¬¾à¬¹à¬¾ à¬®à¬¾à¬¨à¬¬à¬¿à¬•, à¬¸à­à¬ªà¬·à­à¬Ÿ à¬à¬¬à¬‚ à¬‰à¬¤à­à¬¸à¬¾à¬¹à¬¦à¬¾à­Ÿà¬• à¬²à¬¾à¬—à­‡à¥¤" },
-      { title: "à¬•à­à¬²à¬¿à¬¨à¬¿à¬•à¬¾à¬² à¬¸à¬ à¬¿à¬•à¬¤à¬¾", text: "à¬ªà­à¬°à¬¤à­à­Ÿà­‡à¬• à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬ªà­à¬²à¬¾à¬¨ à¬°à­‹à¬—à­€à¬° à¬…à¬¬à¬¸à­à¬¥à¬¾, à¬šà¬³à¬¨ à¬²à¬•à­à¬·à­à­Ÿ à¬à¬¬à¬‚ à¬¦à­ˆà¬¨à¬¨à­à¬¦à¬¿à¬¨ à¬¬à­à­Ÿà¬¬à¬¹à¬¾à¬°à¬¿à¬• à¬¸à­à¬§à¬¾à¬°à¬•à­ à¬§à­à­Ÿà¬¾à¬¨à¬°à­‡ à¬°à¬–à¬¿ à¬¤à¬¿à¬†à¬°à¬¿ à¬¹à­à¬à¥¤" },
-      { title: "à¬­à¬°à¬¸à¬¾à¬¯à­‹à¬—à­à­Ÿ à¬®à¬¾à¬°à­à¬—à¬¦à¬°à­à¬¶à¬¨", text: "à¬†à¬®à­‡ à¬•à­‡à¬¬à¬³ à¬¦à­à¬°à­à¬¤ à¬…à¬ªà¬à¬¨à­à¬Ÿà¬®à­‡à¬£à­à¬Ÿ à¬¦à­‡à¬¬à¬¾à¬•à­ à¬¨à­à¬¹à­‡à¬, à¬¬à¬°à¬‚ à¬¦à­€à¬°à­à¬˜à¬•à¬¾à¬³à­€à¬¨ à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬¸à¬¹à¬­à¬¾à¬—à­€ à¬¹à­‡à¬¬à¬¾à¬•à­ à¬šà¬¾à¬¹à­à¬à¬›à­à¥¤" },
-    ],
-    clinicAlt: "à¬†à¬§à­à¬¨à¬¿à¬• à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬•à­à¬²à¬¿à¬¨à¬¿à¬•à¬° à¬­à¬¿à¬¤à¬° à¬¦à­ƒà¬¶à­à­Ÿ",
-    supportAlt: "à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬¸à¬¹à¬¾à­Ÿà¬¤à¬¾ à¬ªà¬¾à¬‰à¬¥à¬¿à¬¬à¬¾ à¬°à­‹à¬—à­€",
-  },
+  eyebrow: "About Omm Physio World",
+  title: "Recovery care that feels calm, modern, and deeply personal.",
+  text: "We support patients with physiotherapy care that blends expert treatment, honest guidance, and a reassuring environment. From pain relief to rehabilitation and posture support, our goal is to help every patient move with more confidence.",
+  doctor: "Doctor",
+  doctorText: "Dedicated to thoughtful physiotherapy support, guided recovery, and long-term patient wellbeing.",
+  cta: "Book Your Visit",
+  whyChoose: "Why Patients Choose Us",
+  patientCentered: "Patient-centered",
+  patientCenteredText: "We explain clearly, treat thoughtfully, and keep care plans realistic.",
+  metrics: [
+    { label: "Years of care", value: "6+" },
+    { label: "Guided plans", value: "200+" },
+    { label: "Patient trust", value: "High" },
+  ],
+  values: [
+    { title: "Compassionate Care", text: "We focus on listening carefully and creating treatment journeys that feel human, clear, and encouraging." },
+    { title: "Clinical Precision", text: "Every therapy plan is shaped around patient condition, movement goals, and practical day-to-day improvement." },
+    { title: "Trusted Guidance", text: "We aim to be a long-term recovery partner, not just a quick appointment provider." },
+  ],
+  clinicAlt: "Modern therapy clinic interior",
+  supportAlt: "Patient receiving physiotherapy support",
 };
 
 const aboutImages = {
@@ -85,8 +36,7 @@ const aboutImages = {
 };
 
 export default function AboutPage() {
-  const { language } = useLanguage();
-  const t = copy[language] || copy.en;
+  const t = copy;
   const values = [
     { ...t.values[0], icon: HeartHandshake },
     { ...t.values[1], icon: Stethoscope },
@@ -221,4 +171,3 @@ export default function AboutPage() {
     </PublicLayout>
   );
 }
-

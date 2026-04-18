@@ -1,4 +1,4 @@
-﻿import {
+import {
   ArrowRight,
   BadgeCheck,
   CalendarDays,
@@ -17,7 +17,6 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import PublicLayout from "../layout/PublicLayout";
 import Seo from "../components/Seo";
-import { useLanguage } from "../context/LanguageContext";
 import { createBreadcrumbSchema, createMedicalBusinessSchema } from "../utils/seo";
 import API from "../services/api";
 import doctorImage from "../assets/dr-tapaswini-sahu.jpg";
@@ -39,229 +38,89 @@ const slides = [
 ];
 
 const pageCopy = {
-  en: {
-    badge: "Modern physiotherapy care for everyday movement",
-    quickFacts: ["Dr. Tapaswini Sahu, BPT, MPT (Ortho)", "Baripada, Odisha", "Same-week appointments"],
-    slides: [
-      {
-        eyebrow: "Advanced Physiotherapy Care",
-        title: "Relief that starts with the right movement plan.",
-        text:
-          "Personalized recovery programs for pain management, posture correction, and confident daily mobility.",
-        metricLabel: "Patients report better comfort after guided sessions",
-      },
-      {
-        eyebrow: "Recovery After Injury",
-        title: "Structured rehab designed for strength, balance, and return to routine.",
-        text:
-          "From muscle strain to post-injury recovery, we create therapy journeys that feel steady and practical.",
-        metricLabel: "Recovery plans guided with focused patient support",
-      },
-      {
-        eyebrow: "Posture And Spine Support",
-        title: "Modern care for back pain, neck stiffness, and work-from-desk strain.",
-        text:
-          "Hands-on treatment and movement correction to help you move better for longer.",
-        metricLabel: "Years of clinic trust and physiotherapy guidance",
-      },
-    ],
-    services: [
-      {
-        title: "Pain Management",
-        text:
-          "Targeted treatment plans for back pain, neck stiffness, joint issues, and recurring discomfort.",
-      },
-      {
-        title: "Post Injury Rehab",
-        text:
-          "Structured recovery programs to restore mobility, strength, and confidence after injury.",
-      },
-      {
-        title: "Posture Correction",
-        text:
-          "Modern physiotherapy support for office posture, muscle imbalance, and movement quality.",
-      },
-    ],
-    highlights: ["Patient-first care", "Evidence-based plans", "Comfortable recovery journey"],
-    exploreServices: "Explore Services",
-    doctorOnDuty: "Doctor On Duty",
-    doctorText:
-      "Calm, patient-first physiotherapy care with a focus on recovery, posture, and everyday movement.",
-    fastAccess: "Fast Access",
-    sameWeekBooking: "Same-week booking",
-    simpleRequests: "Simple consultation requests",
-    trustSignal: "Trust Signal",
-    patientFocusedClinic: "Patient-focused clinic",
-    trustText: "Guided care plans with a modern recovery approach",
-    featuredBanner: "Featured Banner",
-    bannerTitle: "Omm Physio World patient recovery experience",
-    sameWeek: "Same Week",
-    sameWeekText: "Appointment availability for new consultations",
-    guidedCare: "Guided Care",
-    guidedCareText: "Clear treatment plans for pain, mobility, and posture",
-    bannerSlides: "Banner Slides",
-    featuredCareHighlights: "Featured care highlights",
-    clinicFocus: "Clinic Focus",
-    clinicFocusText: "Pain relief, rehab, posture, and mobility",
-    whyFeelsBetter: "Why It Feels Better",
-    whyFeelsBetterText: "A clinic experience built around clarity, comfort, and guided recovery",
-    reachUs: "Reach Us",
-    servicesTitle: "What We Do",
-    servicesHeading: "Care designed around movement and recovery",
-    viewAllServices: "View all services",
-    recoveryEnvironment: "Recovery Environment",
-    recoveryEnvironmentTitle: "A more reassuring clinic experience from first visit to follow-up.",
-    recoveryEnvironmentText:
-      "Good physiotherapy care is not only about treatment. It is also about clear guidance, patient comfort, and a recovery plan that feels manageable in everyday life.",
-    leadDoctor: "Lead Doctor",
-    leadDoctorText:
-      "Guiding patient-focused physiotherapy care with a calm and modern recovery approach.",
-    quickBooking: "Quick Booking",
-    quickBookingTitle: "Need an appointment this week?",
-    quickBookingText:
-      "Share your details and preferred visit time. We will help you find the right therapy session quickly.",
-    startBooking: "Start booking",
-    heroAlt: "Physiotherapy consultation",
-    therapyAlt: "Patient receiving guided physiotherapy treatment",
-  },
-  hi: {
-    badge: "à¤¹à¤° à¤°à¥‹à¤œà¤¼ à¤•à¥€ à¤¸à¤¹à¤œ à¤—à¤¤à¤¿à¤µà¤¿à¤§à¤¿ à¤•à¥‡ à¤²à¤¿à¤ à¤†à¤§à¥à¤¨à¤¿à¤• à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤¦à¥‡à¤–à¤­à¤¾à¤²",
-    quickFacts: ["à¤¡à¥‰. à¤¤à¤ªà¤¸à¥à¤µà¤¿à¤¨à¥€ à¤¸à¤¾à¤¹à¥‚", "à¤¬à¤¾à¤°à¤¿à¤ªà¤¦à¤¾, à¤“à¤¡à¤¿à¤¶à¤¾", "à¤‰à¤¸à¥€ à¤¸à¤ªà¥à¤¤à¤¾à¤¹ à¤…à¤ªà¥‰à¤‡à¤‚à¤Ÿà¤®à¥‡à¤‚à¤Ÿ"],
-    slides: [
-      {
-        eyebrow: "à¤‰à¤¨à¥à¤¨à¤¤ à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤•à¥‡à¤¯à¤°",
-        title: "à¤°à¤¾à¤¹à¤¤ à¤¸à¤¹à¥€ à¤®à¥‚à¤µà¤®à¥‡à¤‚à¤Ÿ à¤ªà¥à¤²à¤¾à¤¨ à¤¸à¥‡ à¤¶à¥à¤°à¥‚ à¤¹à¥‹à¤¤à¥€ à¤¹à¥ˆà¥¤",
-        text:
-          "à¤¦à¤°à¥à¤¦ à¤ªà¥à¤°à¤¬à¤‚à¤§à¤¨, à¤ªà¥‹à¤¶à¥à¤šà¤° à¤¸à¥à¤§à¤¾à¤° à¤”à¤° à¤†à¤¤à¥à¤®à¤µà¤¿à¤¶à¥à¤µà¤¾à¤¸ à¤¸à¥‡ à¤­à¤°à¥€ à¤¦à¥ˆà¤¨à¤¿à¤• à¤—à¤¤à¤¿à¤µà¤¿à¤§à¤¿ à¤•à¥‡ à¤²à¤¿à¤ à¤µà¥à¤¯à¤•à¥à¤¤à¤¿à¤—à¤¤ à¤°à¤¿à¤•à¤µà¤°à¥€ à¤ªà¥à¤°à¥‹à¤—à¥à¤°à¤¾à¤®à¥¤",
-        metricLabel: "à¤®à¤¾à¤°à¥à¤—à¤¦à¤°à¥à¤¶à¤¿à¤¤ à¤¸à¥‡à¤¶à¤‚à¤¸ à¤•à¥‡ à¤¬à¤¾à¤¦ à¤®à¤°à¥€à¤œà¥‹à¤‚ à¤¨à¥‡ à¤¬à¥‡à¤¹à¤¤à¤° à¤†à¤°à¤¾à¤® à¤®à¤¹à¤¸à¥‚à¤¸ à¤•à¤¿à¤¯à¤¾",
-      },
-      {
-        eyebrow: "à¤šà¥‹à¤Ÿ à¤•à¥‡ à¤¬à¤¾à¤¦ à¤°à¤¿à¤•à¤µà¤°à¥€",
-        title: "à¤¤à¤¾à¤•à¤¤, à¤¸à¤‚à¤¤à¥à¤²à¤¨ à¤”à¤° à¤¦à¤¿à¤¨à¤šà¤°à¥à¤¯à¤¾ à¤®à¥‡à¤‚ à¤µà¤¾à¤ªà¤¸à¥€ à¤•à¥‡ à¤²à¤¿à¤ à¤¸à¥à¤µà¥à¤¯à¤µà¤¸à¥à¤¥à¤¿à¤¤ à¤°à¥€à¤¹à¥ˆà¤¬à¥¤",
-        text:
-          "à¤®à¤¾à¤‚à¤¸à¤ªà¥‡à¤¶à¤¿à¤¯à¥‹à¤‚ à¤®à¥‡à¤‚ à¤–à¤¿à¤‚à¤šà¤¾à¤µ à¤¸à¥‡ à¤²à¥‡à¤•à¤° à¤ªà¥‹à¤¸à¥à¤Ÿ-à¤‡à¤‚à¤œà¤°à¥€ à¤°à¤¿à¤•à¤µà¤°à¥€ à¤¤à¤•, à¤¹à¤® à¤à¤¸à¥‡ à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤ªà¥à¤²à¤¾à¤¨ à¤¬à¤¨à¤¾à¤¤à¥‡ à¤¹à¥ˆà¤‚ à¤œà¥‹ à¤¸à¥à¤¥à¤¿à¤° à¤”à¤° à¤µà¥à¤¯à¤¾à¤µà¤¹à¤¾à¤°à¤¿à¤• à¤²à¤—à¤¤à¥‡ à¤¹à¥ˆà¤‚à¥¤",
-        metricLabel: "à¤•à¥‡à¤‚à¤¦à¥à¤°à¤¿à¤¤ à¤°à¥‹à¤—à¥€ à¤¸à¤¹à¤¯à¥‹à¤— à¤•à¥‡ à¤¸à¤¾à¤¥ à¤®à¤¾à¤°à¥à¤—à¤¦à¤°à¥à¤¶à¤¿à¤¤ à¤°à¤¿à¤•à¤µà¤°à¥€ à¤ªà¥à¤²à¤¾à¤¨",
-      },
-      {
-        eyebrow: "à¤ªà¥‹à¤¶à¥à¤šà¤° à¤”à¤° à¤¸à¥à¤ªà¤¾à¤‡à¤¨ à¤¸à¤ªà¥‹à¤°à¥à¤Ÿ",
-        title: "à¤ªà¥€à¤  à¤¦à¤°à¥à¤¦, à¤—à¤°à¥à¤¦à¤¨ à¤œà¤•à¤¡à¤¼à¤¨ à¤”à¤° à¤¡à¥‡à¤¸à¥à¤• à¤µà¤°à¥à¤• à¤¸à¥à¤Ÿà¥à¤°à¥‡à¤¨ à¤•à¥‡ à¤²à¤¿à¤ à¤†à¤§à¥à¤¨à¤¿à¤• à¤¦à¥‡à¤–à¤­à¤¾à¤²à¥¤",
-        text:
-          "à¤¹à¥ˆà¤‚à¤¡à¥à¤¸-à¤‘à¤¨ à¤Ÿà¥à¤°à¥€à¤Ÿà¤®à¥‡à¤‚à¤Ÿ à¤”à¤° à¤®à¥‚à¤µà¤®à¥‡à¤‚à¤Ÿ à¤•à¤°à¥‡à¤•à¥à¤¶à¤¨ à¤¤à¤¾à¤•à¤¿ à¤†à¤ª à¤²à¤‚à¤¬à¥‡ à¤¸à¤®à¤¯ à¤¤à¤• à¤¬à¥‡à¤¹à¤¤à¤° à¤šà¤² à¤¸à¤•à¥‡à¤‚à¥¤",
-        metricLabel: "à¤•à¥à¤²à¤¿à¤¨à¤¿à¤• à¤µà¤¿à¤¶à¥à¤µà¤¾à¤¸ à¤”à¤° à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤®à¤¾à¤°à¥à¤—à¤¦à¤°à¥à¤¶à¤¨ à¤•à¥‡ à¤µà¤°à¥à¤·",
-      },
-    ],
-    services: [
-      { title: "à¤¦à¤°à¥à¤¦ à¤ªà¥à¤°à¤¬à¤‚à¤§à¤¨", text: "à¤ªà¥€à¤  à¤¦à¤°à¥à¤¦, à¤—à¤°à¥à¤¦à¤¨ à¤œà¤•à¤¡à¤¼à¤¨, à¤œà¥‹à¤¡à¤¼à¥‹à¤‚ à¤•à¥€ à¤¸à¤®à¤¸à¥à¤¯à¤¾ à¤”à¤° à¤¬à¤¾à¤°-à¤¬à¤¾à¤° à¤¹à¥‹à¤¨à¥‡ à¤µà¤¾à¤²à¥€ à¤…à¤¸à¥à¤µà¤¿à¤§à¤¾ à¤•à¥‡ à¤²à¤¿à¤ à¤²à¤•à¥à¤·à¤¿à¤¤ à¤Ÿà¥à¤°à¥€à¤Ÿà¤®à¥‡à¤‚à¤Ÿ à¤ªà¥à¤²à¤¾à¤¨à¥¤" },
-      { title: "à¤šà¥‹à¤Ÿ à¤•à¥‡ à¤¬à¤¾à¤¦ à¤°à¥€à¤¹à¥ˆà¤¬", text: "à¤šà¥‹à¤Ÿ à¤•à¥‡ à¤¬à¤¾à¤¦ à¤—à¤¤à¤¿à¤¶à¥€à¤²à¤¤à¤¾, à¤¤à¤¾à¤•à¤¤ à¤”à¤° à¤†à¤¤à¥à¤®à¤µà¤¿à¤¶à¥à¤µà¤¾à¤¸ à¤²à¥Œà¤Ÿà¤¾à¤¨à¥‡ à¤•à¥‡ à¤²à¤¿à¤ à¤¸à¥à¤µà¥à¤¯à¤µà¤¸à¥à¤¥à¤¿à¤¤ à¤°à¤¿à¤•à¤µà¤°à¥€ à¤ªà¥à¤°à¥‹à¤—à¥à¤°à¤¾à¤®à¥¤" },
-      { title: "à¤ªà¥‹à¤¶à¥à¤šà¤° à¤¸à¥à¤§à¤¾à¤°", text: "à¤‘à¤«à¤¿à¤¸ à¤ªà¥‹à¤¶à¥à¤šà¤°, à¤®à¤¸à¤² à¤‡à¤®à¥à¤¬à¥ˆà¤²à¥‡à¤‚à¤¸ à¤”à¤° à¤®à¥‚à¤µà¤®à¥‡à¤‚à¤Ÿ à¤•à¥à¤µà¤¾à¤²à¤¿à¤Ÿà¥€ à¤•à¥‡ à¤²à¤¿à¤ à¤†à¤§à¥à¤¨à¤¿à¤• à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤¸à¤¹à¤¾à¤¯à¤¤à¤¾à¥¤" },
-    ],
-    highlights: ["à¤®à¤°à¥€à¤œ-à¤ªà¥à¤°à¤¥à¤® à¤¦à¥‡à¤–à¤­à¤¾à¤²", "à¤ªà¥à¤°à¤®à¤¾à¤£-à¤†à¤§à¤¾à¤°à¤¿à¤¤ à¤ªà¥à¤²à¤¾à¤¨", "à¤¸à¥à¤µà¤¿à¤§à¤¾à¤œà¤¨à¤• à¤°à¤¿à¤•à¤µà¤°à¥€ à¤¯à¤¾à¤¤à¥à¤°à¤¾"],
-    exploreServices: "à¤¸à¥‡à¤µà¤¾à¤à¤‚ à¤¦à¥‡à¤–à¥‡à¤‚",
-    doctorOnDuty: "à¤‰à¤ªà¤¸à¥à¤¥à¤¿à¤¤ à¤¡à¥‰à¤•à¥à¤Ÿà¤°",
-    doctorText: "à¤¶à¤¾à¤‚à¤¤, à¤®à¤°à¥€à¤œ-à¤•à¥‡à¤‚à¤¦à¥à¤°à¤¿à¤¤ à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤¦à¥‡à¤–à¤­à¤¾à¤², à¤œà¤¿à¤¸à¤®à¥‡à¤‚ à¤°à¤¿à¤•à¤µà¤°à¥€, à¤ªà¥‹à¤¶à¥à¤šà¤° à¤”à¤° à¤°à¥‹à¤œà¤¼à¤®à¤°à¥à¤°à¤¾ à¤•à¥€ à¤—à¤¤à¤¿à¤µà¤¿à¤§à¤¿ à¤ªà¤° à¤§à¥à¤¯à¤¾à¤¨ à¤¹à¥ˆà¥¤",
-    fastAccess: "à¤¤à¥‡à¤œà¤¼ à¤ªà¤¹à¥à¤‚à¤š",
-    sameWeekBooking: "à¤‰à¤¸à¥€ à¤¸à¤ªà¥à¤¤à¤¾à¤¹ à¤¬à¥à¤•à¤¿à¤‚à¤—",
-    simpleRequests: "à¤¸à¤°à¤² à¤•à¤‚à¤¸à¤²à¥à¤Ÿà¥‡à¤¶à¤¨ à¤…à¤¨à¥à¤°à¥‹à¤§",
-    trustSignal: "à¤µà¤¿à¤¶à¥à¤µà¤¾à¤¸ à¤¸à¤‚à¤•à¥‡à¤¤",
-    patientFocusedClinic: "à¤®à¤°à¥€à¤œ-à¤•à¥‡à¤‚à¤¦à¥à¤°à¤¿à¤¤ à¤•à¥à¤²à¤¿à¤¨à¤¿à¤•",
-    trustText: "à¤†à¤§à¥à¤¨à¤¿à¤• à¤°à¤¿à¤•à¤µà¤°à¥€ à¤¦à¥ƒà¤·à¥à¤Ÿà¤¿à¤•à¥‹à¤£ à¤•à¥‡ à¤¸à¤¾à¤¥ à¤®à¤¾à¤°à¥à¤—à¤¦à¤°à¥à¤¶à¤¿à¤¤ à¤•à¥‡à¤¯à¤° à¤ªà¥à¤²à¤¾à¤¨",
-    featuredBanner: "à¤®à¥à¤–à¥à¤¯ à¤¬à¥ˆà¤¨à¤°",
-    bannerTitle: "à¤“à¤®à¤«à¤¿à¤œà¤¿à¤¯à¥‹ à¤µà¤°à¥à¤²à¥à¤¡ à¤®à¤°à¥€à¤œ à¤°à¤¿à¤•à¤µà¤°à¥€ à¤…à¤¨à¥à¤­à¤µ",
-    sameWeek: "à¤‰à¤¸à¥€ à¤¸à¤ªà¥à¤¤à¤¾à¤¹",
-    sameWeekText: "à¤¨à¤ˆ à¤•à¤‚à¤¸à¤²à¥à¤Ÿà¥‡à¤¶à¤¨ à¤•à¥‡ à¤²à¤¿à¤ à¤…à¤ªà¥‰à¤‡à¤‚à¤Ÿà¤®à¥‡à¤‚à¤Ÿ à¤‰à¤ªà¤²à¤¬à¥à¤§à¤¤à¤¾",
-    guidedCare: "à¤®à¤¾à¤°à¥à¤—à¤¦à¤°à¥à¤¶à¤¿à¤¤ à¤¦à¥‡à¤–à¤­à¤¾à¤²",
-    guidedCareText: "à¤¦à¤°à¥à¤¦, à¤—à¤¤à¤¿à¤¶à¥€à¤²à¤¤à¤¾ à¤”à¤° à¤ªà¥‹à¤¶à¥à¤šà¤° à¤•à¥‡ à¤²à¤¿à¤ à¤¸à¥à¤ªà¤·à¥à¤Ÿ à¤Ÿà¥à¤°à¥€à¤Ÿà¤®à¥‡à¤‚à¤Ÿ à¤ªà¥à¤²à¤¾à¤¨",
-    bannerSlides: "à¤¬à¥ˆà¤¨à¤° à¤¸à¥à¤²à¤¾à¤‡à¤¡à¥à¤¸",
-    featuredCareHighlights: "à¤®à¥à¤–à¥à¤¯ à¤•à¥‡à¤¯à¤° à¤¹à¤¾à¤‡à¤²à¤¾à¤‡à¤Ÿà¥à¤¸",
-    clinicFocus: "à¤•à¥à¤²à¤¿à¤¨à¤¿à¤• à¤«à¥‹à¤•à¤¸",
-    clinicFocusText: "à¤¦à¤°à¥à¤¦ à¤¸à¥‡ à¤°à¤¾à¤¹à¤¤, à¤°à¥€à¤¹à¥ˆà¤¬, à¤ªà¥‹à¤¶à¥à¤šà¤° à¤”à¤° à¤—à¤¤à¤¿à¤¶à¥€à¤²à¤¤à¤¾",
-    whyFeelsBetter: "à¤¯à¤¹ à¤¬à¥‡à¤¹à¤¤à¤° à¤•à¥à¤¯à¥‹à¤‚ à¤²à¤—à¤¤à¤¾ à¤¹à¥ˆ",
-    whyFeelsBetterText: "à¤¸à¥à¤ªà¤·à¥à¤Ÿà¤¤à¤¾, à¤†à¤°à¤¾à¤® à¤”à¤° à¤®à¤¾à¤°à¥à¤—à¤¦à¤°à¥à¤¶à¤¿à¤¤ à¤°à¤¿à¤•à¤µà¤°à¥€ à¤ªà¤° à¤†à¤§à¤¾à¤°à¤¿à¤¤ à¤•à¥à¤²à¤¿à¤¨à¤¿à¤• à¤…à¤¨à¥à¤­à¤µ",
-    reachUs: "à¤¹à¤® à¤¤à¤• à¤ªà¤¹à¥à¤‚à¤šà¥‡à¤‚",
-    servicesTitle: "à¤¹à¤® à¤•à¥à¤¯à¤¾ à¤•à¤°à¤¤à¥‡ à¤¹à¥ˆà¤‚",
-    servicesHeading: "à¤—à¤¤à¤¿à¤¶à¥€à¤²à¤¤à¤¾ à¤”à¤° à¤°à¤¿à¤•à¤µà¤°à¥€ à¤•à¥‡ à¤…à¤¨à¥à¤¸à¤¾à¤° à¤¬à¤¨à¤¾à¤ˆ à¤—à¤ˆ à¤¦à¥‡à¤–à¤­à¤¾à¤²",
-    viewAllServices: "à¤¸à¤­à¥€ à¤¸à¥‡à¤µà¤¾à¤à¤‚ à¤¦à¥‡à¤–à¥‡à¤‚",
-    recoveryEnvironment: "à¤°à¤¿à¤•à¤µà¤°à¥€ à¤µà¤¾à¤¤à¤¾à¤µà¤°à¤£",
-    recoveryEnvironmentTitle: "à¤ªà¤¹à¤²à¥€ à¤µà¤¿à¤œà¤¿à¤Ÿ à¤¸à¥‡ à¤«à¥‰à¤²à¥‹-à¤…à¤ª à¤¤à¤• à¤à¤• à¤…à¤§à¤¿à¤• à¤­à¤°à¥‹à¤¸à¥‡à¤®à¤‚à¤¦ à¤•à¥à¤²à¤¿à¤¨à¤¿à¤• à¤…à¤¨à¥à¤­à¤µà¥¤",
-    recoveryEnvironmentText: "à¤…à¤šà¥à¤›à¥€ à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤•à¥‡à¤µà¤² à¤‰à¤ªà¤šà¤¾à¤° à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤ à¤¯à¤¹ à¤¸à¥à¤ªà¤·à¥à¤Ÿ à¤®à¤¾à¤°à¥à¤—à¤¦à¤°à¥à¤¶à¤¨, à¤®à¤°à¥€à¤œ à¤•à¤¾ à¤†à¤°à¤¾à¤® à¤”à¤° à¤à¤¸à¤¾ à¤°à¤¿à¤•à¤µà¤°à¥€ à¤ªà¥à¤²à¤¾à¤¨ à¤­à¥€ à¤¹à¥ˆ à¤œà¥‹ à¤°à¥‹à¤œà¤®à¤°à¥à¤°à¤¾ à¤•à¥‡ à¤œà¥€à¤µà¤¨ à¤®à¥‡à¤‚ à¤¸à¤‚à¤­à¤¾à¤²à¤¨à¥‡ à¤¯à¥‹à¤—à¥à¤¯ à¤²à¤—à¥‡à¥¤",
-    leadDoctor: "à¤®à¥à¤–à¥à¤¯ à¤¡à¥‰à¤•à¥à¤Ÿà¤°",
-    leadDoctorText: "à¤¶à¤¾à¤‚à¤¤ à¤”à¤° à¤†à¤§à¥à¤¨à¤¿à¤• à¤°à¤¿à¤•à¤µà¤°à¥€ à¤¦à¥ƒà¤·à¥à¤Ÿà¤¿à¤•à¥‹à¤£ à¤•à¥‡ à¤¸à¤¾à¤¥ à¤®à¤°à¥€à¤œ-à¤•à¥‡à¤‚à¤¦à¥à¤°à¤¿à¤¤ à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤¦à¥‡à¤–à¤­à¤¾à¤² à¤•à¤¾ à¤®à¤¾à¤°à¥à¤—à¤¦à¤°à¥à¤¶à¤¨à¥¤",
-    quickBooking: "à¤¤à¥à¤µà¤°à¤¿à¤¤ à¤¬à¥à¤•à¤¿à¤‚à¤—",
-    quickBookingTitle: "à¤•à¥à¤¯à¤¾ à¤‡à¤¸ à¤¸à¤ªà¥à¤¤à¤¾à¤¹ à¤…à¤ªà¥‰à¤‡à¤‚à¤Ÿà¤®à¥‡à¤‚à¤Ÿ à¤šà¤¾à¤¹à¤¿à¤?",
-    quickBookingText: "à¤…à¤ªà¤¨à¥€ à¤œà¤¾à¤¨à¤•à¤¾à¤°à¥€ à¤”à¤° à¤ªà¤¸à¤‚à¤¦à¥€à¤¦à¤¾ à¤¸à¤®à¤¯ à¤¸à¤¾à¤à¤¾ à¤•à¤°à¥‡à¤‚à¥¤ à¤¹à¤® à¤†à¤ªà¤•à¥‡ à¤²à¤¿à¤ à¤¸à¤¹à¥€ à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤¸à¥‡à¤¶à¤¨ à¤œà¤²à¥à¤¦à¥€ à¤¤à¤¯ à¤•à¤°à¤¨à¥‡ à¤®à¥‡à¤‚ à¤®à¤¦à¤¦ à¤•à¤°à¥‡à¤‚à¤—à¥‡à¥¤",
-    startBooking: "à¤¬à¥à¤•à¤¿à¤‚à¤— à¤¶à¥à¤°à¥‚ à¤•à¤°à¥‡à¤‚",
-    heroAlt: "à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤•à¤‚à¤¸à¤²à¥à¤Ÿà¥‡à¤¶à¤¨",
-    therapyAlt: "à¤®à¤¾à¤°à¥à¤—à¤¦à¤°à¥à¤¶à¤¿à¤¤ à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤‰à¤ªà¤šà¤¾à¤° à¤²à¥‡à¤¤à¤¾ à¤®à¤°à¥€à¤œ",
-  },
-  or: {
-    badge: "à¬¦à­ˆà¬¨à¬¨à­à¬¦à¬¿à¬¨ à¬šà¬³à¬¨ à¬ªà¬¾à¬‡à¬ à¬†à¬§à­à¬¨à¬¿à¬• à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬¸à­‡à¬¬à¬¾",
-    quickFacts: ["à¬¡à¬¾. à¬¤à¬ªà¬¸à­à­±à¬¿à¬¨à­€ à¬¸à¬¾à¬¹à­", "à¬¬à¬¾à¬°à¬¿à¬ªà¬¦à¬¾, à¬“à¬¡à¬¿à¬¶à¬¾", "à¬¸à­‡à¬¹à¬¿ à¬¸à¬ªà­à¬¤à¬¾à¬¹à¬°à­‡ à¬…à¬ªà¬à¬¨à­à¬Ÿà¬®à­‡à¬£à­à¬Ÿ"],
-    slides: [
-      {
-        eyebrow: "à¬‰à¬¨à­à¬¨à¬¤ à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬¸à­‡à¬¬à¬¾",
-        title: "à¬ à¬¿à¬•à­ à¬®à­à¬­à¬®à­‡à¬£à­à¬Ÿ à¬ªà­à¬²à¬¾à¬¨ à¬¸à¬¹à¬¿à¬¤ à¬°à¬¾à¬¹à¬¾à¬¤ à¬†à¬°à¬®à­à¬­ à¬¹à­à¬à¥¤",
-        text:
-          "à¬¬à­‡à¬¦à¬¨à¬¾ à¬ªà¬°à¬¿à¬šà¬¾à¬³à¬¨à¬¾, à¬ªà­‹à¬·à­à¬šà¬° à¬¸à­à¬§à¬¾à¬° à¬à¬¬à¬‚ à¬†à¬¤à­à¬®à¬¬à¬¿à¬¶à­à­±à¬¾à¬¸à­€ à¬¦à­ˆà¬¨à¬¨à­à¬¦à¬¿à¬¨ à¬šà¬³à¬¨ à¬ªà¬¾à¬‡à¬ à¬¬à­à­Ÿà¬•à­à¬¤à¬¿à¬—à¬¤ à¬°à¬¿à¬•à¬­à¬°à¬¿ à¬ªà­à¬°à­‹à¬—à­à¬°à¬¾à¬®à¥¤",
-        metricLabel: "à¬®à¬¾à¬°à­à¬—à¬¦à¬°à­à¬¶à¬¿à¬¤ à¬¸à­‡à¬¸à¬¨ à¬ªà¬°à­‡ à¬°à­‹à¬—à­€à¬®à¬¾à¬¨à­‡ à¬…à¬§à¬¿à¬• à¬¸à­à¬¬à¬¿à¬§à¬¾ à¬…à¬¨à­à¬­à¬¬ à¬•à¬°à¬¿à¬›à¬¨à­à¬¤à¬¿",
-      },
-      {
-        eyebrow: "à¬†à¬˜à¬¾à¬¤ à¬ªà¬°à­‡ à¬¸à­à¬¸à­à¬¥à¬¤à¬¾",
-        title: "à¬¶à¬•à­à¬¤à¬¿, à¬¸à¬¨à­à¬¤à­à¬³à¬¨ à¬à¬¬à¬‚ à¬¦à­ˆà¬¨à¬¨à­à¬¦à¬¿à¬¨ à¬šà¬³à¬¨à¬•à­ à¬«à­‡à¬°à¬¿à¬¬à¬¾ à¬ªà¬¾à¬‡à¬ à¬¸à­à¬ à¬¾à¬® à¬°à¬¿à¬¹à¬¾à¬¬à­à¥¤",
-        text:
-          "à¬®à¬¾à¬‚à¬¸à¬ªà­‡à¬¶à­€ à¬Ÿà¬¾à¬£ à¬ à¬¾à¬°à­ à¬†à¬˜à¬¾à¬¤ à¬ªà¬°à¬¬à¬°à­à¬¤à­à¬¤à­€ à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬ªà¬°à­à¬¯à­à­Ÿà¬¨à­à¬¤, à¬†à¬®à­‡ à¬à¬®à¬¿à¬¤à¬¿ à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬ªà­à¬²à¬¾à¬¨ à¬¤à¬¿à¬†à¬°à¬¿ à¬•à¬°à­ à¬¯à¬¾à¬¹à¬¾ à¬¸à­à¬¥à¬¿à¬° à¬à¬¬à¬‚ à¬¬à­à­Ÿà¬¬à¬¹à¬¾à¬°à¬¿à¬• à¬²à¬¾à¬—à­‡à¥¤",
-        metricLabel: "à¬¨à¬¿à¬°à­à¬¦à­à¬¦à¬¿à¬·à­à¬Ÿ à¬°à­‹à¬—à­€ à¬¸à¬¹à¬¯à­‹à¬— à¬¸à¬¹ à¬®à¬¾à¬°à­à¬—à¬¦à¬°à­à¬¶à¬¿à¬¤ à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬ªà­à¬²à¬¾à¬¨",
-      },
-      {
-        eyebrow: "à¬ªà­‹à¬·à­à¬šà¬° à¬“ à¬®à­‡à¬°à­à¬¦à¬£à­à¬¡ à¬¸à¬¹à¬¾à­Ÿà¬¤à¬¾",
-        title: "à¬ªà¬¿à¬ à¬¿ à¬¬à­‡à¬¦à¬¨à¬¾, à¬—à¬°à­à¬¦à­à¬§à¬¨ à¬œà¬¡à¬¾ à¬à¬¬à¬‚ à¬¡à­‡à¬¸à­à¬• à¬•à¬¾à¬®à¬° à¬šà¬¾à¬ª à¬ªà¬¾à¬‡à¬ à¬†à¬§à­à¬¨à¬¿à¬• à¬¸à­‡à¬¬à¬¾à¥¤",
-        text:
-          "à¬¹à­à­Ÿà¬¾à¬£à­à¬¡à¬¸à­-à¬…à¬¨à­ à¬Ÿà­à¬°à¬¿à¬Ÿà¬®à­‡à¬£à­à¬Ÿ à¬“ à¬®à­à¬­à¬®à­‡à¬£à­à¬Ÿ à¬¸à­à¬§à¬¾à¬°, à¬¯à¬¾à¬¹à¬¾ à¬†à¬ªà¬£à¬™à­à¬•à­ à¬¦à­€à¬°à­à¬˜ à¬¸à¬®à­Ÿ à¬­à¬² à¬šà¬³à¬¨à¬°à­‡ à¬¸à¬¾à¬¹à¬¾à¬¯à­à­Ÿ à¬•à¬°à­‡à¥¤",
-        metricLabel: "à¬•à­à¬²à¬¿à¬¨à¬¿à¬• à¬¬à¬¿à¬¶à­à­±à¬¾à¬¸ à¬“ à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬®à¬¾à¬°à­à¬—à¬¦à¬°à­à¬¶à¬¨à¬° à¬¬à¬°à­à¬·",
-      },
-    ],
-    services: [
-      { title: "à¬¬à­‡à¬¦à¬¨à¬¾ à¬ªà¬°à¬¿à¬šà¬¾à¬³à¬¨à¬¾", text: "à¬ªà¬¿à¬ à¬¿ à¬¬à­‡à¬¦à¬¨à¬¾, à¬—à¬°à­à¬¦à­à¬§à¬¨ à¬œà¬¡à¬¾, à¬¯à­‹à¬¡à¬¼ à¬¸à¬®à¬¸à­à­Ÿà¬¾ à¬à¬¬à¬‚ à¬ªà­à¬¨à¬°à¬¾à¬¬à­ƒà¬¤à­à¬¤ à¬…à¬¸à­à¬¬à¬¿à¬§à¬¾ à¬ªà¬¾à¬‡à¬ à¬²à¬•à­à¬·à­à­Ÿà¬­à¬¿à¬¤à­à¬¤à¬¿à¬• à¬Ÿà­à¬°à¬¿à¬Ÿà¬®à­‡à¬£à­à¬Ÿ à¬ªà­à¬²à¬¾à¬¨à¥¤" },
-      { title: "à¬†à¬˜à¬¾à¬¤ à¬ªà¬°à­‡ à¬°à¬¿à¬¹à¬¾à¬¬à­", text: "à¬†à¬˜à¬¾à¬¤ à¬ªà¬°à­‡ à¬—à¬¤à¬¿, à¬¶à¬•à­à¬¤à¬¿ à¬à¬¬à¬‚ à¬†à¬¤à­à¬®à¬¬à¬¿à¬¶à­à­±à¬¾à¬¸ à¬«à­‡à¬°à¬¾à¬‡à¬¬à¬¾ à¬ªà¬¾à¬‡à¬ à¬¸à­à¬ à¬¾à¬® à¬°à¬¿à¬•à¬­à¬°à¬¿ à¬ªà­à¬°à­‹à¬—à­à¬°à¬¾à¬®à¥¤" },
-      { title: "à¬ªà­‹à¬·à­à¬šà¬° à¬¸à­à¬§à¬¾à¬°", text: "à¬…à¬«à¬¿à¬¸ à¬ªà­‹à¬·à­à¬šà¬°, à¬®à¬¾à¬‚à¬¸à¬ªà­‡à¬¶à­€ à¬…à¬¸à¬®à¬¨à­à­±à­Ÿ à¬“ à¬®à­à¬­à¬®à­‡à¬£à­à¬Ÿ à¬—à­à¬£à¬¤à­à­± à¬ªà¬¾à¬‡à¬ à¬†à¬§à­à¬¨à¬¿à¬• à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬¸à¬¹à¬¾à­Ÿà¬¤à¬¾à¥¤" },
-    ],
-    highlights: ["à¬°à­‹à¬—à­€-à¬ªà­à¬°à¬¥à¬® à¬¸à­‡à¬¬à¬¾", "à¬ªà­à¬°à¬®à¬¾à¬£-à¬­à¬¿à¬¤à­à¬¤à¬¿à¬• à¬ªà­à¬²à¬¾à¬¨", "à¬¸à­à¬¬à¬¿à¬§à¬¾à¬œà¬¨à¬• à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬¯à¬¾à¬¤à­à¬°à¬¾"],
-    exploreServices: "à¬¸à­‡à¬¬à¬¾ à¬¦à­‡à¬–à¬¨à­à¬¤à­",
-    doctorOnDuty: "à¬¡à­à­Ÿà­à¬Ÿà¬¿à¬°à­‡ à¬¡à¬¾à¬•à­à¬¤à¬°",
-    doctorText: "à¬¶à¬¾à¬¨à­à¬¤, à¬°à­‹à¬—à­€-à¬•à­‡à¬¨à­à¬¦à­à¬°à¬¿à¬• à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬¸à­‡à¬¬à¬¾, à¬¯à­‡à¬‰à¬à¬¥à¬¿à¬°à­‡ à¬¸à­à¬¸à­à¬¥à¬¤à¬¾, à¬ªà­‹à¬·à­à¬šà¬° à¬“ à¬¦à­ˆà¬¨à¬¨à­à¬¦à¬¿à¬¨ à¬šà¬³à¬¨à¬•à­ à¬—à­à¬°à­à¬¤à­à­± à¬¦à¬¿à¬†à¬¯à¬¾à¬‡à¬›à¬¿à¥¤",
-    fastAccess: "à¬¤à­à¬°à¬¨à­à¬¤ à¬ªà¬¹à¬žà­à¬š",
-    sameWeekBooking: "à¬¸à­‡à¬¹à¬¿ à¬¸à¬ªà­à¬¤à¬¾à¬¹à¬°à­‡ à¬¬à­à¬•à¬¿à¬‚",
-    simpleRequests: "à¬¸à¬¹à¬œ à¬•à¬¨à¬¸à¬²à­à¬Ÿà­‡à¬¸à¬¨ à¬…à¬¨à­à¬°à­‹à¬§",
-    trustSignal: "à¬¬à¬¿à¬¶à­à­±à¬¾à¬¸ à¬¸à¬™à­à¬•à­‡à¬¤",
-    patientFocusedClinic: "à¬°à­‹à¬—à­€-à¬•à­‡à¬¨à­à¬¦à­à¬°à¬¿à¬• à¬•à­à¬²à¬¿à¬¨à¬¿à¬•",
-    trustText: "à¬†à¬§à­à¬¨à¬¿à¬• à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬¦à­ƒà¬·à­à¬Ÿà¬¿à¬•à­‹à¬£ à¬¸à¬¹à¬¿à¬¤ à¬®à¬¾à¬°à­à¬—à¬¦à¬°à­à¬¶à¬¿à¬¤ à¬•à­‡à¬°à­ à¬ªà­à¬²à¬¾à¬¨",
-    featuredBanner: "à¬«à¬¿à¬šà¬°à­à¬¡ à¬¬à­à­Ÿà¬¾à¬¨à¬°à­",
-    bannerTitle: "à¬“à¬®à­â€Œà¬«à¬¿à¬œà¬¿à¬“ à­±à¬¾à¬°à­à¬²à­à¬¡ à¬°à­‹à¬—à­€ à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬…à¬¨à­à¬­à¬¬",
-    sameWeek: "à¬¸à­‡à¬¹à¬¿ à¬¸à¬ªà­à¬¤à¬¾à¬¹",
-    sameWeekText: "à¬¨à­‚à¬¤à¬¨ à¬•à¬¨à¬¸à¬²à­à¬Ÿà­‡à¬¸à¬¨ à¬ªà¬¾à¬‡à¬ à¬…à¬ªà¬à¬¨à­à¬Ÿà¬®à­‡à¬£à­à¬Ÿ à¬‰à¬ªà¬²à¬¬à­à¬§à¬¤à¬¾",
-    guidedCare: "à¬®à¬¾à¬°à­à¬—à¬¦à¬°à­à¬¶à¬¿à¬¤ à¬¸à­‡à¬¬à¬¾",
-    guidedCareText: "à¬¬à­‡à¬¦à¬¨à¬¾, à¬—à¬¤à¬¿à¬¶à­€à¬³à¬¤à¬¾ à¬“ à¬ªà­‹à¬·à­à¬šà¬° à¬ªà¬¾à¬‡à¬ à¬¸à­à¬ªà¬·à­à¬Ÿ à¬Ÿà­à¬°à¬¿à¬Ÿà¬®à­‡à¬£à­à¬Ÿ à¬ªà­à¬²à¬¾à¬¨",
-    bannerSlides: "à¬¬à­à­Ÿà¬¾à¬¨à¬°à­ à¬¸à­à¬²à¬¾à¬‡à¬¡à­",
-    featuredCareHighlights: "à¬®à­à¬–à­à­Ÿ à¬¸à­‡à¬¬à¬¾ à¬¹à¬¾à¬‡à¬²à¬¾à¬‡à¬Ÿà­",
-    clinicFocus: "à¬•à­à¬²à¬¿à¬¨à¬¿à¬• à¬«à­‹à¬•à¬¸à­",
-    clinicFocusText: "à¬¬à­‡à¬¦à¬¨à¬¾à¬°à­ à¬°à¬¾à¬¹à¬¾à¬¤, à¬°à¬¿à¬¹à¬¾à¬¬à­, à¬ªà­‹à¬·à­à¬šà¬° à¬“ à¬—à¬¤à¬¿à¬¶à­€à¬³à¬¤à¬¾",
-    whyFeelsBetter: "à¬à¬¹à¬¾ à¬•à¬¾à¬¹à¬¿à¬à¬•à¬¿ à¬­à¬² à¬²à¬¾à¬—à­‡",
-    whyFeelsBetterText: "à¬¸à­à¬ªà¬·à­à¬Ÿà¬¤à¬¾, à¬¸à­à¬¬à¬¿à¬§à¬¾ à¬“ à¬®à¬¾à¬°à­à¬—à¬¦à¬°à­à¬¶à¬¿à¬¤ à¬¸à­à¬¸à­à¬¥à¬¤à¬¾à¬•à­ à¬†à¬§à¬¾à¬° à¬•à¬°à¬¿à¬¥à¬¿à¬¬à¬¾ à¬•à­à¬²à¬¿à¬¨à¬¿à¬• à¬…à¬¨à­à¬­à¬¬",
-    reachUs: "à¬†à¬® à¬¸à¬¹à¬¿à¬¤ à¬¯à­‹à¬—à¬¾à¬¯à­‹à¬—",
-    servicesTitle: "à¬†à¬®à­‡ à¬•'à¬£ à¬•à¬°à­",
-    servicesHeading: "à¬šà¬³à¬¨ à¬“ à¬¸à­à¬¸à­à¬¥à¬¤à¬¾à¬•à­ à¬§à­à­Ÿà¬¾à¬¨à¬°à­‡ à¬°à¬–à¬¿ à¬¤à¬¿à¬†à¬°à¬¿ à¬¸à­‡à¬¬à¬¾",
-    viewAllServices: "à¬¸à¬®à¬¸à­à¬¤ à¬¸à­‡à¬¬à¬¾ à¬¦à­‡à¬–à¬¨à­à¬¤à­",
-    recoveryEnvironment: "à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬ªà¬°à¬¿à¬¬à­‡à¬¶",
-    recoveryEnvironmentTitle: "à¬ªà­à¬°à¬¥à¬® à¬­à¬¿à¬œà¬¿à¬Ÿà­ à¬ à¬¾à¬°à­ à¬«à¬²à­‹-à¬…à¬ªà­ à¬ªà¬°à­à¬¯à­à­Ÿà¬¨à­à¬¤ à¬…à¬§à¬¿à¬• à¬­à¬°à¬¸à¬¾à¬¯à­‹à¬—à­à­Ÿ à¬•à­à¬²à¬¿à¬¨à¬¿à¬• à¬…à¬¨à­à¬­à¬¬à¥¤",
-    recoveryEnvironmentText: "à¬­à¬² à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬•à­‡à¬¬à¬³ à¬šà¬¿à¬•à¬¿à¬¤à­à¬¸à¬¾ à¬¨à­à¬¹à­‡à¬à¥¤ à¬à¬¹à¬¾ à¬¸à­à¬ªà¬·à­à¬Ÿ à¬®à¬¾à¬°à­à¬—à¬¦à¬°à­à¬¶à¬¨, à¬°à­‹à¬—à­€à¬° à¬¸à­à¬¬à¬¿à¬§à¬¾ à¬“ à¬¦à­ˆà¬¨à¬¨à­à¬¦à¬¿à¬¨ à¬œà­€à¬¬à¬¨à¬°à­‡ à¬¸à¬¹à¬œà¬°à­‡ à¬…à¬¨à­à¬¸à¬°à¬£ à¬•à¬°à¬¿à¬ªà¬¾à¬°à¬¿à¬¬à¬¾ à¬à¬• à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬ªà­à¬²à¬¾à¬¨ à¬®à¬§à­à­Ÿà¥¤",
-    leadDoctor: "à¬®à­à¬–à­à­Ÿ à¬¡à¬¾à¬•à­à¬¤à¬°",
-    leadDoctorText: "à¬¶à¬¾à¬¨à­à¬¤ à¬à¬¬à¬‚ à¬†à¬§à­à¬¨à¬¿à¬• à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬¦à­ƒà¬·à­à¬Ÿà¬¿à¬•à­‹à¬£ à¬¸à¬¹ à¬°à­‹à¬—à­€-à¬•à­‡à¬¨à­à¬¦à­à¬°à¬¿à¬• à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬¸à­‡à¬¬à¬¾à¬° à¬¨à­‡à¬¤à­ƒà¬¤à­à­±à¥¤",
-    quickBooking: "à¬¤à­à­±à¬°à¬¿à¬¤ à¬¬à­à¬•à¬¿à¬‚",
-    quickBookingTitle: "à¬à¬¹à¬¿ à¬¸à¬ªà­à¬¤à¬¾à¬¹à¬°à­‡ à¬…à¬ªà¬à¬¨à­à¬Ÿà¬®à­‡à¬£à­à¬Ÿ à¬¦à¬°à¬•à¬¾à¬° à¬•à¬¿?",
-    quickBookingText: "à¬†à¬ªà¬£à¬™à­à¬• à¬¬à¬¿à¬¬à¬°à¬£à­€ à¬“ à¬ªà¬¸à¬¨à­à¬¦à¬° à¬¸à¬®à­Ÿ à¬¶à­‡à­Ÿà¬¾à¬° à¬•à¬°à¬¨à­à¬¤à­à¥¤ à¬†à¬®à­‡ à¬¶à­€à¬˜à­à¬° à¬ à¬¿à¬•à­ à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬¸à­‡à¬¸à¬¨ à¬¬à­à­Ÿà¬¬à¬¸à­à¬¥à¬¾ à¬•à¬°à¬¿à¬¦à­‡à¬¬à­à¥¤",
-    startBooking: "à¬¬à­à¬•à¬¿à¬‚ à¬†à¬°à¬®à­à¬­ à¬•à¬°à¬¨à­à¬¤à­",
-    heroAlt: "à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬•à¬¨à¬¸à¬²à­à¬Ÿà­‡à¬¸à¬¨",
-    therapyAlt: "à¬®à¬¾à¬°à­à¬—à¬¦à¬°à­à¬¶à¬¿à¬¤ à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬šà¬¿à¬•à¬¿à¬¤à­à¬¸à¬¾ à¬¨à­‡à¬‰à¬¥à¬¿à¬¬à¬¾ à¬°à­‹à¬—à­€",
-  },
+  badge: "Modern physiotherapy care for everyday movement",
+  quickFacts: ["Dr. Tapaswini Sahu, BPT, MPT (Ortho)", "Baripada, Odisha", "Same-week appointments"],
+  slides: [
+    {
+      eyebrow: "Advanced Physiotherapy Care",
+      title: "Relief that starts with the right movement plan.",
+      text:
+        "Personalized recovery programs for pain management, posture correction, and confident daily mobility.",
+      metricLabel: "Patients report better comfort after guided sessions",
+    },
+    {
+      eyebrow: "Recovery After Injury",
+      title: "Structured rehab designed for strength, balance, and return to routine.",
+      text:
+        "From muscle strain to post-injury recovery, we create therapy journeys that feel steady and practical.",
+      metricLabel: "Recovery plans guided with focused patient support",
+    },
+    {
+      eyebrow: "Posture And Spine Support",
+      title: "Modern care for back pain, neck stiffness, and work-from-desk strain.",
+      text:
+        "Hands-on treatment and movement correction to help you move better for longer.",
+      metricLabel: "Years of clinic trust and physiotherapy guidance",
+    },
+  ],
+  services: [
+    {
+      title: "Pain Management",
+      text:
+        "Targeted treatment plans for back pain, neck stiffness, joint issues, and recurring discomfort.",
+    },
+    {
+      title: "Post Injury Rehab",
+      text:
+        "Structured recovery programs to restore mobility, strength, and confidence after injury.",
+    },
+    {
+      title: "Posture Correction",
+      text:
+        "Modern physiotherapy support for office posture, muscle imbalance, and movement quality.",
+    },
+  ],
+  highlights: ["Patient-first care", "Evidence-based plans", "Comfortable recovery journey"],
+  exploreServices: "Explore Services",
+  doctorOnDuty: "Doctor On Duty",
+  doctorText:
+    "Calm, patient-first physiotherapy care with a focus on recovery, posture, and everyday movement.",
+  fastAccess: "Fast Access",
+  sameWeekBooking: "Same-week booking",
+  simpleRequests: "Simple consultation requests",
+  trustSignal: "Trust Signal",
+  patientFocusedClinic: "Patient-focused clinic",
+  trustText: "Guided care plans with a modern recovery approach",
+  featuredBanner: "Featured Banner",
+  bannerTitle: "Omm Physio World patient recovery experience",
+  sameWeek: "Same Week",
+  sameWeekText: "Appointment availability for new consultations",
+  guidedCare: "Guided Care",
+  guidedCareText: "Clear treatment plans for pain, mobility, and posture",
+  bannerSlides: "Banner Slides",
+  featuredCareHighlights: "Featured care highlights",
+  clinicFocus: "Clinic Focus",
+  clinicFocusText: "Pain relief, rehab, posture, and mobility",
+  whyFeelsBetter: "Why It Feels Better",
+  whyFeelsBetterText: "A clinic experience built around clarity, comfort, and guided recovery",
+  reachUs: "Reach Us",
+  servicesTitle: "What We Do",
+  servicesHeading: "Care designed around movement and recovery",
+  viewAllServices: "View all services",
+  recoveryEnvironment: "Recovery Environment",
+  recoveryEnvironmentTitle: "A more reassuring clinic experience from first visit to follow-up.",
+  recoveryEnvironmentText:
+    "Good physiotherapy care is not only about treatment. It is also about clear guidance, patient comfort, and a recovery plan that feels manageable in everyday life.",
+  leadDoctor: "Lead Doctor",
+  leadDoctorText:
+    "Guiding patient-focused physiotherapy care with a calm and modern recovery approach.",
+  quickBooking: "Quick Booking",
+  quickBookingTitle: "Need an appointment this week?",
+  quickBookingText:
+    "Share your details and preferred visit time. We will help you find the right therapy session quickly.",
+  startBooking: "Start booking",
+  heroAlt: "Physiotherapy consultation",
+  therapyAlt: "Patient receiving guided physiotherapy treatment",
 };
 
 const siteImages = {
@@ -302,8 +161,7 @@ export default function HomePage() {
   });
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackStatus, setFeedbackStatus] = useState({ type: "", message: "" });
-  const { language } = useLanguage();
-  const t = pageCopy[language] || pageCopy.en;
+  const t = pageCopy;
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -450,11 +308,7 @@ export default function HomePage() {
                   to="/patient-login?redirect=/patient-dashboard"
                   className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-3.5 font-medium text-white shadow-lg shadow-slate-900/10 hover:bg-slate-800"
                 >
-                  {language === "en"
-                    ? "Book Appointment"
-                    : language === "hi"
-                      ? "à¤…à¤ªà¥‰à¤‡à¤‚à¤Ÿà¤®à¥‡à¤‚à¤Ÿ à¤¬à¥à¤• à¤•à¤°à¥‡à¤‚"
-                      : "à¬…à¬ªà¬à¬¨à­à¬Ÿà¬®à­‡à¬£à­à¬Ÿ à¬¬à­à¬•à­ à¬•à¬°à¬¨à­à¬¤à­"}
+                  Book Appointment
                   <ArrowRight size={18} />
                 </Link>
                 <Link
@@ -760,11 +614,11 @@ export default function HomePage() {
                     <BadgeCheck size={20} />
                   </div>
                   <div className="flex gap-1 text-amber-500">
-                    <span>â˜…</span>
-                    <span>â˜…</span>
-                    <span>â˜…</span>
-                    <span>â˜…</span>
-                    <span>â˜…</span>
+                    <span>�~.</span>
+                    <span>�~.</span>
+                    <span>�~.</span>
+                    <span>�~.</span>
+                    <span>�~.</span>
                   </div>
                 </div>
 

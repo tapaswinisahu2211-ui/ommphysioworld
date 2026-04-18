@@ -169,9 +169,7 @@ export default function PatientAuthPage({ mode = "login" }) {
                     : "Patient account is linked with your OPW patient record"}
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3">
-                  {isForgot
-                    ? "Website and mobile both use the same patient account"
-                    : "Mobile and web access use the same patient account"}
+                  Website and mobile both use the same patient account
                 </div>
               </div>
             </div>

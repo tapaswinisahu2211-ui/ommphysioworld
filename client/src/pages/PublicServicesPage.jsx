@@ -1,4 +1,4 @@
-﻿import {
+import {
   Activity,
   ArrowRight,
   Baby,
@@ -18,7 +18,6 @@
 import { Link } from "react-router-dom";
 import Seo from "../components/Seo";
 import PublicLayout from "../layout/PublicLayout";
-import { useLanguage } from "../context/LanguageContext";
 import { createBreadcrumbSchema, createMedicalBusinessSchema } from "../utils/seo";
 import serviceManual from "../assets/service-manual.png";
 import serviceNeurological from "../assets/service-neurological.png";
@@ -85,71 +84,28 @@ const serviceGroups = [
 const heroImage = servicesHeroImage;
 
 const copy = {
-  en: {
-    eyebrow: "Services",
-    title: "Complete physiotherapy services presented in a more practical, patient-friendly way.",
-    text: "Our care covers pain relief, rehabilitation, posture correction, strength recovery, mobility improvement, and specialty physiotherapy support across different stages of life.",
-    bookAppointment: "Book Appointment",
-    talkToClinic: "Talk to the Clinic",
-    heroAlt: "Modern physiotherapy treatment consultation",
-    featuredServices: [
-      { title: "Orthopedic Physiotherapy", text: "Care for joint pain, fractures, stiffness, ligament issues, and musculoskeletal recovery." },
-      { title: "Sports Rehabilitation", text: "Performance-focused therapy for injury recovery, strengthening, mobility, and return to sport." },
-      { title: "Posture And Spine Care", text: "Support for neck pain, back pain, posture correction, and workstation-related strain." },
-      { title: "Pain Relief Therapy", text: "Hands-on and exercise-based therapy to reduce pain and improve day-to-day movement quality." },
-      { title: "Neurological Physiotherapy", text: "Balance, coordination, gait, and functional support for neurological recovery needs." },
-      { title: "Manual Therapy", text: "Hands-on joint and soft tissue techniques to ease stiffness, improve range, and relieve tension." },
-    ],
-    completeCare: "Complete Care",
-    completeCareTitle: "Broader physiotherapy support for pain, rehab, movement, and long-term function",
-    completeCareText: "Our clinic can support patients across orthopedic, neurological, sports, pediatric, geriatric, post-surgical, spinal, posture, balance, pain-relief, and functional rehabilitation needs. Each plan is adjusted to the patient's condition, comfort level, and recovery goal.",
-    groups: ["Rehabilitation And Recovery", "Specialized Physiotherapy", "Supportive Treatment Options"],
-  },
-  hi: {
-    eyebrow: "à¤¸à¥‡à¤µà¤¾à¤à¤‚",
-    title: "à¤ªà¥‚à¤°à¥à¤£ à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤¸à¥‡à¤µà¤¾à¤à¤‚, à¤œà¤¿à¤¨à¥à¤¹à¥‡à¤‚ à¤…à¤§à¤¿à¤• à¤µà¥à¤¯à¤¾à¤µà¤¹à¤¾à¤°à¤¿à¤• à¤”à¤° à¤®à¤°à¥€à¤œ-à¤®à¤¿à¤¤à¥à¤° à¤¤à¤°à¥€à¤•à¥‡ à¤¸à¥‡ à¤ªà¥à¤°à¤¸à¥à¤¤à¥à¤¤ à¤•à¤¿à¤¯à¤¾ à¤—à¤¯à¤¾ à¤¹à¥ˆà¥¤",
-    text: "à¤¹à¤®à¤¾à¤°à¥€ à¤¦à¥‡à¤–à¤­à¤¾à¤² à¤®à¥‡à¤‚ à¤¦à¤°à¥à¤¦ à¤¸à¥‡ à¤°à¤¾à¤¹à¤¤, à¤ªà¥à¤¨à¤°à¥à¤µà¤¾à¤¸, à¤ªà¥‹à¤¶à¥à¤šà¤° à¤¸à¥à¤§à¤¾à¤°, à¤¤à¤¾à¤•à¤¤ à¤•à¥€ à¤µà¤¾à¤ªà¤¸à¥€, à¤—à¤¤à¤¿à¤¶à¥€à¤²à¤¤à¤¾ à¤¸à¥à¤§à¤¾à¤° à¤”à¤° à¤œà¥€à¤µà¤¨ à¤•à¥‡ à¤…à¤²à¤—-à¤…à¤²à¤— à¤šà¤°à¤£à¥‹à¤‚ à¤•à¥‡ à¤²à¤¿à¤ à¤µà¤¿à¤¶à¥‡à¤· à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤¸à¤¹à¤¾à¤¯à¤¤à¤¾ à¤¶à¤¾à¤®à¤¿à¤² à¤¹à¥ˆà¥¤",
-    bookAppointment: "à¤…à¤ªà¥‰à¤‡à¤‚à¤Ÿà¤®à¥‡à¤‚à¤Ÿ à¤¬à¥à¤• à¤•à¤°à¥‡à¤‚",
-    talkToClinic: "à¤•à¥à¤²à¤¿à¤¨à¤¿à¤• à¤¸à¥‡ à¤¬à¤¾à¤¤ à¤•à¤°à¥‡à¤‚",
-    heroAlt: "à¤†à¤§à¥à¤¨à¤¿à¤• à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤•à¤‚à¤¸à¤²à¥à¤Ÿà¥‡à¤¶à¤¨",
-    featuredServices: [
-      { title: "à¤‘à¤°à¥à¤¥à¥‹à¤ªà¥‡à¤¡à¤¿à¤• à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€", text: "à¤œà¥‹à¤¡à¤¼à¥‹à¤‚ à¤•à¥‡ à¤¦à¤°à¥à¤¦, à¤«à¥à¤°à¥ˆà¤•à¥à¤šà¤°, à¤œà¤•à¤¡à¤¼à¤¨, à¤²à¤¿à¤—à¤¾à¤®à¥‡à¤‚à¤Ÿ à¤¸à¤®à¤¸à¥à¤¯à¤¾à¤“à¤‚ à¤”à¤° à¤®à¤¸à¥à¤•à¥à¤²à¥‹à¤¸à¥à¤•à¥‡à¤²à¥‡à¤Ÿà¤² à¤°à¤¿à¤•à¤µà¤°à¥€ à¤•à¥‡ à¤²à¤¿à¤ à¤¦à¥‡à¤–à¤­à¤¾à¤²à¥¤" },
-      { title: "à¤¸à¥à¤ªà¥‹à¤°à¥à¤Ÿà¥à¤¸ à¤°à¤¿à¤¹à¥ˆà¤¬à¤¿à¤²à¤¿à¤Ÿà¥‡à¤¶à¤¨", text: "à¤šà¥‹à¤Ÿ à¤¸à¥‡ à¤‰à¤¬à¤°à¤¨à¥‡, à¤¸à¥à¤Ÿà¥à¤°à¥‡à¤‚à¤¥, à¤®à¥‹à¤¬à¤¿à¤²à¤¿à¤Ÿà¥€ à¤”à¤° à¤–à¥‡à¤² à¤®à¥‡à¤‚ à¤µà¤¾à¤ªà¤¸à¥€ à¤•à¥‡ à¤²à¤¿à¤ à¤ªà¥à¤°à¤¦à¤°à¥à¤¶à¤¨-à¤•à¥‡à¤‚à¤¦à¥à¤°à¤¿à¤¤ à¤¥à¥‡à¤°à¥‡à¤ªà¥€à¥¤" },
-      { title: "à¤ªà¥‹à¤¶à¥à¤šà¤° à¤”à¤° à¤¸à¥à¤ªà¤¾à¤‡à¤¨ à¤•à¥‡à¤¯à¤°", text: "à¤—à¤°à¥à¤¦à¤¨ à¤¦à¤°à¥à¤¦, à¤ªà¥€à¤  à¤¦à¤°à¥à¤¦, à¤ªà¥‹à¤¶à¥à¤šà¤° à¤¸à¥à¤§à¤¾à¤° à¤”à¤° à¤µà¤°à¥à¤•à¤¸à¥à¤Ÿà¥‡à¤¶à¤¨ à¤¸à¥‡ à¤œà¥à¤¡à¤¼à¥€ à¤ªà¤°à¥‡à¤¶à¤¾à¤¨à¥€ à¤•à¥‡ à¤²à¤¿à¤ à¤¸à¤¹à¤¾à¤¯à¤¤à¤¾à¥¤" },
-      { title: "à¤¦à¤°à¥à¤¦ à¤°à¤¾à¤¹à¤¤ à¤¥à¥‡à¤°à¥‡à¤ªà¥€", text: "à¤¦à¤°à¥à¤¦ à¤•à¤® à¤•à¤°à¤¨à¥‡ à¤”à¤° à¤°à¥‹à¤œà¤®à¤°à¥à¤°à¤¾ à¤•à¥€ à¤—à¤¤à¤¿à¤µà¤¿à¤§à¤¿ à¤¬à¥‡à¤¹à¤¤à¤° à¤•à¤°à¤¨à¥‡ à¤•à¥‡ à¤²à¤¿à¤ à¤¹à¥ˆà¤‚à¤¡à¥à¤¸-à¤‘à¤¨ à¤”à¤° à¤à¤•à¥à¤¸à¤°à¤¸à¤¾à¤‡à¤œ à¤†à¤§à¤¾à¤°à¤¿à¤¤ à¤¥à¥‡à¤°à¥‡à¤ªà¥€à¥¤" },
-      { title: "à¤¨à¥à¤¯à¥‚à¤°à¥‹à¤²à¥‰à¤œà¤¿à¤•à¤² à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€", text: "à¤¨à¥à¤¯à¥‚à¤°à¥‹à¤²à¥‰à¤œà¤¿à¤•à¤² à¤°à¤¿à¤•à¤µà¤°à¥€ à¤•à¥‡ à¤²à¤¿à¤ à¤¸à¤‚à¤¤à¥à¤²à¤¨, à¤•à¥‹à¤‘à¤°à¥à¤¡à¤¿à¤¨à¥‡à¤¶à¤¨, à¤šà¤¾à¤² à¤”à¤° à¤•à¤¾à¤°à¥à¤¯à¤¾à¤¤à¥à¤®à¤• à¤¸à¤¹à¤¾à¤¯à¤¤à¤¾à¥¤" },
-      { title: "à¤®à¥ˆà¤¨à¥à¤…à¤² à¤¥à¥‡à¤°à¥‡à¤ªà¥€", text: "à¤œà¥‹à¤¡à¤¼à¥‹à¤‚ à¤”à¤° à¤¸à¥‰à¤«à¥à¤Ÿ à¤Ÿà¤¿à¤¶à¥‚ à¤•à¥€ à¤¹à¥ˆà¤‚à¤¡à¥à¤¸-à¤‘à¤¨ à¤¤à¤•à¤¨à¥€à¤•à¥‡à¤‚, à¤œà¥‹ à¤œà¤•à¤¡à¤¼à¤¨ à¤•à¤® à¤•à¤°à¥‡à¤‚, à¤°à¥‡à¤‚à¤œ à¤¸à¥à¤§à¤¾à¤°à¥‡à¤‚ à¤”à¤° à¤¤à¤¨à¤¾à¤µ à¤˜à¤Ÿà¤¾à¤à¤‚à¥¤" },
-    ],
-    completeCare: "à¤¸à¤®à¤—à¥à¤° à¤¦à¥‡à¤–à¤­à¤¾à¤²",
-    completeCareTitle: "à¤¦à¤°à¥à¤¦, à¤°à¥€à¤¹à¥ˆà¤¬, à¤®à¥‚à¤µà¤®à¥‡à¤‚à¤Ÿ à¤”à¤° à¤¦à¥€à¤°à¥à¤˜à¤•à¤¾à¤²à¤¿à¤• à¤•à¤¾à¤°à¥à¤¯à¤•à¥à¤·à¤®à¤¤à¤¾ à¤•à¥‡ à¤²à¤¿à¤ à¤µà¥à¤¯à¤¾à¤ªà¤• à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€ à¤¸à¤¹à¤¾à¤¯à¤¤à¤¾",
-    completeCareText: "à¤¹à¤®à¤¾à¤°à¤¾ à¤•à¥à¤²à¤¿à¤¨à¤¿à¤• à¤‘à¤°à¥à¤¥à¥‹à¤ªà¥‡à¤¡à¤¿à¤•, à¤¨à¥à¤¯à¥‚à¤°à¥‹à¤²à¥‰à¤œà¤¿à¤•à¤², à¤¸à¥à¤ªà¥‹à¤°à¥à¤Ÿà¥à¤¸, à¤ªà¥€à¤¡à¤¿à¤¯à¤¾à¤Ÿà¥à¤°à¤¿à¤•, à¤œà¥‡à¤°à¤¿à¤¯à¤¾à¤Ÿà¥à¤°à¤¿à¤•, à¤ªà¥‹à¤¸à¥à¤Ÿ-à¤¸à¤°à¥à¤œà¤¿à¤•à¤², à¤¸à¥à¤ªà¤¾à¤‡à¤¨à¤², à¤ªà¥‹à¤¶à¥à¤šà¤°, à¤¸à¤‚à¤¤à¥à¤²à¤¨, à¤¦à¤°à¥à¤¦-à¤°à¤¾à¤¹à¤¤ à¤”à¤° à¤•à¤¾à¤°à¥à¤¯à¤¾à¤¤à¥à¤®à¤• à¤ªà¥à¤¨à¤°à¥à¤µà¤¾à¤¸ à¤œà¥ˆà¤¸à¥€ à¤œà¤°à¥‚à¤°à¤¤à¥‹à¤‚ à¤®à¥‡à¤‚ à¤¸à¤¹à¤¾à¤¯à¤¤à¤¾ à¤¦à¥‡ à¤¸à¤•à¤¤à¤¾ à¤¹à¥ˆà¥¤ à¤¹à¤° à¤ªà¥à¤²à¤¾à¤¨ à¤®à¤°à¥€à¤œ à¤•à¥€ à¤¸à¥à¤¥à¤¿à¤¤à¤¿, à¤†à¤°à¤¾à¤® à¤”à¤° à¤°à¤¿à¤•à¤µà¤°à¥€ à¤²à¤•à¥à¤·à¥à¤¯ à¤•à¥‡ à¤…à¤¨à¥à¤¸à¤¾à¤° à¤¸à¤®à¤¾à¤¯à¥‹à¤œà¤¿à¤¤ à¤•à¤¿à¤¯à¤¾ à¤œà¤¾à¤¤à¤¾ à¤¹à¥ˆà¥¤",
-    groups: ["à¤°à¥€à¤¹à¥ˆà¤¬à¤¿à¤²à¤¿à¤Ÿà¥‡à¤¶à¤¨ à¤”à¤° à¤°à¤¿à¤•à¤µà¤°à¥€", "à¤µà¤¿à¤¶à¥‡à¤· à¤«à¤¿à¤œà¤¿à¤¯à¥‹à¤¥à¥‡à¤°à¥‡à¤ªà¥€", "à¤¸à¤¹à¤¾à¤¯à¤• à¤‰à¤ªà¤šà¤¾à¤° à¤µà¤¿à¤•à¤²à¥à¤ª"],
-  },
-  or: {
-    eyebrow: "à¬¸à­‡à¬¬à¬¾",
-    title: "à¬¸à¬®à­à¬ªà­‚à¬°à­à¬£à­à¬£ à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬¸à­‡à¬¬à¬¾, à¬¯à¬¾à¬¹à¬¾à¬•à­ à¬…à¬§à¬¿à¬• à¬¬à­à­Ÿà¬¬à¬¹à¬¾à¬°à¬¿à¬• à¬à¬¬à¬‚ à¬°à­‹à¬—à­€-à¬®à¬¿à¬¤à­à¬° à¬­à¬¾à¬¬à¬°à­‡ à¬ªà­à¬°à¬¦à¬°à­à¬¶à¬¿à¬¤ à¬•à¬°à¬¾à¬¯à¬¾à¬‡à¬›à¬¿à¥¤",
-    text: "à¬†à¬® à¬¸à­‡à¬¬à¬¾à¬°à­‡ à¬¬à­‡à¬¦à¬¨à¬¾à¬°à­ à¬°à¬¾à¬¹à¬¾à¬¤, à¬°à¬¿à¬¹à¬¾à¬¬à­, à¬ªà­‹à¬·à­à¬šà¬° à¬¸à­à¬§à¬¾à¬°, à¬¶à¬•à­à¬¤à¬¿ à¬ªà­à¬¨à¬°à­à¬¦à­à¬§à¬¾à¬°, à¬—à¬¤à¬¿à¬¶à­€à¬³à¬¤à¬¾ à¬¸à­à¬§à¬¾à¬° à¬à¬¬à¬‚ à¬œà­€à¬¬à¬¨à¬° à¬¬à¬¿à¬­à¬¿à¬¨à­à¬¨ à¬ªà¬°à­à¬¯à­à­Ÿà¬¾à­Ÿ à¬ªà¬¾à¬‡à¬ à¬¬à¬¿à¬¶à­‡à¬· à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬¸à¬¹à¬¾à­Ÿà¬¤à¬¾ à¬°à¬¹à¬¿à¬›à¬¿à¥¤",
-    bookAppointment: "à¬…à¬ªà¬à¬¨à­à¬Ÿà¬®à­‡à¬£à­à¬Ÿ à¬¬à­à¬•à­ à¬•à¬°à¬¨à­à¬¤à­",
-    talkToClinic: "à¬•à­à¬²à¬¿à¬¨à¬¿à¬• à¬¸à¬¹ à¬•à¬¥à¬¾à¬¹à­à¬…à¬¨à­à¬¤à­",
-    heroAlt: "à¬†à¬§à­à¬¨à¬¿à¬• à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬•à¬¨à¬¸à¬²à­à¬Ÿà­‡à¬¸à¬¨",
-    featuredServices: [
-      { title: "à¬…à¬°à­à¬¥à­‹à¬ªà­‡à¬¡à¬¿à¬•à­ à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿", text: "à¬¯à­‹à¬¡à¬¼ à¬¬à­‡à¬¦à¬¨à¬¾, à¬«à­à¬°à¬¾à¬•à­à¬šà¬°, à¬œà¬¡à¬¾, à¬²à¬¿à¬—à¬¾à¬®à­‡à¬£à­à¬Ÿ à¬¸à¬®à¬¸à­à­Ÿà¬¾ à¬à¬¬à¬‚ à¬®à¬¸à­à¬•à­à¬²à­‹à¬¸à­à¬•à­‡à¬²à­‡à¬Ÿà¬¾à¬² à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬ªà¬¾à¬‡à¬ à¬¸à­‡à¬¬à¬¾à¥¤" },
-      { title: "à¬¸à­à¬ªà­‹à¬°à­à¬Ÿà¬¸à­ à¬°à¬¿à¬¹à¬¾à¬¬à¬¿à¬²à¬¿à¬Ÿà­‡à¬¸à¬¨à­", text: "à¬†à¬˜à¬¾à¬¤ à¬ªà¬°à­‡ à¬¸à­à¬¸à­à¬¥à¬¤à¬¾, à¬¶à¬•à­à¬¤à¬¿, à¬—à¬¤à¬¿à¬¶à­€à¬³à¬¤à¬¾ à¬“ à¬–à­‡à¬³à¬•à­ à¬«à­‡à¬°à¬¿à¬¬à¬¾ à¬ªà¬¾à¬‡à¬ à¬ªà¬°à¬«à¬°à­à¬®à¬¾à¬¨à­à¬¸-à¬•à­‡à¬¨à­à¬¦à­à¬°à¬¿à¬• à¬¥à­‡à¬°à¬¾à¬ªà¬¿à¥¤" },
-      { title: "à¬ªà­‹à¬·à­à¬šà¬° à¬“ à¬¸à­à¬ªà¬¾à¬‡à¬¨à­ à¬¸à­‡à¬¬à¬¾", text: "à¬—à¬°à­à¬¦à­à¬§à¬¨ à¬¬à­‡à¬¦à¬¨à¬¾, à¬ªà¬¿à¬ à¬¿ à¬¬à­‡à¬¦à¬¨à¬¾, à¬ªà­‹à¬·à­à¬šà¬° à¬¸à­à¬§à¬¾à¬° à¬à¬¬à¬‚ à­±à¬°à­à¬•à¬·à­à¬Ÿà­‡à¬¸à¬¨ à¬¸à¬®à­à¬¬à¬¨à­à¬§à¬¿à¬¤ à¬šà¬¾à¬ª à¬ªà¬¾à¬‡à¬ à¬¸à¬¹à¬¾à­Ÿà¬¤à¬¾à¥¤" },
-      { title: "à¬¬à­‡à¬¦à¬¨à¬¾à¬°à­ à¬°à¬¾à¬¹à¬¾à¬¤ à¬¥à­‡à¬°à¬¾à¬ªà¬¿", text: "à¬¬à­‡à¬¦à¬¨à¬¾ à¬•à¬®à­‡à¬‡à¬¬à¬¾ à¬à¬¬à¬‚ à¬¦à­ˆà¬¨à¬¨à­à¬¦à¬¿à¬¨ à¬šà¬³à¬¨ à¬—à­à¬£à¬¤à­à­± à¬¸à­à¬§à¬¾à¬° à¬ªà¬¾à¬‡à¬ à¬¹à­à­Ÿà¬¾à¬£à­à¬¡à¬¸à­-à¬…à¬¨à­ à¬à¬¬à¬‚ à¬…à¬­à­à­Ÿà¬¾à¬¸ à¬†à¬§à¬¾à¬°à¬¿à¬¤ à¬¥à­‡à¬°à¬¾à¬ªà¬¿à¥¤" },
-      { title: "à¬¨à­à­Ÿà­à¬°à­‹à¬²à¬œà¬¿à¬•à¬¾à¬² à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿", text: "à¬¨à­à­Ÿà­à¬°à­‹à¬²à¬œà¬¿à¬•à¬¾à¬² à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬ªà¬¾à¬‡à¬ à¬¸à¬¨à­à¬¤à­à¬³à¬¨, à¬¸à¬®à¬¨à­à­±à­Ÿ, à¬šà¬¾à¬²à¬šà¬²à¬¨ à¬à¬¬à¬‚ à¬•à¬¾à¬°à­à¬¯à­à­Ÿà¬•à¬¾à¬°à­€ à¬¸à¬¹à¬¾à­Ÿà¬¤à¬¾à¥¤" },
-      { title: "à¬®à¬¾à¬¨à­à¬†à¬² à¬¥à­‡à¬°à¬¾à¬ªà¬¿", text: "à¬¯à­‹à¬¡à¬¼ à¬“ à¬¸à¬«à­à¬Ÿ à¬Ÿà¬¿à¬¶à­ à¬ªà¬¾à¬‡à¬ à¬¹à­à­Ÿà¬¾à¬£à­à¬¡à¬¸à­-à¬…à¬¨à­ à¬ªà­à¬°à¬¯à­à¬•à­à¬¤à¬¿, à¬¯à¬¾à¬¹à¬¾ à¬œà¬¡à¬¾ à¬•à¬®à¬¾à¬, à¬°à­‡à¬žà­à¬œ à¬¸à­à¬§à¬¾à¬°à­‡ à¬à¬¬à¬‚ à¬Ÿà­‡à¬¨à¬¸à¬¨ à¬•à¬®à¬¾à¬à¥¤" },
-    ],
-    completeCare: "à¬¸à¬®à­à¬ªà­‚à¬°à­à¬£à­à¬£ à¬¸à­‡à¬¬à¬¾",
-    completeCareTitle: "à¬¬à­‡à¬¦à¬¨à¬¾, à¬°à¬¿à¬¹à¬¾à¬¬à­, à¬šà¬³à¬¨ à¬à¬¬à¬‚ à¬¦à­€à¬°à­à¬˜à¬•à¬¾à¬³à­€à¬¨ à¬•à¬¾à¬°à­à¬¯à­à­Ÿà¬•à­à¬¶à¬³à¬¤à¬¾ à¬ªà¬¾à¬‡à¬ à¬¬à¬¿à¬¸à­à¬¤à­ƒà¬¤ à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿ à¬¸à¬¹à¬¾à­Ÿà¬¤à¬¾",
-    completeCareText: "à¬†à¬® à¬•à­à¬²à¬¿à¬¨à¬¿à¬• à¬…à¬°à­à¬¥à­‹à¬ªà­‡à¬¡à¬¿à¬•à­, à¬¨à­à­Ÿà­à¬°à­‹à¬²à¬œà¬¿à¬•à¬¾à¬², à¬¸à­à¬ªà­‹à¬°à­à¬Ÿà¬¸à­, à¬ªà¬¿à¬¡à¬¿à¬†à¬Ÿà­à¬°à¬¿à¬•à­, à¬œà­‡à¬°à¬¿à¬†à¬Ÿà­à¬°à¬¿à¬•à­, à¬ªà­‹à¬·à­à¬Ÿ-à¬¸à¬°à­à¬œà¬¿à¬•à¬¾à¬², à¬¸à­à¬ªà¬¾à¬‡à¬¨à¬¾à¬², à¬ªà­‹à¬·à­à¬šà¬°, à¬¸à¬¨à­à¬¤à­à¬³à¬¨, à¬¬à­‡à¬¦à¬¨à¬¾à¬°à­ à¬°à¬¾à¬¹à¬¾à¬¤ à¬à¬¬à¬‚ à¬•à¬¾à¬°à­à¬¯à­à­Ÿà¬•à¬¾à¬°à­€ à¬°à¬¿à¬¹à¬¾à¬¬à¬¿à¬²à¬¿à¬Ÿà­‡à¬¸à¬¨ à¬†à¬¬à¬¶à­à­Ÿà¬•à¬¤à¬¾à¬°à­‡ à¬¸à¬¹à¬¾à­Ÿà¬¤à¬¾ à¬•à¬°à¬¿à¬ªà¬¾à¬°à­‡à¥¤ à¬ªà­à¬°à¬¤à­à­Ÿà­‡à¬• à¬ªà­à¬²à¬¾à¬¨à­ à¬°à­‹à¬—à­€à¬™à­à¬• à¬…à¬¬à¬¸à­à¬¥à¬¾, à¬¸à­à¬¬à¬¿à¬§à¬¾ à¬à¬¬à¬‚ à¬¸à­à¬¸à­à¬¥à¬¤à¬¾ à¬²à¬•à­à¬·à­à­Ÿ à¬…à¬¨à­à¬¯à¬¾à­Ÿà­€ à¬¸à¬®à¬¯à­‹à¬œà¬¨ à¬•à¬°à¬¾à¬¯à¬¾à¬à¥¤",
-    groups: ["à¬°à¬¿à¬¹à¬¾à¬¬à¬¿à¬²à¬¿à¬Ÿà­‡à¬¸à¬¨ à¬“ à¬¸à­à¬¸à­à¬¥à¬¤à¬¾", "à¬¬à¬¿à¬¶à­‡à¬· à¬«à¬¿à¬œà¬¿à¬“à¬¥à­‡à¬°à¬¾à¬ªà¬¿", "à¬¸à¬¹à¬¾à­Ÿà¬• à¬šà¬¿à¬•à¬¿à¬¤à­à¬¸à¬¾ à¬¬à¬¿à¬•à¬³à­à¬ª"],
-  },
+  eyebrow: "Services",
+  title: "Complete physiotherapy services presented in a more practical, patient-friendly way.",
+  text: "Our care covers pain relief, rehabilitation, posture correction, strength recovery, mobility improvement, and specialty physiotherapy support across different stages of life.",
+  bookAppointment: "Book Appointment",
+  talkToClinic: "Talk to the Clinic",
+  heroAlt: "Modern physiotherapy treatment consultation",
+  featuredServices: [
+    { title: "Orthopedic Physiotherapy", text: "Care for joint pain, fractures, stiffness, ligament issues, and musculoskeletal recovery." },
+    { title: "Sports Rehabilitation", text: "Performance-focused therapy for injury recovery, strengthening, mobility, and return to sport." },
+    { title: "Posture And Spine Care", text: "Support for neck pain, back pain, posture correction, and workstation-related strain." },
+    { title: "Pain Relief Therapy", text: "Hands-on and exercise-based therapy to reduce pain and improve day-to-day movement quality." },
+    { title: "Neurological Physiotherapy", text: "Balance, coordination, gait, and functional support for neurological recovery needs." },
+    { title: "Manual Therapy", text: "Hands-on joint and soft tissue techniques to ease stiffness, improve range, and relieve tension." },
+  ],
+  completeCare: "Complete Care",
+  completeCareTitle: "Broader physiotherapy support for pain, rehab, movement, and long-term function",
+  completeCareText: "Our clinic can support patients across orthopedic, neurological, sports, pediatric, geriatric, post-surgical, spinal, posture, balance, pain-relief, and functional rehabilitation needs. Each plan is adjusted to the patient's condition, comfort level, and recovery goal.",
+  groups: ["Rehabilitation And Recovery", "Specialized Physiotherapy", "Supportive Treatment Options"],
 };
 
 export default function PublicServicesPage() {
-  const { language } = useLanguage();
-  const t = copy[language] || copy.en;
+  const t = copy;
   const localizedFeaturedServices = featuredServices.map((item, index) => ({
     ...item,
     ...t.featuredServices[index],
@@ -289,4 +245,3 @@ export default function PublicServicesPage() {
     </PublicLayout>
   );
 }
-

@@ -1,10 +1,9 @@
-﻿import { BriefcaseBusiness, FileText, Send } from "lucide-react";
+import { BriefcaseBusiness, FileText, Send } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Seo from "../components/Seo";
 import PublicLayout from "../layout/PublicLayout";
 import API from "../services/api";
-import { useLanguage } from "../context/LanguageContext";
 import { createBreadcrumbSchema, createMedicalBusinessSchema } from "../utils/seo";
 import {
   cleanEmail,
@@ -15,46 +14,41 @@ import {
 } from "../utils/validation";
 
 const copy = {
-  en: {
-    eyebrow: "Career",
-    title: "Join our staff and grow with a patient-first physiotherapy team.",
-    text:
-      "We are always happy to connect with compassionate people who want to support recovery, movement, and better patient care.",
-    perks: [
-      "Apply directly from the website",
-      "Send your resume and role interest in one step",
-      "Applications are delivered to the clinic inbox",
-    ],
-    roleTitle: "Why apply here",
-    roleText:
-      "Whether you are applying for therapist, receptionist, assistant, or support staff roles, you can share your details and we will review your application.",
-    deliveryTitle: "Direct review",
-    deliveryText:
-      "Your application is saved and also sent to the clinic email for faster follow-up.",
-    formTitle: "Staff Application Form",
-    formText:
-      "Fill in your details and tell us which role you want to apply for.",
-    submitted: "Your staff application has been sent successfully.",
-    fallbackError: "Unable to submit your application right now.",
-    fullName: "Full Name",
-    email: "Email Address",
-    phone: "Phone Number",
-    role: "Role You Are Applying For",
-    experience: "Years of Experience",
-    message: "Tell us about your skills, background, or availability",
-    uploadLabel: "Upload Resume",
-    uploadHelp:
-      "You can upload a resume in PDF, DOC, DOCX, or image format.",
-    submitting: "Submitting...",
-    submit: "Apply Now",
-  },
-  hi: {},
-  or: {},
+  eyebrow: "Career",
+  title: "Join our staff and grow with a patient-first physiotherapy team.",
+  text:
+    "We are always happy to connect with compassionate people who want to support recovery, movement, and better patient care.",
+  perks: [
+    "Apply directly from the website",
+    "Send your resume and role interest in one step",
+    "Applications are delivered to the clinic inbox",
+  ],
+  roleTitle: "Why apply here",
+  roleText:
+    "Whether you are applying for therapist, receptionist, assistant, or support staff roles, you can share your details and we will review your application.",
+  deliveryTitle: "Direct review",
+  deliveryText:
+    "Your application is saved and also sent to the clinic email for faster follow-up.",
+  formTitle: "Staff Application Form",
+  formText:
+    "Fill in your details and tell us which role you want to apply for.",
+  submitted: "Your staff application has been sent successfully.",
+  fallbackError: "Unable to submit your application right now.",
+  fullName: "Full Name",
+  email: "Email Address",
+  phone: "Phone Number",
+  role: "Role You Are Applying For",
+  experience: "Years of Experience",
+  message: "Tell us about your skills, background, or availability",
+  uploadLabel: "Upload Resume",
+  uploadHelp:
+    "You can upload a resume in PDF, DOC, DOCX, or image format.",
+  submitting: "Submitting...",
+  submit: "Apply Now",
 };
 
 export default function CareerPage() {
-  const { language } = useLanguage();
-  const t = copy[language] || copy.en;
+  const t = copy;
   const [searchParams] = useSearchParams();
   const [form, setForm] = useState({
     name: "",
@@ -294,4 +288,3 @@ export default function CareerPage() {
     </PublicLayout>
   );
 }
-

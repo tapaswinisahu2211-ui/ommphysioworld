@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import PublicLayout from "../layout/PublicLayout";
 import API from "../services/api";
+import Seo from "../components/Seo";
 import { getPatientUser, savePatientUser } from "../utils/patientAuth";
 import {
   cleanEmail,
@@ -80,6 +81,21 @@ export default function PatientAuthPage({ mode = "login" }) {
           },
     [isForgot, isRegister, redirectTo]
   );
+  const seoTitle = isForgot
+    ? "Patient Forgot Password"
+    : isRegister
+    ? "Patient Register"
+    : "Patient Login";
+  const seoDescription = isForgot
+    ? "Recover your OPW patient account password through email."
+    : isRegister
+    ? "Create your Omm Physio World patient account to request appointments and track care updates."
+    : "Login to your Omm Physio World patient account to access appointments, therapy, sessions, payments, and orders.";
+  const seoPath = isForgot
+    ? "/patient-forgot-password"
+    : isRegister
+    ? "/patient-register"
+    : "/patient-login";
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -147,6 +163,12 @@ export default function PatientAuthPage({ mode = "login" }) {
 
   return (
     <PublicLayout>
+      <Seo
+        title={seoTitle}
+        description={seoDescription}
+        path={seoPath}
+        robots="noindex, nofollow"
+      />
       <section className="page-section mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-20">
         <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
           <div className="motion-panel relative overflow-hidden rounded-[36px] bg-gradient-to-br from-slate-950 via-blue-950 to-cyan-800 p-8 text-white shadow-[0_30px_80px_rgba(15,23,42,0.22)]">

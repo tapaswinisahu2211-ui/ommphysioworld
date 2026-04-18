@@ -3,6 +3,7 @@ const clinicAddress =
   "City clinic road, near davaindia, Baripada";
 const clinicPhone = "+91 88955 55519";
 const clinicEmail = "contact@ommphysioworld.com";
+const siteLogoPath = "/logo512.png";
 
 export const createMedicalBusinessSchema = ({
   name = siteName,
@@ -12,10 +13,14 @@ export const createMedicalBusinessSchema = ({
 }) => ({
   "@context": "https://schema.org",
   "@type": "MedicalBusiness",
+  "@id": path,
   name,
   description,
+  medicalSpecialty: "Physiotherapy",
   telephone: clinicPhone,
   email: clinicEmail,
+  image: siteLogoPath,
+  logo: siteLogoPath,
   address: {
     "@type": "PostalAddress",
     streetAddress: clinicAddress,
@@ -38,6 +43,19 @@ export const createBreadcrumbSchema = (items) => ({
     position: index + 1,
     name: item.name,
     item: item.path,
+  })),
+});
+
+export const createFaqSchema = (items = []) => ({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: items.map((item) => ({
+    "@type": "Question",
+    name: item.question,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: item.answer,
+    },
   })),
 });
 

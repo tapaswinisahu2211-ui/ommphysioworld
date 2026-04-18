@@ -39,6 +39,10 @@ const pageMeta = {
     title: "Therapy",
     subtitle: "Upload and organize therapy media for each service.",
   },
+  "/shop-admin": {
+    title: "Shop",
+    subtitle: "Manage products, stock, and incoming website purchases.",
+  },
   "/feedback": {
     title: "Feedback",
     subtitle: "Approve patient reviews before publishing them on the website.",

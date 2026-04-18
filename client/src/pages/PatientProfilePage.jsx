@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Seo from "../components/Seo";
 import PublicLayout from "../layout/PublicLayout";
 import API from "../services/api";
 import { clearPatientUser, getPatientUser, savePatientUser } from "../utils/patientAuth";
@@ -239,6 +240,12 @@ export default function PatientProfilePage() {
 
   return (
     <PublicLayout>
+      <Seo
+        title="Patient Profile"
+        description="Manage your OPW patient profile details and account information."
+        path="/patient-profile"
+        robots="noindex, nofollow"
+      />
       <section className="page-section mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
         <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-slate-950 via-blue-950 to-cyan-800 px-6 py-5 text-white shadow-[0_18px_45px_rgba(15,23,42,0.18)]">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_34%)]" />

@@ -11,6 +11,7 @@ const {
   authenticateRequest,
   requireAdminAuth,
   requireAuthenticatedSession,
+  requirePatientAuth,
   requirePatientOrStaffAuth,
   requirePatientRecordAccess,
   requireStaffAuth,
@@ -67,9 +68,12 @@ const JobRequirement = require("./models/JobRequirement");
 const Patient = require("./models/Patient");
 const PublicUser = require("./models/PublicUser");
 const Service = require("./models/Service");
+const ShopOrder = require("./models/ShopOrder");
+const ShopProduct = require("./models/ShopProduct");
 const StaffApplication = require("./models/StaffApplication");
 const TherapyResource = require("./models/TherapyResource");
 const User = require("./models/User");
+const shopUpload = require("./middleware/shopUpload");
 const therapyUpload = require("./middleware/therapyUpload");
 const upload = require("./middleware/upload");
 const authRoutes = require("./routes/authRoutes");
@@ -273,6 +277,39 @@ const syncAdminCreatedPatientPortalAccount = async (patient) => {
     createdFrom: "admin",
     patientId: patient._id,
   });
+};
+
+const deletePatientRelatedRecords = async (patient) => {
+  const patientId = patient?._id || null;
+  const email = String(patient?.email || "").trim().toLowerCase();
+  const mobile = String(patient?.mobile || "").trim();
+  const appointmentFilters = [];
+
+  if (patientId) {
+    appointmentFilters.push({ patientId });
+  }
+
+  if (email) {
+    appointmentFilters.push({ email });
+  }
+
+  if (mobile) {
+    appointmentFilters.push({ phone: mobile });
+  }
+
+  const [deletedPortalAccountsResult, deletedAppointmentsResult] = await Promise.all([
+    PublicUser.deleteMany({
+      $or: [{ patientId }, ...(email ? [{ email }] : [])],
+    }),
+    appointmentFilters.length
+      ? Appointment.deleteMany({ $or: appointmentFilters })
+      : Promise.resolve({ deletedCount: 0 }),
+  ]);
+
+  return {
+    deletedPortalAccounts: Number(deletedPortalAccountsResult?.deletedCount || 0),
+    deletedAppointmentRequests: Number(deletedAppointmentsResult?.deletedCount || 0),
+  };
 };
 
 const formatPatientCreatedFrom = (value) => {
@@ -525,6 +562,52 @@ const serializeService = (service) => ({
   updatedAt: service.updatedAt,
 });
 
+const serializeShopProduct = (product) => ({
+  id: product._id.toString(),
+  name: product.name || "",
+  category: product.category || "",
+  description: product.description || "",
+  price: Number(product.price || 0),
+  stockQuantity: Number(product.stockQuantity || 0),
+  isActive: Boolean(product.isActive),
+  imageUrl: product.imageData
+    ? `/shop/products/${product._id.toString()}/image`
+    : "",
+  imageUpdatedAt: product.imageUpdatedAt || null,
+  createdAt: product.createdAt,
+  updatedAt: product.updatedAt,
+});
+
+const serializeShopOrder = (order) => ({
+  id: order._id.toString(),
+  orderNumber: order.orderNumber || "",
+  patientId: order.patientId ? order.patientId.toString() : "",
+  publicUserId: order.publicUserId ? order.publicUserId.toString() : "",
+  customerName: order.customerName || "",
+  customerEmail: order.customerEmail || "",
+  customerMobile: order.customerMobile || "",
+  totalQuantity: Number(order.totalQuantity || 0),
+  totalAmount: Number(order.totalAmount || 0),
+  note: order.note || "",
+  status: order.status || "pending",
+  items: (order.items || []).map((item) => ({
+    id: item._id.toString(),
+    productId: item.productId ? item.productId.toString() : "",
+    productName: item.productName || "",
+    category: item.category || "",
+    unitPrice: Number(item.unitPrice || 0),
+    quantity: Number(item.quantity || 0),
+    lineTotal: Number(item.lineTotal || 0),
+  })),
+  createdAt: order.createdAt,
+  updatedAt: order.updatedAt,
+});
+
+const createShopOrderNumber = () =>
+  `OPW-SHOP-${Date.now().toString().slice(-8)}${Math.floor(
+    100 + Math.random() * 900
+  )}`;
+
 const getTherapyResourceType = (mimeType = "") => {
   if (mimeType === "image/gif") {
     return "gif";
@@ -763,13 +846,49 @@ app.get("/api/dashboard", requireStaffAuth, async (req, res) => {
   try {
     await autoCompleteOverdueAppointments();
 
-    const [patients, staff, appointmentRequests] = await Promise.all([
+    const [patients, staff, appointmentRequests, shopOrders] = await Promise.all([
       Patient.find().sort({ updatedAt: -1 }),
       User.find().sort({ createdAt: -1 }),
       Appointment.find().sort({ createdAt: -1 }),
+      ShopOrder.find().sort({ createdAt: -1 }),
     ]);
     const now = new Date();
     const todayKey = now.toISOString().slice(0, 10);
+    const monthFormatter = new Intl.DateTimeFormat("en-IN", {
+      month: "short",
+      year: "2-digit",
+    });
+    const createRecentMonthBuckets = (length = 6) =>
+      Array.from({ length }, (_, index) => {
+        const date = new Date(now.getFullYear(), now.getMonth() - (length - 1 - index), 1);
+        return {
+          key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`,
+          label: monthFormatter.format(date),
+          value: 0,
+        };
+      });
+    const createBucketMap = (buckets) => new Map(buckets.map((bucket) => [bucket.key, bucket]));
+    const addValueToMonthBucket = (bucketMap, dateValue, amount = 1) => {
+      const entryDate = dateValue ? new Date(dateValue) : null;
+      if (!entryDate || Number.isNaN(entryDate.getTime())) {
+        return;
+      }
+
+      const key = `${entryDate.getFullYear()}-${String(entryDate.getMonth() + 1).padStart(2, "0")}`;
+      const bucket = bucketMap.get(key);
+      if (bucket) {
+        bucket.value += Number(amount || 0);
+      }
+    };
+    const serviceDemandMap = new Map();
+    const addServiceDemand = (rawLabel, amount = 1) => {
+      const label = cleanText(rawLabel);
+      if (!label) {
+        return;
+      }
+
+      serviceDemandMap.set(label, (serviceDemandMap.get(label) || 0) + Number(amount || 0));
+    };
 
     const totalRevenue = patients.reduce((sum, patient) => {
       const treatmentRevenue = (patient.treatmentPlans || []).reduce(
@@ -923,41 +1042,61 @@ app.get("/api/dashboard", requireStaffAuth, async (req, res) => {
       label: status.replace(/^\w/, (letter) => letter.toUpperCase()),
       value: treatmentPlans.filter((plan) => (plan.status || "active") === status).length,
     }));
-    const monthFormatter = new Intl.DateTimeFormat("en-IN", {
-      month: "short",
-      year: "2-digit",
-    });
-    const revenueByMonth = Array.from({ length: 6 }, (_, index) => {
-      const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
-      return {
-        key: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`,
-        label: monthFormatter.format(date),
-        value: 0,
-      };
-    });
-    const revenueBuckets = new Map(revenueByMonth.map((month) => [month.key, month]));
+    const revenueByMonth = createRecentMonthBuckets(6);
+    const revenueBuckets = createBucketMap(revenueByMonth);
     const addRevenueToMonth = (payment) => {
-      const paymentDate = payment.createdAt ? new Date(payment.createdAt) : null;
-      if (!paymentDate || Number.isNaN(paymentDate.getTime())) {
-        return;
-      }
-
-      const key = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(
-        2,
-        "0"
-      )}`;
-      const bucket = revenueBuckets.get(key);
-      if (bucket) {
-        bucket.value += Number(payment.amount || 0);
-      }
+      addValueToMonthBucket(revenueBuckets, payment.createdAt, payment.amount || 0);
     };
 
     patients.forEach((patient) => {
       (patient.payments || []).forEach(addRevenueToMonth);
+      serializePatientAppointments(patient.appointments || []).forEach((appointment) => {
+        addServiceDemand(appointment.service);
+      });
       (patient.treatmentPlans || []).forEach((plan) => {
         (plan.payments || []).forEach(addRevenueToMonth);
+        (plan.treatmentTypes || []).forEach((service) => addServiceDemand(service));
       });
     });
+
+    appointmentRequests.forEach((appointment) => {
+      addServiceDemand(appointment.service);
+    });
+
+    const patientSourceChart = [
+      { label: "Website", value: patients.filter((patient) => patient.createdFrom === "website").length },
+      {
+        label: "Mobile App",
+        value: patients.filter((patient) => patient.createdFrom === "mobile_app").length,
+      },
+      { label: "Admin", value: patients.filter((patient) => patient.createdFrom === "admin").length },
+    ];
+    const topServices = [...serviceDemandMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([label, value]) => ({ label, value }));
+    const patientGrowthByMonth = createRecentMonthBuckets(6);
+    const patientGrowthBuckets = createBucketMap(patientGrowthByMonth);
+    patients.forEach((patient) => {
+      addValueToMonthBucket(patientGrowthBuckets, patient.createdAt, 1);
+    });
+    const shopOrderStatus = ["pending", "confirmed", "completed", "cancelled"].map((status) => ({
+      label: status.replace(/^\w/, (letter) => letter.toUpperCase()),
+      value: shopOrders.filter((order) => (order.status || "pending") === status).length,
+    }));
+    const shopRevenueByMonth = createRecentMonthBuckets(6);
+    const shopRevenueBuckets = createBucketMap(shopRevenueByMonth);
+    shopOrders.forEach((order) => {
+      if ((order.status || "pending") === "cancelled") {
+        return;
+      }
+
+      addValueToMonthBucket(shopRevenueBuckets, order.createdAt, order.totalAmount || 0);
+    });
+    const staffStatus = ["Active", "Inactive"].map((status) => ({
+      label: status,
+      value: staff.filter((member) => (member.status || "Active") === status).length,
+    }));
 
     res.json({
       stats: {
@@ -978,6 +1117,12 @@ app.get("/api/dashboard", requireStaffAuth, async (req, res) => {
         appointmentStatus: appointmentStatusChart,
         sessionStatus: sessionStatusChart,
         revenueByMonth,
+        patientSource: patientSourceChart,
+        topServices,
+        patientGrowthByMonth,
+        shopOrderStatus,
+        shopRevenueByMonth,
+        staffStatus,
       },
       todaysSchedule,
       upcomingSchedule,
@@ -1865,9 +2010,13 @@ app.delete("/api/patients/:id/permanent", requireAdminAuth, async (req, res) => 
       return res.status(404).json({ message: "Archived patient not found." });
     }
 
+    const deletedRecords = await deletePatientRelatedRecords(patient);
     await patient.deleteOne();
 
-    res.json({ message: "Archived patient deleted permanently." });
+    res.json({
+      message: "Archived patient and related data deleted permanently.",
+      deletedRecords,
+    });
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to permanently delete archived patient." });
@@ -2634,6 +2783,164 @@ app.get("/api/services", async (req, res) => {
   }
 });
 
+app.get("/api/shop/products", async (_req, res) => {
+  try {
+    const products = await ShopProduct.find({ isActive: true }).sort({
+      updatedAt: -1,
+      createdAt: -1,
+    });
+    res.json(products.map(serializeShopProduct));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to load shop products." });
+  }
+});
+
+app.get("/api/shop/products/:id/image", async (req, res) => {
+  try {
+    const product = await ShopProduct.findById(req.params.id);
+
+    if (!product || !product.imageData) {
+      return res.status(404).json({ message: "Product image not found." });
+    }
+
+    res.setHeader("Content-Type", product.imageMimeType || "image/jpeg");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.send(product.imageData);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to load product image." });
+  }
+});
+
+app.get("/api/shop/orders/my", requirePatientAuth, async (req, res) => {
+  try {
+    const patientId = String(req.auth?.patientId || "").trim();
+    const publicUserId = String(req.auth?.sub || "").trim();
+    const filters = [];
+
+    if (patientId) {
+      filters.push({ patientId });
+    }
+
+    if (publicUserId) {
+      filters.push({ publicUserId });
+    }
+
+    const orders = filters.length
+      ? await ShopOrder.find({ $or: filters }).sort({ createdAt: -1 })
+      : [];
+
+    res.json(orders.map(serializeShopOrder));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to load your shop orders." });
+  }
+});
+
+app.post("/api/shop/orders", requirePatientAuth, async (req, res) => {
+  try {
+    const items = Array.isArray(req.body.items) ? req.body.items : [];
+    const note = cleanText(req.body.note);
+    const publicUserId = String(req.auth?.sub || "").trim();
+    const patientId = String(req.auth?.patientId || "").trim();
+
+    if (!items.length) {
+      return res.status(400).json({ message: "Add at least one product to continue." });
+    }
+
+    const publicUser = await PublicUser.findById(publicUserId);
+    const patient = patientId ? await Patient.findById(patientId) : null;
+
+    if (!publicUser || !patient) {
+      return res.status(404).json({ message: "Patient account not found." });
+    }
+
+    const normalizedItems = Array.from(
+      new Map(
+        items
+          .map((item) => {
+            const productId = cleanText(item?.productId);
+            const quantity = Math.max(1, Number(item?.quantity || 1));
+
+            return productId ? [productId, { productId, quantity }] : null;
+          })
+          .filter(Boolean)
+      ).values()
+    );
+
+    if (!normalizedItems.length) {
+      return res.status(400).json({ message: "Please choose valid products." });
+    }
+
+    const products = await ShopProduct.find({
+      _id: { $in: normalizedItems.map((item) => item.productId) },
+      isActive: true,
+    });
+    const productMap = new Map(products.map((product) => [product._id.toString(), product]));
+    const orderItems = [];
+
+    for (const item of normalizedItems) {
+      const product = productMap.get(item.productId);
+
+      if (!product) {
+        return res.status(404).json({ message: "One or more products are no longer available." });
+      }
+
+      if (Number(product.stockQuantity || 0) < item.quantity) {
+        return res.status(409).json({
+          message: `Only ${product.stockQuantity || 0} item(s) left for ${product.name}.`,
+        });
+      }
+
+      const unitPrice = Number(product.price || 0);
+      const quantity = Number(item.quantity || 1);
+
+      product.stockQuantity = Math.max(0, Number(product.stockQuantity || 0) - quantity);
+      orderItems.push({
+        productId: product._id,
+        productName: product.name || "",
+        category: product.category || "",
+        unitPrice,
+        quantity,
+        lineTotal: unitPrice * quantity,
+      });
+    }
+
+    const totalQuantity = orderItems.reduce(
+      (sum, item) => sum + Number(item.quantity || 0),
+      0
+    );
+    const totalAmount = orderItems.reduce(
+      (sum, item) => sum + Number(item.lineTotal || 0),
+      0
+    );
+
+    const order = await ShopOrder.create({
+      orderNumber: createShopOrderNumber(),
+      patientId: patient._id,
+      publicUserId: publicUser._id,
+      customerName: publicUser.name || patient.name || "Patient",
+      customerEmail: publicUser.email || patient.email || "",
+      customerMobile: publicUser.mobile || patient.mobile || "",
+      items: orderItems,
+      totalQuantity,
+      totalAmount,
+      note,
+    });
+
+    await Promise.all(products.map((product) => product.save()));
+
+    res.status(201).json({
+      message: "Order placed successfully.",
+      order: serializeShopOrder(order),
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to place shop order." });
+  }
+});
+
 app.get("/api/therapy-resources", requireStaffAuth, async (req, res) => {
   try {
     const serviceId = cleanText(req.query.serviceId);
@@ -2955,6 +3262,71 @@ app.post("/api/services", requireStaffAuth, async (req, res) => {
   }
 });
 
+app.get("/api/admin/shop/products", requireStaffAuth, async (_req, res) => {
+  try {
+    const products = await ShopProduct.find().sort({ updatedAt: -1, createdAt: -1 });
+    res.json(products.map(serializeShopProduct));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to load shop products." });
+  }
+});
+
+app.get("/api/admin/shop/orders", requireStaffAuth, async (_req, res) => {
+  try {
+    const orders = await ShopOrder.find().sort({ createdAt: -1 });
+    res.json(orders.map(serializeShopOrder));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to load shop orders." });
+  }
+});
+
+app.post(
+  "/api/admin/shop/products",
+  requireStaffAuth,
+  shopUpload.single("image"),
+  async (req, res) => {
+    try {
+      const name = cleanText(req.body.name);
+      const category = cleanText(req.body.category);
+      const description = cleanText(req.body.description);
+      const price = Number(req.body.price || 0);
+      const stockQuantity = Math.max(0, Number(req.body.stockQuantity || 0));
+      const isActive =
+        req.body.isActive === undefined
+          ? true
+          : !["false", "0"].includes(String(req.body.isActive).trim().toLowerCase());
+
+      if (!name || name.length < 2) {
+        return res.status(400).json({ message: "Product name must be at least 2 characters." });
+      }
+
+      if (!Number.isFinite(price) || price <= 0) {
+        return res.status(400).json({ message: "Product price must be greater than zero." });
+      }
+
+      const product = await ShopProduct.create({
+        name,
+        category,
+        description,
+        price,
+        stockQuantity,
+        isActive,
+        imageName: req.file?.originalname || "",
+        imageMimeType: req.file?.mimetype || "",
+        imageData: req.file?.buffer || null,
+        imageUpdatedAt: req.file ? new Date() : null,
+      });
+
+      res.status(201).json(serializeShopProduct(product));
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ message: "Failed to create shop product." });
+    }
+  }
+);
+
 app.post("/api/therapy-resources", requireStaffAuth, therapyUpload.single("file"), async (req, res) => {
   try {
     const serviceId = cleanText(req.body.serviceId);
@@ -3021,6 +3393,65 @@ app.put("/api/services/:id", requireStaffAuth, async (req, res) => {
     res.status(500).json({ message: "Failed to update service." });
   }
 });
+
+app.put(
+  "/api/admin/shop/products/:id",
+  requireStaffAuth,
+  shopUpload.single("image"),
+  async (req, res) => {
+    try {
+      const product = await ShopProduct.findById(req.params.id);
+
+      if (!product) {
+        return res.status(404).json({ message: "Shop product not found." });
+      }
+
+      const name = cleanText(req.body.name);
+      const category = cleanText(req.body.category);
+      const description = cleanText(req.body.description);
+      const price = Number(req.body.price || 0);
+      const stockQuantity = Math.max(0, Number(req.body.stockQuantity || 0));
+      const removeImage = ["true", "1"].includes(
+        String(req.body.removeImage || "").trim().toLowerCase()
+      );
+
+      if (!name || name.length < 2) {
+        return res.status(400).json({ message: "Product name must be at least 2 characters." });
+      }
+
+      if (!Number.isFinite(price) || price <= 0) {
+        return res.status(400).json({ message: "Product price must be greater than zero." });
+      }
+
+      product.name = name;
+      product.category = category;
+      product.description = description;
+      product.price = price;
+      product.stockQuantity = stockQuantity;
+      product.isActive = !["false", "0"].includes(
+        String(req.body.isActive).trim().toLowerCase()
+      );
+
+      if (req.file) {
+        product.imageName = req.file.originalname || "";
+        product.imageMimeType = req.file.mimetype || "";
+        product.imageData = req.file.buffer || null;
+        product.imageUpdatedAt = new Date();
+      } else if (removeImage) {
+        product.imageName = "";
+        product.imageMimeType = "";
+        product.imageData = null;
+        product.imageUpdatedAt = new Date();
+      }
+
+      await product.save();
+      res.json(serializeShopProduct(product));
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ message: "Failed to update shop product." });
+    }
+  }
+);
 
 app.put("/api/therapy-resources/:id", requireStaffAuth, therapyUpload.single("file"), async (req, res) => {
   try {
@@ -3090,6 +3521,82 @@ app.delete("/api/services/:id", requireStaffAuth, async (req, res) => {
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to delete service." });
+  }
+});
+
+app.patch("/api/admin/shop/orders/:id/status", requireStaffAuth, async (req, res) => {
+  try {
+    const order = await ShopOrder.findById(req.params.id);
+    const nextStatus = cleanText(req.body.status).toLowerCase();
+
+    if (!order) {
+      return res.status(404).json({ message: "Shop order not found." });
+    }
+
+    if (!["pending", "confirmed", "completed", "cancelled"].includes(nextStatus)) {
+      return res.status(400).json({ message: "Invalid shop order status." });
+    }
+
+    const currentStatus = String(order.status || "pending").toLowerCase();
+    const isCancelling = currentStatus !== "cancelled" && nextStatus === "cancelled";
+    const isReactivating = currentStatus === "cancelled" && nextStatus !== "cancelled";
+
+    if (isCancelling || isReactivating) {
+      const products = await ShopProduct.find({
+        _id: { $in: (order.items || []).map((item) => item.productId).filter(Boolean) },
+      });
+      const productMap = new Map(products.map((product) => [product._id.toString(), product]));
+
+      for (const item of order.items || []) {
+        const product = productMap.get(String(item.productId || ""));
+
+        if (!product) {
+          continue;
+        }
+
+        const quantity = Number(item.quantity || 0);
+
+        if (isCancelling) {
+          product.stockQuantity = Number(product.stockQuantity || 0) + quantity;
+        }
+
+        if (isReactivating) {
+          if (Number(product.stockQuantity || 0) < quantity) {
+            return res.status(409).json({
+              message: `Not enough stock to reactivate ${item.productName || "this product"} order.`,
+            });
+          }
+
+          product.stockQuantity = Math.max(0, Number(product.stockQuantity || 0) - quantity);
+        }
+      }
+
+      await Promise.all(products.map((product) => product.save()));
+    }
+
+    order.status = nextStatus;
+    await order.save();
+
+    res.json(serializeShopOrder(order));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to update shop order status." });
+  }
+});
+
+app.delete("/api/admin/shop/products/:id", requireStaffAuth, async (req, res) => {
+  try {
+    const product = await ShopProduct.findById(req.params.id);
+
+    if (!product) {
+      return res.status(404).json({ message: "Shop product not found." });
+    }
+
+    await product.deleteOne();
+    res.json({ message: "Shop product deleted successfully." });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to delete shop product." });
   }
 });
 

@@ -1,3 +1,22 @@
 # https://www.robotstxt.org/robotstxt.html
 User-agent: *
-Disallow:
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /patients
+Disallow: /services
+Disallow: /therapy
+Disallow: /shop-admin
+Disallow: /feedback
+Disallow: /job-requirements
+Disallow: /staff
+Disallow: /mailbox
+Disallow: /treatment-tracker
+Disallow: /reports
+Disallow: /profile
+Disallow: /patient-dashboard
+Disallow: /patient-profile
+Disallow: /patient-login
+Disallow: /patient-register
+Disallow: /patient-forgot-password
+Disallow: /shop/cart
+Sitemap: http://ommphysioworld.com/sitemap.xml

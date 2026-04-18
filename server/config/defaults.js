@@ -16,6 +16,7 @@ const DEFAULT_STAFF_PERMISSIONS = [
   { module: "chat", view: false, add: true, edit: true },
   { module: "services", view: false, add: false, edit: false },
   { module: "therapy", view: false, add: false, edit: false },
+  { module: "shop", view: false, add: false, edit: false },
   { module: "staff", view: false, add: false, edit: false },
   { module: "mailbox", view: false, add: false, edit: false },
   { module: "treatment_tracker", view: false, add: false, edit: false },

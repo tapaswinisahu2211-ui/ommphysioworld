@@ -1,19 +1,26 @@
 import {
+  ArrowRight,
   CalendarDays,
+  CalendarClock,
   CircleX,
+  ClipboardList,
   CreditCard,
   Eye,
   FileText,
   FolderOpen,
   LayoutDashboard,
   LogOut,
+  PackageCheck,
   Send,
+  ShoppingBag,
+  Sparkles,
   Stethoscope,
   Trash2,
   UserCircle2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Seo from "../components/Seo";
 import PublicLayout from "../layout/PublicLayout";
 import API from "../services/api";
 import { clearPatientUser, getPatientUser } from "../utils/patientAuth";
@@ -25,9 +32,24 @@ const tabs = [
   { key: "notes", label: "Therapy", icon: FileText },
   { key: "sessions", label: "Session", icon: Stethoscope },
   { key: "payments", label: "Payment", icon: CreditCard },
+  { key: "orders", label: "Order", icon: ShoppingBag },
 ];
 
 const formatMoney = (value) => `Rs. ${Number(value || 0).toLocaleString("en-IN")}`;
+
+const formatStatusLabel = (value) =>
+  String(value || "")
+    .replace(/_/g, " ")
+    .replace(/^\w/, (letter) => letter.toUpperCase()) || "Pending";
+
+const toTimeValue = (value) => {
+  if (!value) {
+    return Number.NaN;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? Number.NaN : parsed.getTime();
+};
 
 const formatDate = (value) => {
   if (!value) {
@@ -60,6 +82,24 @@ const isInlinePreviewableTherapyItem = (item) =>
   item?.resourceType === "video" ||
   item?.mimeType === "application/pdf";
 
+const getStatusBadgeClass = (status) => {
+  switch (String(status || "").toLowerCase()) {
+    case "approved":
+    case "confirmed":
+    case "active":
+    case "done":
+    case "completed":
+      return "bg-emerald-50 text-emerald-700";
+    case "rescheduled":
+      return "bg-sky-50 text-sky-700";
+    case "cancelled":
+    case "inactive":
+      return "bg-rose-50 text-rose-700";
+    default:
+      return "bg-amber-50 text-amber-700";
+  }
+};
+
 export default function PatientDashboardPage() {
   const navigate = useNavigate();
   const [patientUser, setPatientUser] = useState(() => getPatientUser());
@@ -79,6 +119,7 @@ export default function PatientDashboardPage() {
     files: [],
   });
   const [appointmentRequests, setAppointmentRequests] = useState([]);
+  const [shopOrders, setShopOrders] = useState([]);
   const [services, setServices] = useState([]);
 
   const patientId = patientUser?.patientId || "";
@@ -99,12 +140,14 @@ export default function PatientDashboardPage() {
 
     try {
       setLoading(true);
-      const [patientResponse, requestResponse] = await Promise.all([
+      const [patientResponse, requestResponse, ordersResponse] = await Promise.all([
         API.get(`/patients/${patientId}`),
         API.get(`/patients/${patientId}/appointment-requests`),
+        API.get("/shop/orders/my"),
       ]);
       setPatient(patientResponse.data);
       setAppointmentRequests(requestResponse.data || []);
+      setShopOrders(ordersResponse.data || []);
       setStatus({ type: "", message: "" });
     } catch (error) {
       setStatus({
@@ -208,6 +251,9 @@ export default function PatientDashboardPage() {
       !bookedAppointmentRequestIds.has(request.id) &&
       !["cancelled", "completed"].includes(request.status || "")
   );
+  const hasPendingAppointmentRequest = visibleAppointmentRequests.some(
+    (request) => (request.status || "pending") === "pending"
+  );
   const therapyItemCount = therapyRecommendations.reduce(
     (sum, recommendation) => sum + (recommendation.items?.length || 0),
     0
@@ -224,13 +270,139 @@ export default function PatientDashboardPage() {
 
   const stats = useMemo(
     () => [
-      { label: "Therapy Items", value: therapyItemCount, icon: FolderOpen },
-      { label: "Appointments", value: appointments.length, icon: CalendarDays },
-      { label: "Sessions", value: treatmentPlans.length, icon: Stethoscope },
-      { label: "Payments", value: payments.length, icon: CreditCard },
+      {
+        label: "Therapy Items",
+        value: therapyItemCount,
+        icon: FolderOpen,
+        tabKey: "notes",
+        detail: "View your assigned therapy files",
+        tone: "bg-sky-50 text-sky-700",
+      },
+      {
+        label: "Appointments",
+        value: appointments.length + visibleAppointmentRequests.length,
+        icon: CalendarDays,
+        tabKey: "appointments",
+        detail: hasPendingAppointmentRequest
+          ? "One request is waiting for OPW review"
+          : "Track requests and booked visits",
+        tone: "bg-violet-50 text-violet-700",
+      },
+      {
+        label: "Sessions",
+        value: treatmentPlans.length,
+        icon: Stethoscope,
+        tabKey: "sessions",
+        detail: "Check your treatment and session plan",
+        tone: "bg-emerald-50 text-emerald-700",
+      },
+      {
+        label: "Payments",
+        value: payments.length,
+        icon: CreditCard,
+        tabKey: "payments",
+        detail: "Review all recorded OPW payments",
+        tone: "bg-amber-50 text-amber-700",
+      },
+      {
+        label: "Orders",
+        value: shopOrders.length,
+        icon: ShoppingBag,
+        tabKey: "orders",
+        detail: "Track shop purchases from your account",
+        tone: "bg-cyan-50 text-cyan-700",
+      },
     ],
-    [appointments.length, payments.length, therapyItemCount, treatmentPlans.length]
+    [
+      appointments.length,
+      hasPendingAppointmentRequest,
+      payments.length,
+      shopOrders.length,
+      therapyItemCount,
+      treatmentPlans.length,
+      visibleAppointmentRequests.length,
+    ]
   );
+  const pendingRequestCount = visibleAppointmentRequests.filter(
+    (request) => (request.status || "pending") === "pending"
+  ).length;
+  const totalPaidAmount = payments.reduce(
+    (sum, payment) => sum + Number(payment.amount || 0),
+    0
+  );
+  const outstandingBalance = treatmentPlans.reduce(
+    (sum, plan) => sum + Number(plan.balanceAmount || 0),
+    0
+  );
+  const totalSessionDays = treatmentPlans.reduce(
+    (sum, plan) => sum + (plan.sessionDays?.length || 0),
+    0
+  );
+  const completedSessionDays = treatmentPlans.reduce(
+    (sum, plan) =>
+      sum + (plan.sessionDays || []).filter((day) => day.status === "done").length,
+    0
+  );
+  const sessionCompletionPercent = totalSessionDays
+    ? Math.min(100, Math.round((completedSessionDays / totalSessionDays) * 100))
+    : 0;
+  const nextBookedAppointment = [...appointments]
+    .filter((appointment) => !["completed", "cancelled"].includes(appointment.status || ""))
+    .sort((a, b) => {
+      const first = toTimeValue(a.date);
+      const second = toTimeValue(b.date);
+      return (Number.isNaN(first) ? Number.MAX_SAFE_INTEGER : first) -
+        (Number.isNaN(second) ? Number.MAX_SAFE_INTEGER : second);
+    })[0];
+  const latestPayment = [...payments].sort((a, b) => {
+    const first = toTimeValue(a.createdAt);
+    const second = toTimeValue(b.createdAt);
+    return (Number.isNaN(second) ? 0 : second) - (Number.isNaN(first) ? 0 : first);
+  })[0];
+  const latestOrder = [...shopOrders].sort((a, b) => {
+    const first = toTimeValue(a.createdAt);
+    const second = toTimeValue(b.createdAt);
+    return (Number.isNaN(second) ? 0 : second) - (Number.isNaN(first) ? 0 : first);
+  })[0];
+  const latestClinicalNote = [...clinicalNotes].sort((a, b) => {
+    const first = toTimeValue(a.createdAt);
+    const second = toTimeValue(b.createdAt);
+    return (Number.isNaN(second) ? 0 : second) - (Number.isNaN(first) ? 0 : first);
+  })[0];
+  const tabCounts = {
+    overview: 0,
+    appointments: appointments.length + visibleAppointmentRequests.length,
+    notes: therapyItemCount + clinicalNotes.length,
+    sessions: treatmentPlans.length,
+    payments: payments.length,
+    orders: shopOrders.length,
+  };
+  const quickActions = [
+    {
+      key: "appointments",
+      label: "Book Appointment",
+      helper: hasPendingAppointmentRequest ? "Request pending review" : "Start a new request",
+      icon: CalendarClock,
+    },
+    {
+      key: "notes",
+      label: "Open Therapy",
+      helper: `${therapyItemCount} therapy item${therapyItemCount === 1 ? "" : "s"} shared`,
+      icon: Sparkles,
+    },
+    {
+      key: "payments",
+      label: "Check Payments",
+      helper: `${formatMoney(totalPaidAmount)} recorded`,
+      icon: CreditCard,
+    },
+    {
+      key: "orders",
+      label: "View Orders",
+      helper: `${shopOrders.length} shop order${shopOrders.length === 1 ? "" : "s"}`,
+      icon: PackageCheck,
+    },
+  ];
 
   const handleLogout = () => {
     clearPatientUser();
@@ -242,6 +414,9 @@ export default function PatientDashboardPage() {
     event.preventDefault();
 
     const validationError = firstValidationError([
+      hasPendingAppointmentRequest
+        ? "Your previous appointment request is still pending."
+        : "",
       !appointmentForm.service.trim() ? "Please add service." : "",
       !appointmentForm.date ? "Please add preferred date." : "",
       appointmentForm.date && !isFutureOrTodayDate(appointmentForm.date)
@@ -373,6 +548,12 @@ export default function PatientDashboardPage() {
 
   return (
     <PublicLayout>
+      <Seo
+        title="Patient Dashboard"
+        description="View your OPW patient dashboard with appointments, therapy, sessions, payments, and orders."
+        path="/patient-dashboard"
+        robots="noindex, nofollow"
+      />
       <section className="page-section mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
         <div className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-slate-950 via-blue-950 to-cyan-800 px-6 py-5 text-white shadow-[0_18px_45px_rgba(15,23,42,0.18)]">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_34%)]" />
@@ -387,6 +568,17 @@ export default function PatientDashboardPage() {
               <p className="mt-2 max-w-2xl text-sm leading-6 text-white/75">
                 View your notes, appointment requests, treatment sessions, and payment updates from OPW.
               </p>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-white/90">
+                <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1.5">
+                  {pendingRequestCount} pending request{pendingRequestCount === 1 ? "" : "s"}
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1.5">
+                  {therapyItemCount} therapy item{therapyItemCount === 1 ? "" : "s"}
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1.5">
+                  {formatMoney(outstandingBalance)} balance
+                </span>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-2 text-sm text-white/90">
@@ -435,6 +627,15 @@ export default function PatientDashboardPage() {
                 >
                   <Icon size={17} />
                   {tab.label}
+                  {tabCounts[tab.key] ? (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        active ? "bg-white/15 text-white" : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {tabCounts[tab.key]}
+                    </span>
+                  ) : null}
                 </button>
               );
             })}
@@ -449,19 +650,193 @@ export default function PatientDashboardPage() {
           ) : (
             <>
               {activeTab === "overview" && (
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  {stats.map((stat) => {
-                    const Icon = stat.icon;
-                    return (
-                      <div key={stat.label} className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
-                        <div className="mb-5 inline-flex rounded-2xl bg-sky-50 p-2.5 text-sky-700">
-                          <Icon size={20} />
+                <div className="space-y-5">
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                    {stats.map((stat) => {
+                      const Icon = stat.icon;
+                      return (
+                        <button
+                          key={stat.label}
+                          type="button"
+                          onClick={() => setActiveTab(stat.tabKey)}
+                          className="group rounded-[24px] border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-md"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className={`inline-flex rounded-2xl p-2.5 ${stat.tone}`}>
+                              <Icon size={20} />
+                            </div>
+                            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                              Open
+                            </span>
+                          </div>
+                          <p className="mt-5 text-3xl font-semibold text-slate-950">{stat.value}</p>
+                          <p className="mt-2 text-sm font-medium text-slate-700">{stat.label}</p>
+                          <div className="mt-4 flex items-center justify-between gap-3 text-xs text-slate-500">
+                            <span>{stat.detail}</span>
+                            <ArrowRight
+                              size={15}
+                              className="shrink-0 transition group-hover:translate-x-0.5"
+                            />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+                    <Panel
+                      title="Recovery Journey"
+                      subtitle="A quick view of your current recovery progress and important updates."
+                    >
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <div className="rounded-[22px] border border-slate-200 bg-[linear-gradient(135deg,#eff6ff,#f8fbff)] p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                            Next Visit
+                          </p>
+                          <p className="mt-3 text-lg font-semibold text-slate-950">
+                            {nextBookedAppointment?.service || "Not scheduled"}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-500">
+                            {nextBookedAppointment
+                              ? `${formatDate(nextBookedAppointment.date)}${
+                                  nextBookedAppointment.time ? ` at ${nextBookedAppointment.time}` : ""
+                                }`
+                              : "Your next confirmed appointment will show here."}
+                          </p>
                         </div>
-                        <p className="text-3xl font-semibold text-slate-950">{stat.value}</p>
-                        <p className="mt-2 text-sm font-medium text-slate-500">{stat.label}</p>
+
+                        <div className="rounded-[22px] border border-slate-200 bg-[linear-gradient(135deg,#f0fdf4,#f8fffb)] p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                            Session Progress
+                          </p>
+                          <p className="mt-3 text-lg font-semibold text-slate-950">
+                            {completedSessionDays}/{totalSessionDays || 0} completed
+                          </p>
+                          <div className="mt-3 h-2.5 rounded-full bg-white/70">
+                            <div
+                              className="h-2.5 rounded-full bg-emerald-500"
+                              style={{ width: `${sessionCompletionPercent}%` }}
+                            />
+                          </div>
+                          <p className="mt-2 text-sm text-slate-500">
+                            {sessionCompletionPercent}% of planned session days are marked done.
+                          </p>
+                        </div>
+
+                        <div className="rounded-[22px] border border-slate-200 bg-[linear-gradient(135deg,#fff7ed,#fffdf8)] p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                            Payment Snapshot
+                          </p>
+                          <p className="mt-3 text-lg font-semibold text-slate-950">
+                            {formatMoney(totalPaidAmount)}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-500">
+                            Paid so far | Balance due {formatMoney(outstandingBalance)}
+                          </p>
+                        </div>
                       </div>
-                    );
-                  })}
+
+                      <div className="mt-5 grid gap-3 md:grid-cols-3">
+                        <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                            Requests Waiting
+                          </p>
+                          <p className="mt-2 text-2xl font-semibold text-slate-950">
+                            {pendingRequestCount}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                            Shared Notes
+                          </p>
+                          <p className="mt-2 text-2xl font-semibold text-slate-950">
+                            {clinicalNotes.length}
+                          </p>
+                        </div>
+                        <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                            Shop Orders
+                          </p>
+                          <p className="mt-2 text-2xl font-semibold text-slate-950">
+                            {shopOrders.length}
+                          </p>
+                        </div>
+                      </div>
+                    </Panel>
+
+                    <div className="grid gap-5">
+                      <Panel
+                        title="Quick Actions"
+                        subtitle="Jump straight to the section you want without scrolling through the whole dashboard."
+                      >
+                        <div className="grid gap-3">
+                          {quickActions.map((action) => {
+                            const Icon = action.icon;
+                            return (
+                              <button
+                                key={action.key}
+                                type="button"
+                                onClick={() => setActiveTab(action.key)}
+                                className="group flex items-center justify-between gap-4 rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4 text-left transition hover:border-sky-200 hover:bg-white"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="rounded-2xl bg-white p-2.5 text-sky-700 shadow-sm">
+                                    <Icon size={18} />
+                                  </div>
+                                  <div>
+                                    <p className="font-semibold text-slate-950">{action.label}</p>
+                                    <p className="mt-1 text-sm text-slate-500">{action.helper}</p>
+                                  </div>
+                                </div>
+                                <ArrowRight
+                                  size={16}
+                                  className="shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-slate-700"
+                                />
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </Panel>
+
+                      <Panel
+                        title="Recent Highlights"
+                        subtitle="The latest update from your care plan, payments, and shop activity."
+                      >
+                        <div className="grid gap-3">
+                          <HighlightCard
+                            icon={ClipboardList}
+                            title="Latest Doctor Note"
+                            value={latestClinicalNote?.title || "No doctor note yet"}
+                            helper={
+                              latestClinicalNote
+                                ? `Added on ${formatDate(latestClinicalNote.createdAt)}`
+                                : "Notes shared by OPW will appear here."
+                            }
+                          />
+                          <HighlightCard
+                            icon={CreditCard}
+                            title="Latest Payment"
+                            value={latestPayment ? formatMoney(latestPayment.amount) : "No payment yet"}
+                            helper={
+                              latestPayment
+                                ? `${latestPayment.method || "Payment"} | ${formatDate(latestPayment.createdAt)}`
+                                : "Your newest recorded payment will appear here."
+                            }
+                          />
+                          <HighlightCard
+                            icon={PackageCheck}
+                            title="Latest Order"
+                            value={latestOrder?.orderNumber || "No order yet"}
+                            helper={
+                              latestOrder
+                                ? `${formatStatusLabel(latestOrder.status)} | ${formatDate(latestOrder.createdAt)}`
+                                : "Shop activity will appear here after your first order."
+                            }
+                          />
+                        </div>
+                      </Panel>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -642,11 +1017,43 @@ export default function PatientDashboardPage() {
                     title="Request Appointment"
                     subtitle="Only logged-in patients can submit this request. Upload PDF/images and previous doctor notes."
                   >
+                    <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                          Pending
+                        </p>
+                        <p className="mt-2 text-xl font-semibold text-slate-950">
+                          {pendingRequestCount}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                          Booked
+                        </p>
+                        <p className="mt-2 text-xl font-semibold text-slate-950">
+                          {appointments.length}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                          Next Visit
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-slate-950">
+                          {nextBookedAppointment ? formatDate(nextBookedAppointment.date) : "Not set"}
+                        </p>
+                      </div>
+                    </div>
+                    {hasPendingAppointmentRequest ? (
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        Your previous appointment request is still pending. You can send a new request after OPW reviews it.
+                      </div>
+                    ) : null}
                     <form onSubmit={handleAppointmentSubmit} className="grid gap-4">
                       <select
                         className="input rounded-2xl border-slate-200 bg-slate-50"
                         value={appointmentForm.service}
                         onChange={(event) => setAppointmentForm({ ...appointmentForm, service: event.target.value })}
+                        disabled={hasPendingAppointmentRequest}
                         required
                       >
                         <option value="">Select service</option>
@@ -661,6 +1068,7 @@ export default function PatientDashboardPage() {
                         className="input rounded-2xl border-slate-200 bg-slate-50"
                         value={appointmentForm.date}
                         onChange={(event) => setAppointmentForm({ ...appointmentForm, date: event.target.value })}
+                        disabled={hasPendingAppointmentRequest}
                         required
                       />
                       <input
@@ -668,12 +1076,14 @@ export default function PatientDashboardPage() {
                         className="input rounded-2xl border-slate-200 bg-slate-50"
                         value={appointmentForm.time}
                         onChange={(event) => setAppointmentForm({ ...appointmentForm, time: event.target.value })}
+                        disabled={hasPendingAppointmentRequest}
                       />
                       <textarea
                         className="input min-h-[140px] rounded-2xl border-slate-200 bg-slate-50"
                         placeholder="Tell us about your pain, injury, or preferred timing"
                         value={appointmentForm.message}
                         onChange={(event) => setAppointmentForm({ ...appointmentForm, message: event.target.value })}
+                        disabled={hasPendingAppointmentRequest}
                       />
                       <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                         <label className="mb-3 block text-sm font-medium text-slate-700">
@@ -687,6 +1097,7 @@ export default function PatientDashboardPage() {
                             accept="image/*,.pdf"
                             className="hidden"
                             onChange={handleAppointmentFilesChange}
+                            disabled={hasPendingAppointmentRequest}
                           />
                         </label>
                         <p className="mt-2 text-xs text-slate-500">
@@ -713,7 +1124,7 @@ export default function PatientDashboardPage() {
                           </div>
                         ) : null}
                       </div>
-                      <button disabled={sendingAppointment} className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
+                      <button disabled={sendingAppointment || hasPendingAppointmentRequest} className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
                         <Send size={18} />
                         {sendingAppointment ? "Sending..." : "Request Appointment"}
                       </button>
@@ -725,9 +1136,14 @@ export default function PatientDashboardPage() {
                         {visibleAppointmentRequests.map((request) => (
                           <RecordCard
                             key={request.id}
-                            title={`${request.service || "Appointment"} - ${request.status || "pending"}`}
+                            title={request.service || "Appointment"}
                             subtitle={`Requested: ${formatDate(request.requestedDate)}${request.requestedTime ? ` at ${request.requestedTime}` : ""}`}
                           >
+                            <div className="mt-2">
+                              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(request.status)}`}>
+                                {formatStatusLabel(request.status || "pending")}
+                              </span>
+                            </div>
                             {request.status !== "pending" ? (
                               <p className="mt-2 rounded-2xl bg-sky-50 px-3 py-2 text-sm font-medium text-sky-700">
                                 {request.status === "rescheduled" ? "Rescheduled" : "Confirmed"}:{" "}
@@ -752,9 +1168,13 @@ export default function PatientDashboardPage() {
                             title={appointment.service || "Appointment"}
                             subtitle={`${formatDate(appointment.date)}${appointment.time ? ` at ${appointment.time}` : ""}`}
                           >
-                            <p className="mt-2 text-sm font-medium text-slate-600">
-                              Status: {appointment.status === "completed" ? "Done" : appointment.status || "approved"}
-                            </p>
+                            <div className="mt-2">
+                              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(appointment.status)}`}>
+                                {appointment.status === "completed"
+                                  ? "Done"
+                                  : formatStatusLabel(appointment.status || "approved")}
+                              </span>
+                            </div>
                             {appointment.remark ? (
                               <p className="mt-2 rounded-2xl bg-sky-50 px-3 py-2 text-sm text-sky-700">
                                 OPW remark: {appointment.remark}
@@ -770,6 +1190,26 @@ export default function PatientDashboardPage() {
 
               {activeTab === "sessions" && (
                 <Panel title="Session / Treatment Details" subtitle="Treatment and session details from OPW.">
+                  <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                        Plans
+                      </p>
+                      <p className="mt-2 text-xl font-semibold text-slate-950">{treatmentPlans.length}</p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                        Completed Days
+                      </p>
+                      <p className="mt-2 text-xl font-semibold text-slate-950">{completedSessionDays}</p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                        Progress
+                      </p>
+                      <p className="mt-2 text-xl font-semibold text-slate-950">{sessionCompletionPercent}%</p>
+                    </div>
+                  </div>
                   <RecordList emptyText="No session details added yet.">
                     {treatmentPlans.map((plan) => (
                       <RecordCard
@@ -777,6 +1217,11 @@ export default function PatientDashboardPage() {
                         title={Array.isArray(plan.treatmentTypes) ? plan.treatmentTypes.join(", ") : "Treatment plan"}
                         subtitle={`From ${formatDate(plan.fromDate)} to ${formatDate(plan.toDate)}`}
                       >
+                        <div className="mt-2">
+                          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(plan.status || "active")}`}>
+                            {formatStatusLabel(plan.status || "active")}
+                          </span>
+                        </div>
                         <p className="mt-2 text-sm text-slate-500">
                           Total: {formatMoney(plan.totalAmount)} | Advance: {formatMoney(plan.advanceAmount)} | Balance: {formatMoney(plan.balanceAmount)}
                         </p>
@@ -808,6 +1253,26 @@ export default function PatientDashboardPage() {
 
               {activeTab === "payments" && (
                 <Panel title="Payment Details" subtitle="Payment records from your OPW care plan.">
+                  <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                        Total Paid
+                      </p>
+                      <p className="mt-2 text-xl font-semibold text-slate-950">{formatMoney(totalPaidAmount)}</p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                        Outstanding
+                      </p>
+                      <p className="mt-2 text-xl font-semibold text-slate-950">{formatMoney(outstandingBalance)}</p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                        Entries
+                      </p>
+                      <p className="mt-2 text-xl font-semibold text-slate-950">{payments.length}</p>
+                    </div>
+                  </div>
                   <RecordList emptyText="No payment details added yet.">
                     {payments.map((payment, index) => (
                       <RecordCard
@@ -821,6 +1286,74 @@ export default function PatientDashboardPage() {
                           .filter(Boolean)
                           .join(" | ")}
                       />
+                    ))}
+                  </RecordList>
+                </Panel>
+              )}
+
+              {activeTab === "orders" && (
+                <Panel
+                  title="My Orders"
+                  subtitle="All shop orders placed from your patient account will appear here."
+                >
+                  <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                        Orders
+                      </p>
+                      <p className="mt-2 text-xl font-semibold text-slate-950">{shopOrders.length}</p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                        Latest Status
+                      </p>
+                      <p className="mt-2 text-sm font-semibold text-slate-950">
+                        {latestOrder ? formatStatusLabel(latestOrder.status) : "No order yet"}
+                      </p>
+                    </div>
+                    <div className="rounded-2xl bg-slate-50 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                        Latest Total
+                      </p>
+                      <p className="mt-2 text-sm font-semibold text-slate-950">
+                        {latestOrder ? formatMoney(latestOrder.totalAmount) : formatMoney(0)}
+                      </p>
+                    </div>
+                  </div>
+                  <RecordList emptyText="No shop orders placed yet.">
+                    {shopOrders.map((order) => (
+                      <RecordCard
+                        key={order.id}
+                        title={`${order.orderNumber} | ${formatMoney(order.totalAmount)}`}
+                        subtitle={[
+                          `Ordered on ${formatDate(order.createdAt)}`,
+                          `${order.totalQuantity || 0} item(s)`,
+                        ].join(" | ")}
+                      >
+                        <div className="mt-2">
+                          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(order.status)}`}>
+                            {formatStatusLabel(order.status || "pending")}
+                          </span>
+                        </div>
+                        {(order.items || []).length ? (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {order.items.map((item) => (
+                              <span
+                                key={item.id}
+                                className="rounded-full bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700"
+                              >
+                                {item.productName} x {item.quantity}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        {order.note ? (
+                          <p className="mt-3 rounded-2xl bg-slate-100 px-3 py-2 text-sm text-slate-600">
+                            Note: {order.note}
+                          </p>
+                        ) : null}
+                      </RecordCard>
                     ))}
                   </RecordList>
                 </Panel>
@@ -937,6 +1470,25 @@ function RecordCard({ title, subtitle, children }) {
       <p className="font-semibold text-slate-950">{title}</p>
       <p className="mt-1 text-sm leading-6 text-slate-500">{subtitle}</p>
       {children}
+    </div>
+  );
+}
+
+function HighlightCard({ icon: Icon, title, value, helper }) {
+  return (
+    <div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
+      <div className="flex items-start gap-3">
+        <div className="rounded-2xl bg-white p-2.5 text-sky-700 shadow-sm">
+          <Icon size={18} />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+            {title}
+          </p>
+          <p className="mt-2 truncate text-base font-semibold text-slate-950">{value}</p>
+          <p className="mt-1 text-sm leading-6 text-slate-500">{helper}</p>
+        </div>
+      </div>
     </div>
   );
 }

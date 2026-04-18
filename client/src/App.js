@@ -19,6 +19,9 @@ import Patients from "./pages/Patients";
 import PatientsArchive from "./pages/PatientsArchive";
 import PublicServicesPage from "./pages/PublicServicesPage";
 import Services from "./pages/Services";
+import Shop from "./pages/Shop";
+import ShopCartPage from "./pages/ShopCartPage";
+import ShopPage from "./pages/ShopPage";
 import Staff from "./pages/Staff";
 import StaffProfile from "./pages/StaffProfile";
 import Therapy from "./pages/Therapy";
@@ -49,6 +52,8 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/care" element={<PublicServicesPage />} />
+        <Route path="/shop" element={<ShopPage />} />
+        <Route path="/shop/cart" element={<ShopCartPage />} />
         <Route path="/faq" element={<FaqPage />} />
         <Route path="/career" element={<CareerPage />} />
         <Route path="/career/requirements" element={<CareerRequirementsPage />} />
@@ -105,6 +110,14 @@ function App() {
           element={
             <ProtectedRoute moduleKey="therapy">
               <Therapy />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/shop-admin"
+          element={
+            <ProtectedRoute moduleKey="shop">
+              <Shop />
             </ProtectedRoute>
           }
         />

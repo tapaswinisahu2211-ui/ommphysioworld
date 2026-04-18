@@ -27,7 +27,12 @@ function HorizontalChartCard({ title, subtitle, items = [], type = "number" }) {
         <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
       </div>
 
-      <div className="space-y-4">
+      {items.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+          No data yet.
+        </div>
+      ) : (
+        <div className="space-y-4">
         {items.map((item, index) => (
           <div key={item.label}>
             <div className="mb-2 flex items-center justify-between gap-3 text-sm">
@@ -45,7 +50,8 @@ function HorizontalChartCard({ title, subtitle, items = [], type = "number" }) {
             </div>
           </div>
         ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -70,7 +76,12 @@ function PieChartCard({ title, subtitle, items = [] }) {
         <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
       </div>
 
-      <div className="flex flex-col items-center gap-5 sm:flex-row">
+      {items.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+          No data yet.
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-5 sm:flex-row">
         <div
           className="relative flex h-36 w-36 shrink-0 items-center justify-center rounded-full"
           style={{ background: chartBackground }}
@@ -97,12 +108,13 @@ function PieChartCard({ title, subtitle, items = [] }) {
             </div>
           ))}
         </div>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function VerticalChartCard({ title, subtitle, items = [] }) {
+function VerticalChartCard({ title, subtitle, items = [], type = "currency" }) {
   const maxValue = Math.max(...items.map((item) => Number(item.value || 0)), 1);
 
   return (
@@ -112,11 +124,16 @@ function VerticalChartCard({ title, subtitle, items = [] }) {
         <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
       </div>
 
-      <div className="flex h-52 items-end gap-3 rounded-2xl bg-slate-50 px-4 py-5">
+      {items.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+          No data yet.
+        </div>
+      ) : (
+        <div className="flex h-52 items-end gap-3 rounded-2xl bg-slate-50 px-4 py-5">
         {items.map((item, index) => (
           <div key={item.key || item.label} className="flex flex-1 flex-col items-center gap-2">
             <div className="text-xs font-medium text-slate-500">
-              {formatChartValue(item.value, "currency")}
+              {formatChartValue(item.value, type)}
             </div>
             <div className="flex h-28 w-full items-end justify-center">
               <div
@@ -130,7 +147,8 @@ function VerticalChartCard({ title, subtitle, items = [] }) {
             <div className="text-xs text-slate-500">{item.label}</div>
           </div>
         ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -218,6 +236,12 @@ export default function Dashboard() {
   const appointmentStatusChart = charts.appointmentStatus || [];
   const sessionStatusChart = charts.sessionStatus || [];
   const revenueByMonth = charts.revenueByMonth || [];
+  const patientSourceChart = charts.patientSource || [];
+  const topServicesChart = charts.topServices || [];
+  const patientGrowthByMonth = charts.patientGrowthByMonth || [];
+  const shopOrderStatusChart = charts.shopOrderStatus || [];
+  const shopRevenueByMonth = charts.shopRevenueByMonth || [];
+  const staffStatusChart = charts.staffStatus || [];
 
   return (
     <DashboardLayout>
@@ -301,6 +325,45 @@ export default function Dashboard() {
             title="Payment Trend"
             subtitle="Recorded treatment payments over the last six months."
             items={revenueByMonth}
+            type="currency"
+          />
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-3">
+          <HorizontalChartCard
+            title="Top Service Demand"
+            subtitle="Most requested and assigned services across appointments and treatments."
+            items={topServicesChart}
+          />
+          <PieChartCard
+            title="Patient Source Mix"
+            subtitle="Where current patient records are being created from."
+            items={patientSourceChart}
+          />
+          <HorizontalChartCard
+            title="Shop Order Status"
+            subtitle="Current order pipeline across pending, confirmed, completed, and cancelled orders."
+            items={shopOrderStatusChart}
+          />
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-3">
+          <VerticalChartCard
+            title="New Patient Trend"
+            subtitle="Patient growth over the last six months."
+            items={patientGrowthByMonth}
+            type="number"
+          />
+          <VerticalChartCard
+            title="Shop Revenue Trend"
+            subtitle="Non-cancelled shop order value over the last six months."
+            items={shopRevenueByMonth}
+            type="currency"
+          />
+          <PieChartCard
+            title="Staff Status"
+            subtitle="Active versus inactive team members."
+            items={staffStatusChart}
           />
         </div>
 
@@ -470,6 +533,9 @@ export default function Dashboard() {
                 </div>
                 <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
                   Payment totals are calculated from treatment-session payments recorded in patient profiles.
+                </div>
+                <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-700">
+                  Dashboard charts now also surface patient-source mix, service demand, shop order flow, and monthly growth trends.
                 </div>
               </div>
             </div>

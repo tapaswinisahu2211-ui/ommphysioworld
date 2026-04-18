@@ -1,14 +1,27 @@
 const nodemailer = require("nodemailer");
 
-const hasMailConfig = () =>
-  Boolean(process.env.EMAIL_USER && process.env.EMAIL_APP_PASSWORD);
+const PLACEHOLDER_PASSWORDS = new Set([
+  "PASTE_YOUR_GMAIL_APP_PASSWORD_HERE",
+  "YOUR_GMAIL_APP_PASSWORD",
+]);
+
+const cleanEnvValue = (value) => String(value || "").trim();
+
+const hasMailConfig = () => {
+  const emailUser = cleanEnvValue(process.env.EMAIL_USER);
+  const emailPassword = cleanEnvValue(process.env.EMAIL_APP_PASSWORD);
+
+  return Boolean(
+    emailUser && emailPassword && !PLACEHOLDER_PASSWORDS.has(emailPassword)
+  );
+};
 
 const createTransporter = () =>
   nodemailer.createTransport({
     service: "gmail",
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_APP_PASSWORD,
+      user: cleanEnvValue(process.env.EMAIL_USER),
+      pass: cleanEnvValue(process.env.EMAIL_APP_PASSWORD),
     },
   });
 

@@ -6,6 +6,7 @@
   LayoutDashboard,
   Mail,
   MessageSquareQuote,
+  ShoppingBag,
   Stethoscope,
   UserCog,
   Users,
@@ -17,6 +18,20 @@ export default function Sidebar({ collapsed, onNavigate }) {
   const location = useLocation();
   const currentUser = getStoredUser();
   const adminUser = isAdminUser(currentUser);
+  const isMenuActive = (menuPath) => {
+    if (location.pathname === menuPath) {
+      return true;
+    }
+
+    if (menuPath === "/patients") {
+      return (
+        location.pathname.startsWith("/patients/") ||
+        location.pathname.startsWith("/patient/")
+      );
+    }
+
+    return location.pathname.startsWith(`${menuPath}/`);
+  };
   const initials = (currentUser.name || "Admin")
     .split(" ")
     .map((part) => part[0])
@@ -30,6 +45,7 @@ export default function Sidebar({ collapsed, onNavigate }) {
     { name: "Treatment Tracker", path: "/treatment-tracker", icon: ClipboardList, hint: "Follow-up", moduleKey: "treatment_tracker" },
     { name: "Services", path: "/services", icon: Stethoscope, hint: "Treatments", moduleKey: "services" },
     { name: "Therapy", path: "/therapy", icon: FolderOpen, hint: "Media", moduleKey: "therapy" },
+    { name: "Shop", path: "/shop-admin", icon: ShoppingBag, hint: "Products", moduleKey: "shop" },
     ...(adminUser
       ? [
           { name: "Feedback", path: "/feedback", icon: MessageSquareQuote, hint: "Reviews", moduleKey: "" },
@@ -92,9 +108,7 @@ export default function Sidebar({ collapsed, onNavigate }) {
 
           <nav className="space-y-2">
             {menus.map((menu) => {
-              const active =
-                location.pathname === menu.path ||
-                (menu.path === "/patients" && location.pathname.startsWith("/patient"));
+              const active = isMenuActive(menu.path);
 
               return (
                 <Link

@@ -257,15 +257,18 @@ const loginPublicUser = async (req, res) => {
       return res.status(401).json({ message: "Invalid email or password." });
     }
 
-    if (!user.patientId) {
-      const patient = await findOrCreatePatientForPublicUser({
-        name: user.name,
-        email: user.email,
-        mobile: user.mobile,
-        createdFrom: user.createdFrom || "website",
+    let linkedPatient = null;
+
+    if (user.patientId) {
+      linkedPatient = await Patient.findById(user.patientId);
+    }
+
+    if (!linkedPatient) {
+      await user.deleteOne();
+      return res.status(404).json({
+        message:
+          "This patient account is no longer available. Please contact OPW support.",
       });
-      user.patientId = patient._id;
-      await user.save();
     }
 
     return res.json({
@@ -273,7 +276,7 @@ const loginPublicUser = async (req, res) => {
       token: createSessionToken({
         sub: user._id.toString(),
         type: "patient",
-        patientId: user.patientId ? user.patientId.toString() : "",
+        patientId: linkedPatient._id.toString(),
       }),
       user: serializePublicUser(user),
     });
@@ -333,6 +336,20 @@ If you did not request this change, please contact OPW immediately.
       });
     } catch (emailError) {
       console.log("Password reset email failed:", emailError);
+
+      const authFailed =
+        emailError?.code === "EAUTH" ||
+        String(emailError?.response || "")
+          .toLowerCase()
+          .includes("authentication");
+
+      if (authFailed) {
+        return res.status(503).json({
+          message:
+            "Password email is not configured correctly right now. Please contact OPW support.",
+        });
+      }
+
       return res.status(500).json({
         message: "Unable to send the password email right now. Please try again shortly.",
       });

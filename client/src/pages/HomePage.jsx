@@ -613,12 +613,8 @@ export default function HomePage() {
                   <div className="inline-flex rounded-2xl bg-emerald-50 p-3 text-emerald-600">
                     <BadgeCheck size={20} />
                   </div>
-                  <div className="flex gap-1 text-amber-500">
-                    <span>�~.</span>
-                    <span>�~.</span>
-                    <span>�~.</span>
-                    <span>�~.</span>
-                    <span>�~.</span>
+                  <div className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
+                    Verified review
                   </div>
                 </div>
 
@@ -751,4 +747,6 @@ export default function HomePage() {
     </PublicLayout>
   );
 }
+
+
 

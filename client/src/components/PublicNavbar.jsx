@@ -1,21 +1,22 @@
-import { Clock3, Download, LogOut, MapPin, Menu, Phone, UserCircle2, X } from "lucide-react";
-import { useState } from "react";
+import { Clock3, Download, LogOut, MapPin, Menu, Phone, ShoppingCart, UserCircle2, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import logoImage from "../assets/opw.png";
 import { clearPatientUser, getPatientUser } from "../utils/patientAuth";
+import { getShopCartEventName, getShopCartItemCount } from "../utils/shopCart";
 
 const copy = {
   nav: [
     { label: "Home", path: "/" },
     { label: "About", path: "/about" },
     { label: "Services", path: "/care" },
+    { label: "Shop", path: "/shop" },
     { label: "FAQ", path: "/faq" },
     { label: "Career", path: "/career/requirements" },
     { label: "Contact", path: "/contact" },
   ],
   hours: "Monday to Saturday, 9:00 AM to 7:00 PM",
   location: "Baripada, Odisha",
-  reachClinic: "Reach Clinic",
   downloadApp: "Download our app",
   clinicName: "Omm Physio World",
   doctor: "Dr. Tapaswini Sahu",
@@ -25,6 +26,7 @@ export default function PublicNavbar() {
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [patientUser, setPatientUser] = useState(() => getPatientUser());
+  const [cartCount, setCartCount] = useState(() => getShopCartItemCount());
   const navigate = useNavigate();
   const t = copy;
   const dashboardLabel = "Dashboard";
@@ -54,6 +56,19 @@ export default function PublicNavbar() {
   const scrollPageTop = () => {
     window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
   };
+
+  useEffect(() => {
+    const syncCartCount = () => setCartCount(getShopCartItemCount());
+    const eventName = getShopCartEventName();
+
+    window.addEventListener("storage", syncCartCount);
+    window.addEventListener(eventName, syncCartCount);
+
+    return () => {
+      window.removeEventListener("storage", syncCartCount);
+      window.removeEventListener(eventName, syncCartCount);
+    };
+  }, []);
 
   return (
     <header className="sticky top-0 z-50">
@@ -129,10 +144,16 @@ export default function PublicNavbar() {
 
             <div className="hidden items-center gap-3 lg:flex">
               <Link
-                to="/contact"
-                className="rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                to="/shop/cart"
+                className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                title="Cart"
               >
-                {t.reachClinic}
+                <ShoppingCart size={19} />
+                {cartCount ? (
+                  <span className="absolute -right-1 -top-1 inline-flex min-h-[20px] min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1.5 text-[11px] font-semibold text-white">
+                    {cartCount}
+                  </span>
+                ) : null}
               </Link>
               {patientUser ? (
                 <div className="relative">
@@ -226,11 +247,11 @@ export default function PublicNavbar() {
 
               <div className="mt-2 grid gap-2 sm:grid-cols-2">
                 <Link
-                  to="/contact"
+                  to="/shop/cart"
                   className="rounded-2xl border border-slate-200 px-4 py-3 text-center text-sm font-medium text-slate-700"
                   onClick={() => setOpen(false)}
                 >
-                  {t.reachClinic}
+                  Cart {cartCount ? `(${cartCount})` : ""}
                 </Link>
                 {patientUser ? (
                   <Link

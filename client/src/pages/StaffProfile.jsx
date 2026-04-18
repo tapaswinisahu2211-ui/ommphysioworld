@@ -24,6 +24,7 @@ const MODULE_LABELS = {
   chat: "Chat",
   services: "Services",
   therapy: "Therapy",
+  shop: "Shop",
   staff: "Staff",
   mailbox: "Mailbox",
   treatment_tracker: "Treatment Tracker",

@@ -3,6 +3,7 @@ import { ArrowRight, ChevronDown, HelpCircle, Search, Sparkles } from "lucide-re
 import { Link } from "react-router-dom";
 import Seo from "../components/Seo";
 import PublicLayout from "../layout/PublicLayout";
+import { createBreadcrumbSchema, createFaqSchema, createMedicalBusinessSchema } from "../utils/seo";
 
 const copy = {
   badge: "Smart FAQ Search",
@@ -123,6 +124,19 @@ export default function FaqPage() {
         title="FAQ and Patient Help | Omm Physio World"
         description="Find physiotherapy FAQ answers about pain relief, posture correction, rehabilitation, clinical notes, appointments, and how Omm Physio World can help."
         path="/faq"
+        schema={[
+          createMedicalBusinessSchema({
+            description:
+              "FAQ answers from Omm Physio World about physiotherapy, rehabilitation, posture support, appointments, and patient guidance.",
+            path: "/faq",
+            pageName: "FAQ",
+          }),
+          createBreadcrumbSchema([
+            { name: "Home", path: "/" },
+            { name: "FAQ", path: "/faq" },
+          ]),
+          createFaqSchema(copy.faqItems),
+        ]}
       />
 
       <section className="page-section relative px-4 py-12 sm:px-6 lg:px-8">

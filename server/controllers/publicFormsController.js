@@ -190,6 +190,21 @@ const hasOpenScheduledAppointment = async ({ patient, email, phone }) => {
   return Boolean(existingAppointment);
 };
 
+const hasPendingAppointmentRequest = async ({ patient, email, phone }) => {
+  const identityQuery = buildAppointmentIdentityQuery({ patient, email, phone });
+
+  if (!identityQuery) {
+    return false;
+  }
+
+  const pendingAppointment = await Appointment.findOne({
+    ...identityQuery,
+    status: "pending",
+  });
+
+  return Boolean(pendingAppointment);
+};
+
 const getAppointmentUploadFiles = (req) => {
   if (Array.isArray(req.files)) {
     return req.files;
@@ -264,6 +279,13 @@ const submitAppointment = async (req, res) => {
       return res.status(409).json({
         message:
           "You already have a scheduled appointment. You can request another appointment after it is done or cancelled.",
+      });
+    }
+
+    if (await hasPendingAppointmentRequest({ patient: linkedPatient, email, phone })) {
+      return res.status(409).json({
+        message:
+          "Your previous appointment request is still pending. Please wait until OPW reviews it before sending another request.",
       });
     }
 

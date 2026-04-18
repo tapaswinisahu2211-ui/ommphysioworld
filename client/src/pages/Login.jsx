@@ -1,6 +1,7 @@
 ﻿import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import Seo from "../components/Seo";
 import API from "../services/api";
 
 export default function Login() {
@@ -51,6 +52,12 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex">
+      <Seo
+        title="Admin Login"
+        description="Secure staff and admin login for Omm Physio World."
+        path="/admin"
+        robots="noindex, nofollow"
+      />
       
       {/* LEFT SIDE */}
       <div className="motion-panel hidden w-1/2 items-center justify-center bg-blue-600 text-white md:flex">

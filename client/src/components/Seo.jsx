@@ -4,6 +4,7 @@ const DEFAULT_TITLE = "Omm Physio World | Physiotherapy Clinic in Baripada";
 const DEFAULT_DESCRIPTION =
   "Omm Physio World offers physiotherapy care in Baripada for pain relief, posture correction, rehabilitation, and guided recovery.";
 const DEFAULT_IMAGE = "/logo512.png";
+const ABSOLUTE_URL_KEYS = new Set(["url", "item", "image", "logo"]);
 
 const normalizeSchemaUrls = (value, origin) => {
   if (Array.isArray(value)) {
@@ -14,7 +15,7 @@ const normalizeSchemaUrls = (value, origin) => {
     return Object.fromEntries(
       Object.entries(value).map(([key, currentValue]) => {
         if (
-          (key === "url" || key === "item") &&
+          ABSOLUTE_URL_KEYS.has(key) &&
           typeof currentValue === "string" &&
           currentValue.startsWith("/")
         ) {
@@ -90,6 +91,14 @@ export default function Seo({
       property: "og:title",
       content: fullTitle,
     });
+    ensureMeta('meta[property="og:site_name"]', {
+      property: "og:site_name",
+      content: "Omm Physio World",
+    });
+    ensureMeta('meta[property="og:locale"]', {
+      property: "og:locale",
+      content: "en_IN",
+    });
     ensureMeta('meta[property="og:description"]', {
       property: "og:description",
       content: description,
@@ -121,6 +130,10 @@ export default function Seo({
     ensureMeta('meta[name="twitter:image"]', {
       name: "twitter:image",
       content: imageUrl,
+    });
+    ensureMeta('meta[name="twitter:image:alt"]', {
+      name: "twitter:image:alt",
+      content: fullTitle,
     });
     ensureLink('link[rel="canonical"]', {
       rel: "canonical",

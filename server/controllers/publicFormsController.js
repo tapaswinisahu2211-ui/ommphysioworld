@@ -190,6 +190,18 @@ const hasOpenScheduledAppointment = async ({ patient, email, phone }) => {
   return Boolean(existingAppointment);
 };
 
+const getAppointmentUploadFiles = (req) => {
+  if (Array.isArray(req.files)) {
+    return req.files;
+  }
+
+  if (req.files && typeof req.files === "object") {
+    return [...(req.files.files || []), ...(req.files.file || [])];
+  }
+
+  return req.file ? [req.file] : [];
+};
+
 const submitAppointment = async (req, res) => {
   try {
     const requestedPatientId = cleanText(req.body.patientId);
@@ -202,6 +214,8 @@ const submitAppointment = async (req, res) => {
     const date = cleanText(req.body.date);
     const time = cleanText(req.body.time);
     const message = cleanText(req.body.message);
+    const uploadedFiles = getAppointmentUploadFiles(req);
+    const primaryAttachment = uploadedFiles[0] || null;
 
     if (patientToken && patientToken.patientId && requestedPatientId && requestedPatientId !== patientToken.patientId) {
       return res.status(403).json({ message: "Invalid patient session for this appointment request." });
@@ -262,9 +276,14 @@ const submitAppointment = async (req, res) => {
       date,
       time: time || "",
       message,
-      attachmentName: req.file ? req.file.originalname : "",
-      attachmentMimeType: req.file ? req.file.mimetype : "",
-      attachmentData: req.file ? req.file.buffer : undefined,
+      attachmentName: primaryAttachment ? primaryAttachment.originalname : "",
+      attachmentMimeType: primaryAttachment ? primaryAttachment.mimetype : "",
+      attachmentData: primaryAttachment ? primaryAttachment.buffer : undefined,
+      attachments: uploadedFiles.map((file) => ({
+        name: file.originalname,
+        mimeType: file.mimetype,
+        data: file.buffer,
+      })),
     });
 
     let emailSent = false;
@@ -283,20 +302,20 @@ Phone: ${phone}
 Service: ${service}
 Preferred Date: ${date}
 Preferred Time: ${time || "Not provided"}
-Attachment: ${req.file ? req.file.originalname : "No attachment"}
+Attachments: ${
+          uploadedFiles.length
+            ? uploadedFiles.map((file) => file.originalname).join(", ")
+            : "No attachment"
+        }
 
 Message:
 ${message || "Not provided"}
 `,
-        attachments: req.file
-          ? [
-              {
-                filename: req.file.originalname,
-                content: req.file.buffer,
-                contentType: req.file.mimetype,
-              },
-            ]
-          : [],
+        attachments: uploadedFiles.map((file) => ({
+          filename: file.originalname,
+          content: file.buffer,
+          contentType: file.mimetype,
+        })),
       });
     } catch (emailError) {
       console.log("Appointment email failed:", emailError);

@@ -48,6 +48,40 @@ const clinicalNoteSchema = new mongoose.Schema(
   { _id: true }
 );
 
+const therapyRecommendationItemSchema = new mongoose.Schema(
+  {
+    resourceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "TherapyResource",
+      required: true,
+    },
+    title: { type: String, default: "", trim: true },
+    description: { type: String, default: "", trim: true },
+    fileName: { type: String, default: "", trim: true },
+    mimeType: { type: String, default: "application/octet-stream", trim: true },
+    resourceType: { type: String, default: "document", trim: true },
+    sizeBytes: { type: Number, default: 0 },
+    addedAt: { type: Date, default: Date.now },
+  },
+  { _id: true }
+);
+
+const therapyRecommendationSchema = new mongoose.Schema(
+  {
+    serviceId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Service",
+      required: true,
+    },
+    serviceName: { type: String, default: "", trim: true },
+    note: { type: String, default: "", trim: true },
+    items: { type: [therapyRecommendationItemSchema], default: [] },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+  },
+  { _id: true }
+);
+
 const sessionDaySchema = new mongoose.Schema(
   {
     date: { type: String, required: true },
@@ -94,15 +128,25 @@ const patientSchema = new mongoose.Schema({
   profileImageMimeType: { type: String, default: "" },
   profileImageUpdatedAt: { type: Date, default: null },
   clinicalNotes: { type: [clinicalNoteSchema], default: [] },
+  therapyRecommendations: { type: [therapyRecommendationSchema], default: [] },
   treatmentPlans: { type: [treatmentPlanSchema], default: [] },
   appointments: { type: [appointmentEntrySchema], default: [] },
   payments: { type: [paymentEntrySchema], default: [] },
+  archivedAt: { type: Date, default: null },
+  archivedByUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  archivedByRole: { type: String, default: "", trim: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
 
 patientSchema.pre("save", function updateTimestamp() {
   this.updatedAt = Date.now();
+});
+
+patientSchema.pre(/^find/, function excludeArchivedPatients() {
+  if (!this.getOptions().includeArchived) {
+    this.where({ archivedAt: null });
+  }
 });
 
 module.exports = mongoose.model("Patient", patientSchema);

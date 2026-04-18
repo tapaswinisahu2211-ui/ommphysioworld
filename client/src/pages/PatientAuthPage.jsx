@@ -34,6 +34,19 @@ export default function PatientAuthPage({ mode = "login" }) {
     }
   }, [isForgot, navigate, redirectTo]);
 
+  useEffect(() => {
+    try {
+      const sessionMessage = sessionStorage.getItem("opwSessionExpiredMessage") || "";
+
+      if (sessionMessage) {
+        setError(sessionMessage);
+        sessionStorage.removeItem("opwSessionExpiredMessage");
+      }
+    } catch (_) {
+      // Ignore storage read failures.
+    }
+  }, []);
+
   const copy = useMemo(
     () =>
       isForgot

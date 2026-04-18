@@ -23,6 +23,10 @@ const pageMeta = {
     title: "Patients",
     subtitle: "Manage patient records, profiles, and care history.",
   },
+  "/patients/archive": {
+    title: "Patient Archive",
+    subtitle: "Review archived patients and permanently delete them when needed.",
+  },
   "/treatment-tracker": {
     title: "Treatment Tracker",
     subtitle: "Track upcoming appointments, active sessions, and overdue follow-ups.",
@@ -30,6 +34,10 @@ const pageMeta = {
   "/services": {
     title: "Services",
     subtitle: "Organize treatment offerings and clinic service details.",
+  },
+  "/therapy": {
+    title: "Therapy",
+    subtitle: "Upload and organize therapy media for each service.",
   },
   "/feedback": {
     title: "Feedback",
@@ -135,6 +143,10 @@ export default function Topbar({ collapsed, setCollapsed, onOpenMobileMenu }) {
   };
 
   const activePage = useMemo(() => {
+    if (location.pathname === "/patients/archive") {
+      return pageMeta["/patients/archive"];
+    }
+
     if (location.pathname.startsWith("/patients/") || location.pathname.startsWith("/patient/")) {
       return {
         title: "Patient Profile",

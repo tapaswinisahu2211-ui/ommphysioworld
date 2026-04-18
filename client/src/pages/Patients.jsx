@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Pagination from "../components/Pagination";
 import DashboardLayout from "../layout/DashboardLayout";
-import { Eye, Pencil, Trash2, Plus, Search, Users, UserPlus } from "lucide-react";
+import { Archive, Eye, Pencil, Trash2, Plus, Search, Users, UserPlus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import API from "../services/api";
-import { canAddModule, canEditModule, getStoredUser } from "../utils/auth";
+import { canAddModule, canEditModule, getStoredUser, isAdminUser } from "../utils/auth";
 import {
   cleanEmail,
   cleanPhone,
@@ -17,6 +17,7 @@ export default function Patients() {
   const PAGE_SIZE = 10;
   const navigate = useNavigate();
   const currentUser = getStoredUser();
+  const adminUser = isAdminUser(currentUser);
   const canAddPatients = canAddModule("patients", currentUser);
   const canEditPatients = canEditModule("patients", currentUser);
   const [patients, setPatients] = useState([]);
@@ -121,8 +122,9 @@ export default function Patients() {
       await API.delete(`/patients/${deleteId}`);
       setPatients((current) => current.filter((patient) => patient.id !== deleteId));
       setDeleteId(null);
+      setError("");
     } catch (deleteError) {
-      setError(deleteError.response?.data?.message || "Failed to delete patient.");
+      setError(deleteError.response?.data?.message || "Failed to archive patient.");
     }
   };
 
@@ -186,14 +188,25 @@ export default function Patients() {
               </div>
             </div>
 
-            {canAddPatients ? (
-              <button
-                onClick={openAddModal}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100"
-              >
-                <Plus size={16} /> Add Patient
-              </button>
-            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              {adminUser ? (
+                <button
+                  onClick={() => navigate("/patients/archive")}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/15"
+                >
+                  <Archive size={16} /> Archive
+                </button>
+              ) : null}
+
+              {canAddPatients ? (
+                <button
+                  onClick={openAddModal}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-medium text-slate-900 hover:bg-slate-100"
+                >
+                  <Plus size={16} /> Add Patient
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -326,7 +339,7 @@ export default function Patients() {
                                 <button
                                   onClick={() => setDeleteId(patient.id)}
                                   className="rounded-xl border border-rose-200 bg-rose-50 p-2 text-rose-600 hover:bg-rose-100"
-                                  title="Delete patient"
+                                  title="Archive patient"
                                 >
                                   <Trash2 size={17} />
                                 </button>
@@ -424,14 +437,15 @@ export default function Patients() {
         {deleteId && canEditPatients ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm px-4">
             <div className="motion-card w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-6 shadow-2xl">
-              <p className="text-sm font-medium text-rose-600">Delete Patient</p>
+              <p className="text-sm font-medium text-amber-600">Archive Patient</p>
               <h3 className="mt-1 text-2xl font-semibold text-slate-900">
-                Confirm Delete
+                Move To Archive
               </h3>
 
               <p className="mt-3 text-sm leading-6 text-slate-500">
-                Are you sure you want to delete this patient? This action will
-                remove the record from the current list.
+                Are you sure you want to archive this patient? The record will be
+                hidden from the patient list and other modules until an admin
+                permanently deletes it from the archive.
               </p>
 
               <div className="mt-6 flex justify-end gap-3">
@@ -444,9 +458,9 @@ export default function Patients() {
 
                 <button
                   onClick={confirmDelete}
-                  className="rounded-xl bg-rose-600 px-5 py-2 font-medium text-white hover:bg-rose-700"
+                  className="rounded-xl bg-amber-600 px-5 py-2 font-medium text-white hover:bg-amber-700"
                 >
-                  Delete
+                  Archive
                 </button>
               </div>
             </div>

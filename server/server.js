@@ -68,7 +68,9 @@ const Patient = require("./models/Patient");
 const PublicUser = require("./models/PublicUser");
 const Service = require("./models/Service");
 const StaffApplication = require("./models/StaffApplication");
+const TherapyResource = require("./models/TherapyResource");
 const User = require("./models/User");
+const therapyUpload = require("./middleware/therapyUpload");
 const upload = require("./middleware/upload");
 const authRoutes = require("./routes/authRoutes");
 const publicRoutes = require("./routes/publicRoutes");
@@ -177,6 +179,26 @@ const serializePatient = (patient) => ({
       downloadUrl: `/patients/${patient._id.toString()}/clinical-notes/${entry._id.toString()}/documents/${document._id.toString()}`,
     })),
   })),
+  therapyRecommendations: (patient.therapyRecommendations || []).map((entry) => ({
+    id: entry._id.toString(),
+    serviceId: entry.serviceId ? entry.serviceId.toString() : "",
+    serviceName: entry.serviceName || "",
+    note: entry.note || "",
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+    items: (entry.items || []).map((item) => ({
+      id: item._id.toString(),
+      resourceId: item.resourceId ? item.resourceId.toString() : "",
+      title: item.title || "",
+      description: item.description || "",
+      fileName: item.fileName || "",
+      mimeType: item.mimeType || "application/octet-stream",
+      resourceType: item.resourceType || getTherapyResourceType(item.mimeType || ""),
+      sizeBytes: Number(item.sizeBytes || 0),
+      fileUrl: `/patients/${patient._id.toString()}/therapy-recommendations/${entry._id.toString()}/items/${item._id.toString()}/file`,
+      downloadUrl: `/patients/${patient._id.toString()}/therapy-recommendations/${entry._id.toString()}/items/${item._id.toString()}/download`,
+    })),
+  })),
   treatmentPlans: (patient.treatmentPlans || []).map((plan) => ({
     id: plan._id.toString(),
     treatmentTypes: plan.treatmentTypes || [],
@@ -209,9 +231,49 @@ const serializePatient = (patient) => ({
     method: payment.method,
     createdAt: payment.createdAt,
   })),
+  isArchived: Boolean(patient.archivedAt),
+  archivedAt: patient.archivedAt || null,
+  archivedByUserId: patient.archivedByUserId ? patient.archivedByUserId.toString() : "",
+  archivedByRole: patient.archivedByRole || "",
   createdAt: patient.createdAt,
   updatedAt: patient.updatedAt,
 });
+
+const getArchivedPatients = () =>
+  Patient.find({ archivedAt: { $ne: null } })
+    .setOptions({ includeArchived: true })
+    .sort({ archivedAt: -1, updatedAt: -1 });
+
+const findArchivedPatientById = (id) =>
+  Patient.findOne({ _id: id, archivedAt: { $ne: null } }).setOptions({
+    includeArchived: true,
+  });
+
+const DEFAULT_ADMIN_CREATED_PATIENT_PASSWORD = "123456";
+
+const syncAdminCreatedPatientPortalAccount = async (patient) => {
+  const existingUser = await PublicUser.findOne({ email: patient.email });
+
+  if (existingUser) {
+    existingUser.name = patient.name;
+    existingUser.email = patient.email;
+    existingUser.mobile = patient.mobile;
+    existingUser.createdFrom = "admin";
+    existingUser.patientId = patient._id;
+    existingUser.passwordHash = hashPassword(DEFAULT_ADMIN_CREATED_PATIENT_PASSWORD);
+    await existingUser.save();
+    return existingUser;
+  }
+
+  return PublicUser.create({
+    name: patient.name,
+    email: patient.email,
+    mobile: patient.mobile,
+    passwordHash: hashPassword(DEFAULT_ADMIN_CREATED_PATIENT_PASSWORD),
+    createdFrom: "admin",
+    patientId: patient._id,
+  });
+};
 
 const formatPatientCreatedFrom = (value) => {
   switch (String(value || "").trim()) {
@@ -461,6 +523,56 @@ const serializeService = (service) => ({
   name: service.name,
   createdAt: service.createdAt,
   updatedAt: service.updatedAt,
+});
+
+const getTherapyResourceType = (mimeType = "") => {
+  if (mimeType === "image/gif") {
+    return "gif";
+  }
+
+  if (mimeType.startsWith("image/")) {
+    return "image";
+  }
+
+  if (mimeType.startsWith("video/")) {
+    return "video";
+  }
+
+  return "document";
+};
+
+const serializeTherapyResource = (resource) => {
+  const service =
+    resource.serviceId && typeof resource.serviceId === "object"
+      ? resource.serviceId
+      : null;
+  const resourceId = resource._id.toString();
+
+  return {
+    id: resourceId,
+    serviceId: service?._id?.toString() || String(resource.serviceId || ""),
+    serviceName: service?.name || "",
+    title: resource.title || "",
+    description: resource.description || "",
+    fileName: resource.fileName || "",
+    mimeType: resource.mimeType || "application/octet-stream",
+    resourceType: getTherapyResourceType(resource.mimeType || ""),
+    sizeBytes: Number(resource.sizeBytes || 0),
+    fileUrl: `/therapy-resources/${resourceId}/file`,
+    downloadUrl: `/therapy-resources/${resourceId}/download`,
+    createdAt: resource.createdAt,
+    updatedAt: resource.updatedAt,
+  };
+};
+
+const buildTherapyRecommendationItemSnapshot = (resource) => ({
+  resourceId: resource._id,
+  title: resource.title || "",
+  description: resource.description || "",
+  fileName: resource.fileName || "",
+  mimeType: resource.mimeType || "application/octet-stream",
+  resourceType: getTherapyResourceType(resource.mimeType || ""),
+  sizeBytes: Number(resource.sizeBytes || 0),
 });
 
 const serializeMailboxItem = (type, entry) => {
@@ -1492,6 +1604,16 @@ app.get("/api/patients", requireStaffAuth, async (req, res) => {
   }
 });
 
+app.get("/api/patients/archive", requireAdminAuth, async (_req, res) => {
+  try {
+    const patients = await getArchivedPatients();
+    res.json(patients.map(serializePatient));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to load archived patients." });
+  }
+});
+
 app.get("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
   try {
     await autoCompleteOverdueAppointments();
@@ -1533,7 +1655,7 @@ app.post("/api/patients", requireStaffAuth, async (req, res) => {
 
     const existingPatient = await Patient.findOne({
       $or: [{ email }, { mobile }],
-    });
+    }).setOptions({ includeArchived: true });
 
     if (existingPatient) {
       return res.status(409).json({
@@ -1548,6 +1670,9 @@ app.post("/api/patients", requireStaffAuth, async (req, res) => {
       createdFrom: "admin",
       notes: "Created from Admin registration.",
     });
+
+    await syncAdminCreatedPatientPortalAccount(patient);
+
     res.status(201).json(serializePatient(patient));
   } catch (error) {
     console.log(error);
@@ -1586,6 +1711,19 @@ app.put("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
       return res.status(400).json({ message: "Please enter a valid 10-digit mobile number." });
     }
 
+    if (req.auth?.type === "staff" && email !== undefined && email !== patient.email) {
+      const conflictingPortalUser = await PublicUser.findOne({
+        email,
+        patientId: { $ne: patient._id },
+      });
+
+      if (conflictingPortalUser) {
+        return res.status(409).json({
+          message: "A patient login account with this email already exists.",
+        });
+      }
+    }
+
     if (req.auth?.type === "staff") {
       patient.email = email ?? patient.email;
     }
@@ -1601,6 +1739,7 @@ app.put("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
       {
         $set: {
           name: patient.name,
+          email: patient.email,
           mobile: patient.mobile,
         },
       }
@@ -1656,16 +1795,82 @@ app.post("/api/patients/:id/profile-image", requirePatientRecordAccess, upload.s
 
 app.delete("/api/patients/:id", requireStaffAuth, async (req, res) => {
   try {
-    const patient = await Patient.findByIdAndDelete(req.params.id);
+    const patient = await Patient.findById(req.params.id);
 
     if (!patient) {
       return res.status(404).json({ message: "Patient not found." });
     }
 
-    res.json({ message: "Patient deleted successfully." });
+    if (patient.archivedAt) {
+      return res.status(409).json({ message: "Patient is already archived." });
+    }
+
+    patient.archivedAt = new Date();
+    patient.archivedByUserId =
+      req.auth?.type === "staff" && req.auth?.sub ? req.auth.sub : null;
+    patient.archivedByRole =
+      req.auth?.type === "staff" && req.auth?.role ? req.auth.role : "";
+    await patient.save();
+
+    res.json({
+      message: "Patient archived successfully.",
+      patient: serializePatient(patient),
+    });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ message: "Failed to delete patient." });
+    res.status(500).json({ message: "Failed to archive patient." });
+  }
+});
+
+app.patch("/api/patients/:id/restore", requireAdminAuth, async (req, res) => {
+  try {
+    const patient = await findArchivedPatientById(req.params.id);
+
+    if (!patient) {
+      return res.status(404).json({ message: "Archived patient not found." });
+    }
+
+    const conflictingPatient = await Patient.findOne({
+      _id: { $ne: patient._id },
+      $or: [{ email: patient.email }, { mobile: patient.mobile }],
+    });
+
+    if (conflictingPatient) {
+      return res.status(409).json({
+        message:
+          "Cannot restore this patient because another active patient already uses the same email or mobile number.",
+      });
+    }
+
+    patient.archivedAt = null;
+    patient.archivedByUserId = null;
+    patient.archivedByRole = "";
+    await patient.save();
+
+    res.json({
+      message: "Archived patient restored successfully.",
+      patient: serializePatient(patient),
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to restore archived patient." });
+  }
+});
+
+app.delete("/api/patients/:id/permanent", requireAdminAuth, async (req, res) => {
+  try {
+    const patient = await findArchivedPatientById(req.params.id);
+
+    if (!patient) {
+      return res.status(404).json({ message: "Archived patient not found." });
+    }
+
+    await patient.deleteOne();
+
+    res.json({ message: "Archived patient deleted permanently." });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to permanently delete archived patient." });
   }
 });
 
@@ -2011,6 +2216,180 @@ app.delete("/api/patients/:id/clinical-notes/:noteId", requireStaffAuth, async (
   }
 });
 
+app.post("/api/patients/:id/therapy-recommendations", requireStaffAuth, async (req, res) => {
+  try {
+    const patient = await Patient.findById(req.params.id);
+    const serviceId = cleanText(req.body.serviceId);
+    const note = cleanText(req.body.note);
+    const itemIds = Array.from(
+      new Set(
+        (Array.isArray(req.body.itemIds) ? req.body.itemIds : [req.body.itemIds])
+          .map((value) => cleanText(value))
+          .filter(Boolean)
+      )
+    );
+
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found." });
+    }
+
+    if (!serviceId) {
+      return res.status(400).json({ message: "Please choose a service." });
+    }
+
+    if (!itemIds.length) {
+      return res.status(400).json({ message: "Please choose at least one therapy item." });
+    }
+
+    const service = await Service.findById(serviceId);
+
+    if (!service) {
+      return res.status(404).json({ message: "Service not found." });
+    }
+
+    const resources = await TherapyResource.find({
+      _id: { $in: itemIds },
+      serviceId,
+    });
+
+    if (resources.length !== itemIds.length) {
+      return res.status(400).json({
+        message: "Some selected therapy items are invalid for this service.",
+      });
+    }
+
+    const resourceMap = new Map(
+      resources.map((resource) => [resource._id.toString(), resource])
+    );
+    const items = itemIds
+      .map((itemId) => resourceMap.get(itemId))
+      .filter(Boolean)
+      .map(buildTherapyRecommendationItemSnapshot);
+
+    const existingRecommendation = (patient.therapyRecommendations || []).find(
+      (entry) => entry.serviceId?.toString() === service._id.toString()
+    );
+
+    if (existingRecommendation) {
+      existingRecommendation.serviceName = service.name;
+      existingRecommendation.note = note;
+      existingRecommendation.items = items;
+      existingRecommendation.updatedAt = new Date();
+    } else {
+      patient.therapyRecommendations.unshift({
+        serviceId: service._id,
+        serviceName: service.name,
+        note,
+        items,
+        updatedAt: new Date(),
+      });
+    }
+
+    await patient.save();
+    res.status(201).json(serializePatient(patient));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to save therapy recommendation." });
+  }
+});
+
+app.delete("/api/patients/:id/therapy-recommendations/:recommendationId", requireStaffAuth, async (req, res) => {
+  try {
+    const patient = await Patient.findById(req.params.id);
+
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found." });
+    }
+
+    patient.therapyRecommendations = (patient.therapyRecommendations || []).filter(
+      (entry) => entry._id.toString() !== req.params.recommendationId
+    );
+
+    await patient.save();
+    res.json(serializePatient(patient));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to delete therapy recommendation." });
+  }
+});
+
+app.get("/api/patients/:id/therapy-recommendations/:recommendationId/items/:itemId/file", requirePatientRecordAccess, async (req, res) => {
+  try {
+    const patient = await Patient.findById(req.params.id);
+
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found." });
+    }
+
+    const recommendation = patient.therapyRecommendations.id(req.params.recommendationId);
+
+    if (!recommendation) {
+      return res.status(404).json({ message: "Therapy recommendation not found." });
+    }
+
+    const item = recommendation.items.id(req.params.itemId);
+
+    if (!item) {
+      return res.status(404).json({ message: "Therapy item not found." });
+    }
+
+    const resource = await TherapyResource.findById(item.resourceId);
+
+    if (!resource || !resource.data) {
+      return res.status(404).json({ message: "Therapy file not found." });
+    }
+
+    res.setHeader("Content-Type", resource.mimeType || item.mimeType || "application/octet-stream");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${encodeURIComponent(resource.fileName || item.fileName || "therapy-file")}"`
+    );
+    res.setHeader("Cache-Control", "no-store");
+    res.send(resource.data);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to load therapy file." });
+  }
+});
+
+app.get("/api/patients/:id/therapy-recommendations/:recommendationId/items/:itemId/download", requirePatientRecordAccess, async (req, res) => {
+  try {
+    const patient = await Patient.findById(req.params.id);
+
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found." });
+    }
+
+    const recommendation = patient.therapyRecommendations.id(req.params.recommendationId);
+
+    if (!recommendation) {
+      return res.status(404).json({ message: "Therapy recommendation not found." });
+    }
+
+    const item = recommendation.items.id(req.params.itemId);
+
+    if (!item) {
+      return res.status(404).json({ message: "Therapy item not found." });
+    }
+
+    const resource = await TherapyResource.findById(item.resourceId);
+
+    if (!resource || !resource.data) {
+      return res.status(404).json({ message: "Therapy file not found." });
+    }
+
+    res.setHeader("Content-Type", resource.mimeType || item.mimeType || "application/octet-stream");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${encodeURIComponent(resource.fileName || item.fileName || "therapy-file")}"`
+    );
+    res.send(resource.data);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to download therapy file." });
+  }
+});
+
 app.get("/api/patients/:id/clinical-notes/:noteId/documents/:documentId", requirePatientRecordAccess, async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
@@ -2252,6 +2631,26 @@ app.get("/api/services", async (req, res) => {
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to load services." });
+  }
+});
+
+app.get("/api/therapy-resources", requireStaffAuth, async (req, res) => {
+  try {
+    const serviceId = cleanText(req.query.serviceId);
+    const filters = {};
+
+    if (serviceId) {
+      filters.serviceId = serviceId;
+    }
+
+    const resources = await TherapyResource.find(filters)
+      .populate("serviceId")
+      .sort({ updatedAt: -1, createdAt: -1 });
+
+    res.json(resources.map(serializeTherapyResource));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to load therapy resources." });
   }
 });
 
@@ -2556,6 +2955,50 @@ app.post("/api/services", requireStaffAuth, async (req, res) => {
   }
 });
 
+app.post("/api/therapy-resources", requireStaffAuth, therapyUpload.single("file"), async (req, res) => {
+  try {
+    const serviceId = cleanText(req.body.serviceId);
+    const title = cleanText(req.body.title);
+    const description = cleanText(req.body.description);
+    const createdByUserId = cleanText(req.auth?.sub);
+
+    if (!serviceId) {
+      return res.status(400).json({ message: "Please choose a service." });
+    }
+
+    if (!title) {
+      return res.status(400).json({ message: "Title is required." });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "Please upload a file." });
+    }
+
+    const service = await Service.findById(serviceId);
+
+    if (!service) {
+      return res.status(404).json({ message: "Service not found." });
+    }
+
+    const resource = await TherapyResource.create({
+      serviceId: service._id,
+      title,
+      description,
+      fileName: req.file.originalname,
+      mimeType: req.file.mimetype || "application/octet-stream",
+      sizeBytes: req.file.size || 0,
+      data: req.file.buffer,
+      createdByUserId: createdByUserId || null,
+    });
+
+    const populatedResource = await TherapyResource.findById(resource._id).populate("serviceId");
+    res.status(201).json(serializeTherapyResource(populatedResource));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to create therapy resource." });
+  }
+});
+
 app.put("/api/services/:id", requireStaffAuth, async (req, res) => {
   try {
     const name = cleanText(req.body.name);
@@ -2579,8 +3022,64 @@ app.put("/api/services/:id", requireStaffAuth, async (req, res) => {
   }
 });
 
+app.put("/api/therapy-resources/:id", requireStaffAuth, therapyUpload.single("file"), async (req, res) => {
+  try {
+    const serviceId = cleanText(req.body.serviceId);
+    const title = cleanText(req.body.title);
+    const description = cleanText(req.body.description);
+    const resource = await TherapyResource.findById(req.params.id);
+
+    if (!resource) {
+      return res.status(404).json({ message: "Therapy resource not found." });
+    }
+
+    if (!serviceId) {
+      return res.status(400).json({ message: "Please choose a service." });
+    }
+
+    if (!title) {
+      return res.status(400).json({ message: "Title is required." });
+    }
+
+    const service = await Service.findById(serviceId);
+
+    if (!service) {
+      return res.status(404).json({ message: "Service not found." });
+    }
+
+    resource.serviceId = service._id;
+    resource.title = title;
+    resource.description = description;
+
+    if (req.file) {
+      resource.fileName = req.file.originalname;
+      resource.mimeType = req.file.mimetype || "application/octet-stream";
+      resource.sizeBytes = req.file.size || 0;
+      resource.data = req.file.buffer;
+    }
+
+    await resource.save();
+
+    const populatedResource = await TherapyResource.findById(resource._id).populate("serviceId");
+    res.json(serializeTherapyResource(populatedResource));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to update therapy resource." });
+  }
+});
+
 app.delete("/api/services/:id", requireStaffAuth, async (req, res) => {
   try {
+    const linkedTherapyResources = await TherapyResource.countDocuments({
+      serviceId: req.params.id,
+    });
+
+    if (linkedTherapyResources) {
+      return res.status(400).json({
+        message: "This service has therapy files. Remove those files first.",
+      });
+    }
+
     const service = await Service.findByIdAndDelete(req.params.id);
 
     if (!service) {
@@ -2591,6 +3090,73 @@ app.delete("/api/services/:id", requireStaffAuth, async (req, res) => {
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to delete service." });
+  }
+});
+
+app.delete("/api/therapy-resources/:id", requireStaffAuth, async (req, res) => {
+  try {
+    const resource = await TherapyResource.findById(req.params.id);
+
+    if (!resource) {
+      return res.status(404).json({ message: "Therapy resource not found." });
+    }
+
+    const assignedPatientsCount = await Patient.countDocuments({
+      "therapyRecommendations.items.resourceId": resource._id,
+    });
+
+    if (assignedPatientsCount) {
+      return res.status(400).json({
+        message: "This therapy file is already assigned to patients.",
+      });
+    }
+
+    await resource.deleteOne();
+    res.json({ message: "Therapy resource deleted successfully." });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to delete therapy resource." });
+  }
+});
+
+app.get("/api/therapy-resources/:id/file", requireStaffAuth, async (req, res) => {
+  try {
+    const resource = await TherapyResource.findById(req.params.id);
+
+    if (!resource || !resource.data) {
+      return res.status(404).json({ message: "Therapy file not found." });
+    }
+
+    res.setHeader("Content-Type", resource.mimeType || "application/octet-stream");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${encodeURIComponent(resource.fileName || "therapy-file")}"`
+    );
+    res.setHeader("Cache-Control", "no-store");
+    res.send(resource.data);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to load therapy file." });
+  }
+});
+
+app.get("/api/therapy-resources/:id/download", requireStaffAuth, async (req, res) => {
+  try {
+    const resource = await TherapyResource.findById(req.params.id);
+
+    if (!resource || !resource.data) {
+      return res.status(404).json({ message: "Therapy file not found." });
+    }
+
+    res.setHeader("Content-Type", resource.mimeType || "application/octet-stream");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${encodeURIComponent(resource.fileName || "therapy-file")}"`
+    );
+    res.send(resource.data);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to download therapy file." });
   }
 });
 
@@ -3243,7 +3809,7 @@ app.use((error, _req, res, next) => {
     return res.status(400).json({ message: error.message || "File upload failed." });
   }
 
-  if (error.message === "Unsupported file type.") {
+  if (error.message === "Unsupported file type." || error.message === "Unsupported therapy file type.") {
     return res.status(400).json({ message: "Unsupported file type." });
   }
 

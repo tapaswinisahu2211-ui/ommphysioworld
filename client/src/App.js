@@ -16,10 +16,12 @@ import Dashboard from "./pages/Dashboard";
 import FeedbackManagement from "./pages/FeedbackManagement";
 import FaqPage from "./pages/FaqPage";
 import Patients from "./pages/Patients";
+import PatientsArchive from "./pages/PatientsArchive";
 import PublicServicesPage from "./pages/PublicServicesPage";
 import Services from "./pages/Services";
 import Staff from "./pages/Staff";
 import StaffProfile from "./pages/StaffProfile";
+import Therapy from "./pages/Therapy";
 import PatientProfile from "./pages/PatientProfile";
 import AdminProfile from "./pages/AdminProfile";
 import ProtectedRoute from "./utils/ProtectedRoute";
@@ -83,10 +85,26 @@ function App() {
           }
         />
         <Route
+          path="/patients/archive"
+          element={
+            <ProtectedRoute adminOnly>
+              <PatientsArchive />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/services"
           element={
             <ProtectedRoute moduleKey="services">
               <Services />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/therapy"
+          element={
+            <ProtectedRoute moduleKey="therapy">
+              <Therapy />
             </ProtectedRoute>
           }
         />

@@ -1,5 +1,15 @@
 const mongoose = require("mongoose");
 
+const appointmentAttachmentSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true },
+    mimeType: { type: String, default: "application/octet-stream" },
+    data: { type: Buffer, required: true },
+    uploadedAt: { type: Date, default: Date.now },
+  },
+  { _id: true }
+);
+
 const appointmentSchema = new mongoose.Schema({
   name: String,
   email: String,
@@ -16,6 +26,7 @@ const appointmentSchema = new mongoose.Schema({
   attachmentName: String,
   attachmentMimeType: String,
   attachmentData: Buffer,
+  attachments: { type: [appointmentAttachmentSchema], default: [] },
   status: {
     type: String,
     enum: ["pending", "approved", "rescheduled", "completed", "cancelled"],

@@ -76,10 +76,12 @@ export default function PatientProfile() {
   });
   const [editBasic, setEditBasic] = useState(false);
   const [showClinicalNoteModal, setShowClinicalNoteModal] = useState(false);
+  const [showTherapyModal, setShowTherapyModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showTreatmentModal, setShowTreatmentModal] = useState(false);
   const [appointmentForm, setAppointmentForm] = useState({ date: "", time: "", service: "" });
   const [services, setServices] = useState([]);
+  const [therapyResources, setTherapyResources] = useState([]);
   const [appointmentActionForms, setAppointmentActionForms] = useState({});
   const [appointmentRequests, setAppointmentRequests] = useState([]);
   const [appointmentRequestForms, setAppointmentRequestForms] = useState({});
@@ -87,6 +89,11 @@ export default function PatientProfile() {
     title: "",
     note: "",
     documents: [],
+  });
+  const [therapyForm, setTherapyForm] = useState({
+    serviceId: "",
+    note: "",
+    itemIds: [],
   });
   const [treatmentForm, setTreatmentForm] = useState({
     treatmentTypeInput: "",
@@ -159,25 +166,36 @@ export default function PatientProfile() {
   }, [loadPatient]);
 
   useEffect(() => {
-    const loadServices = async () => {
+    const loadReferenceData = async () => {
       try {
-        const response = await API.get("/services");
-        setServices(response.data || []);
+        const [servicesResponse, therapyResponse] = await Promise.all([
+          API.get("/services"),
+          API.get("/therapy-resources"),
+        ]);
+        setServices(servicesResponse.data || []);
+        setTherapyResources(therapyResponse.data || []);
       } catch (_) {
         setServices([]);
+        setTherapyResources([]);
       }
     };
 
-    loadServices();
+    loadReferenceData();
   }, []);
 
   const closeDrawer = () => {
     setEditBasic(false);
     setShowClinicalNoteModal(false);
+    setShowTherapyModal(false);
     setShowAppointmentModal(false);
     setShowTreatmentModal(false);
     setEditingPlanId("");
     setPlanPaymentForm({ planId: "", amount: "", method: "" });
+    setTherapyForm({
+      serviceId: "",
+      note: "",
+      itemIds: [],
+    });
   };
 
   const handleBasicUpdate = async (e) => {
@@ -237,6 +255,63 @@ export default function PatientProfile() {
       setError("");
     } catch (deleteError) {
       setError(deleteError.response?.data?.message || "Failed to delete clinical note.");
+    }
+  };
+
+  const openTherapyModal = () => {
+    setTherapyForm({
+      serviceId: services[0]?.id || "",
+      note: "",
+      itemIds: [],
+    });
+    setShowTherapyModal(true);
+  };
+
+  const toggleTherapyItem = (itemId) => {
+    setTherapyForm((current) => ({
+      ...current,
+      itemIds: current.itemIds.includes(itemId)
+        ? current.itemIds.filter((entry) => entry !== itemId)
+        : [...current.itemIds, itemId],
+    }));
+  };
+
+  const handleSaveTherapyRecommendation = async (event) => {
+    event.preventDefault();
+
+    try {
+      const response = await API.post(`/patients/${id}/therapy-recommendations`, {
+        serviceId: therapyForm.serviceId,
+        note: therapyForm.note,
+        itemIds: therapyForm.itemIds,
+      });
+
+      setPatient(response.data);
+      setShowTherapyModal(false);
+      setTherapyForm({
+        serviceId: "",
+        note: "",
+        itemIds: [],
+      });
+      setError("");
+    } catch (saveError) {
+      setError(
+        saveError.response?.data?.message || "Failed to save therapy recommendation."
+      );
+    }
+  };
+
+  const handleDeleteTherapyRecommendation = async (recommendationId) => {
+    try {
+      const response = await API.delete(
+        `/patients/${id}/therapy-recommendations/${recommendationId}`
+      );
+      setPatient(response.data);
+      setError("");
+    } catch (deleteError) {
+      setError(
+        deleteError.response?.data?.message || "Failed to delete therapy recommendation."
+      );
     }
   };
 
@@ -567,6 +642,10 @@ export default function PatientProfile() {
       tone: "bg-violet-50 text-violet-600",
     },
   ];
+
+  const availableTherapyResources = therapyForm.serviceId
+    ? therapyResources.filter((resource) => resource.serviceId === therapyForm.serviceId)
+    : [];
 
   const panelClass = "rounded-2xl border border-slate-200/80 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.06)]";
 
@@ -1064,6 +1143,98 @@ export default function PatientProfile() {
                 )}
               </div>
             </section>
+
+            <section className={`${panelClass} p-4`}>
+              <div className="mb-5 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">Recommended Therapy</h2>
+                  <p className="text-sm text-slate-500">
+                    Add service-wise therapy items for this patient. These will also appear on the patient therapy tab.
+                  </p>
+                </div>
+                <button
+                  onClick={openTherapyModal}
+                  className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                >
+                  <Plus size={15} />
+                  Add Therapy
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {!patient.therapyRecommendations?.length ? (
+                  <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                    No therapy recommendations added yet.
+                  </div>
+                ) : (
+                  patient.therapyRecommendations.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-base font-semibold text-slate-900">
+                              {entry.serviceName || "Therapy Service"}
+                            </p>
+                            <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-700">
+                              {(entry.items || []).length} item
+                              {(entry.items || []).length === 1 ? "" : "s"}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-400">
+                            Updated {formatDate(entry.updatedAt || entry.createdAt)}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteTherapyRecommendation(entry.id)}
+                          className="shrink-0 rounded-xl p-2 text-rose-500 hover:bg-rose-50"
+                          title="Delete therapy recommendation"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+
+                      {entry.note ? (
+                        <p className="mt-3 rounded-2xl bg-slate-50 px-3 py-3 text-sm leading-6 text-slate-700">
+                          {entry.note}
+                        </p>
+                      ) : null}
+
+                      <div className="mt-3 grid gap-2 md:grid-cols-2">
+                        {(entry.items || []).map((item) => (
+                          <div
+                            key={item.id}
+                            className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="font-medium text-slate-900">
+                                  {item.title || item.fileName || "Therapy Item"}
+                                </p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  {item.fileName || "No file name"}
+                                </p>
+                              </div>
+                              <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold uppercase text-slate-600">
+                                {item.resourceType || "file"}
+                              </span>
+                            </div>
+                            {item.description ? (
+                              <p className="mt-2 text-sm leading-6 text-slate-600">
+                                {item.description}
+                              </p>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
           </div>
 
           <div className="min-w-0 space-y-4 lg:sticky lg:top-4">
@@ -1357,14 +1528,14 @@ export default function PatientProfile() {
         </div>
       </div>
 
-      {[editBasic, showClinicalNoteModal, showAppointmentModal, showTreatmentModal].some(Boolean) && (
+      {[editBasic, showClinicalNoteModal, showTherapyModal, showAppointmentModal, showTreatmentModal].some(Boolean) && (
         <div
           className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/50 px-4 py-6 backdrop-blur-sm"
           onClick={closeDrawer}
         >
           <div
             className={`relative mx-auto w-full rounded-[28px] border border-white/70 bg-white p-5 shadow-2xl shadow-slate-950/30 ${
-              showTreatmentModal ? "max-w-3xl" : "max-w-lg"
+              showTreatmentModal || showTherapyModal ? "max-w-3xl" : "max-w-lg"
             }`}
             style={{ marginTop: "max(1.5rem, env(safe-area-inset-top))", marginBottom: "1.5rem" }}
             onClick={(event) => event.stopPropagation()}
@@ -1383,6 +1554,7 @@ export default function PatientProfile() {
                 <h3 className={`text-2xl font-semibold ${showTreatmentModal ? "text-white" : "text-slate-900"}`}>
                   {editBasic && "Edit Patient"}
                   {showClinicalNoteModal && "Clinical Notes"}
+                  {showTherapyModal && "Recommended Therapy"}
                   {showAppointmentModal && "Add Appointment"}
                   {showTreatmentModal && (editingPlanId ? "Edit Session" : "Session Start")}
                 </h3>
@@ -1643,6 +1815,117 @@ export default function PatientProfile() {
                 </div>
                 <button className="w-full rounded-xl bg-slate-900 px-4 py-3 font-medium text-white hover:bg-slate-800">
                   Save Note
+                </button>
+              </form>
+            )}
+
+            {showTherapyModal && (
+              <form onSubmit={handleSaveTherapyRecommendation} className="space-y-5">
+                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                  <label className="mb-2 block text-sm font-semibold text-slate-900">
+                    Service
+                  </label>
+                  <select
+                    className="input bg-white"
+                    value={therapyForm.serviceId}
+                    onChange={(event) =>
+                      setTherapyForm((current) => ({
+                        ...current,
+                        serviceId: event.target.value,
+                        itemIds: [],
+                      }))
+                    }
+                    required
+                  >
+                    <option value="">Select service</option>
+                    {services.map((service) => (
+                      <option key={service.id} value={service.id}>
+                        {service.name}
+                      </option>
+                    ))}
+                  </select>
+
+                  <textarea
+                    className="input mt-4 min-h-[110px] bg-white"
+                    placeholder="Doctor recommendation note for this therapy"
+                    value={therapyForm.note}
+                    onChange={(event) =>
+                      setTherapyForm((current) => ({
+                        ...current,
+                        note: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-4 flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">Therapy Items</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Choose multiple therapy items for the selected service.
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                      {therapyForm.itemIds.length} selected
+                    </span>
+                  </div>
+
+                  {!therapyForm.serviceId ? (
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                      Select a service first to view therapy items.
+                    </div>
+                  ) : !availableTherapyResources.length ? (
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                      No therapy items are available for this service yet.
+                    </div>
+                  ) : (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {availableTherapyResources.map((resource) => {
+                        const checked = therapyForm.itemIds.includes(resource.id);
+
+                        return (
+                          <label
+                            key={resource.id}
+                            className={`flex cursor-pointer gap-3 rounded-2xl border px-4 py-4 transition ${
+                              checked
+                                ? "border-sky-300 bg-sky-50"
+                                : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleTherapyItem(resource.id)}
+                              className="mt-1"
+                            />
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="font-medium text-slate-900">
+                                  {resource.title || resource.fileName}
+                                </p>
+                                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold uppercase text-slate-600">
+                                  {resource.resourceType || "file"}
+                                </span>
+                              </div>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {resource.fileName}
+                              </p>
+                              {resource.description ? (
+                                <p className="mt-2 text-sm leading-6 text-slate-600">
+                                  {resource.description}
+                                </p>
+                              ) : null}
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <button className="w-full rounded-xl bg-slate-900 px-4 py-3 font-medium text-white hover:bg-slate-800">
+                  Save Therapy Recommendation
                 </button>
               </form>
             )}

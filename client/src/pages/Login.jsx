@@ -1,5 +1,5 @@
 ﻿import { ArrowLeft } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import API from "../services/api";
 
@@ -11,6 +11,19 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    try {
+      const sessionMessage = sessionStorage.getItem("opwSessionExpiredMessage") || "";
+
+      if (sessionMessage) {
+        setError(sessionMessage);
+        sessionStorage.removeItem("opwSessionExpiredMessage");
+      }
+    } catch (_) {
+      // Ignore storage read failures.
+    }
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();

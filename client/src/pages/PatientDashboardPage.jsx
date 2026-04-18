@@ -1,13 +1,15 @@
 import {
   CalendarDays,
+  CircleX,
   CreditCard,
+  Eye,
   FileText,
   FolderOpen,
   LayoutDashboard,
   LogOut,
   Send,
   Stethoscope,
-  UploadCloud,
+  Trash2,
   UserCircle2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -19,8 +21,8 @@ import { firstValidationError, isFutureOrTodayDate } from "../utils/validation";
 
 const tabs = [
   { key: "overview", label: "Overview", icon: LayoutDashboard },
-  { key: "notes", label: "Notes", icon: FileText },
   { key: "appointments", label: "Appointment", icon: CalendarDays },
+  { key: "notes", label: "Therapy", icon: FileText },
   { key: "sessions", label: "Session", icon: Stethoscope },
   { key: "payments", label: "Payment", icon: CreditCard },
 ];
@@ -44,30 +46,50 @@ const formatDate = (value) => {
   });
 };
 
+const revokeObjectUrls = (urlMap = {}) => {
+  Object.values(urlMap).forEach((url) => {
+    if (url) {
+      window.URL.revokeObjectURL(url);
+    }
+  });
+};
+
+const isInlinePreviewableTherapyItem = (item) =>
+  item?.resourceType === "image" ||
+  item?.resourceType === "gif" ||
+  item?.resourceType === "video" ||
+  item?.mimeType === "application/pdf";
+
 export default function PatientDashboardPage() {
   const navigate = useNavigate();
   const [patientUser, setPatientUser] = useState(() => getPatientUser());
   const [patient, setPatient] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(true);
-  const [savingNote, setSavingNote] = useState(false);
   const [sendingAppointment, setSendingAppointment] = useState(false);
   const [status, setStatus] = useState({ type: "", message: "" });
-  const [noteForm, setNoteForm] = useState({
-    title: "",
-    note: "",
-    documents: [],
-  });
+  const [activeFileAction, setActiveFileAction] = useState("");
+  const [previewItem, setPreviewItem] = useState(null);
+  const [therapyCardPreviewUrls, setTherapyCardPreviewUrls] = useState({});
   const [appointmentForm, setAppointmentForm] = useState({
     service: "",
     date: "",
     time: "",
     message: "",
+    files: [],
   });
   const [appointmentRequests, setAppointmentRequests] = useState([]);
   const [services, setServices] = useState([]);
 
   const patientId = patientUser?.patientId || "";
+  const clinicalNotes = useMemo(() => patient?.clinicalNotes || [], [patient?.clinicalNotes]);
+  const therapyRecommendations = useMemo(
+    () => patient?.therapyRecommendations || [],
+    [patient?.therapyRecommendations]
+  );
+  const appointments = useMemo(() => patient?.appointments || [], [patient?.appointments]);
+  const treatmentPlans = useMemo(() => patient?.treatmentPlans || [], [patient?.treatmentPlans]);
+  const directPayments = useMemo(() => patient?.payments || [], [patient?.payments]);
 
   const loadPatient = useCallback(async () => {
     if (!patientId) {
@@ -116,8 +138,68 @@ export default function PatientDashboardPage() {
     loadServices();
   }, []);
 
-  const clinicalNotes = patient?.clinicalNotes || [];
-  const appointments = patient?.appointments || [];
+  useEffect(() => {
+    if (activeTab !== "notes" || !therapyRecommendations.length) {
+      setTherapyCardPreviewUrls((current) => {
+        revokeObjectUrls(current);
+        return {};
+      });
+      return undefined;
+    }
+
+    const previewItems = therapyRecommendations
+      .flatMap((recommendation) => recommendation.items || [])
+      .filter(isInlinePreviewableTherapyItem);
+
+    if (!previewItems.length) {
+      setTherapyCardPreviewUrls((current) => {
+        revokeObjectUrls(current);
+        return {};
+      });
+      return undefined;
+    }
+
+    let disposed = false;
+
+    const loadTherapyCardPreviews = async () => {
+      const nextUrls = {};
+
+      await Promise.all(
+        previewItems.map(async (item) => {
+          try {
+            const response = await API.get(item.fileUrl, { responseType: "blob" });
+            nextUrls[item.id] = window.URL.createObjectURL(response.data);
+          } catch (_) {
+            nextUrls[item.id] = "";
+          }
+        })
+      );
+
+      if (disposed) {
+        revokeObjectUrls(nextUrls);
+        return;
+      }
+
+      setTherapyCardPreviewUrls((current) => {
+        revokeObjectUrls(current);
+        return nextUrls;
+      });
+    };
+
+    loadTherapyCardPreviews();
+
+    return () => {
+      disposed = true;
+    };
+  }, [activeTab, therapyRecommendations]);
+
+  useEffect(
+    () => () => {
+      revokeObjectUrls(therapyCardPreviewUrls);
+    },
+    [therapyCardPreviewUrls]
+  );
+
   const bookedAppointmentRequestIds = new Set(
     appointments.map((appointment) => appointment.requestId).filter(Boolean)
   );
@@ -126,8 +208,10 @@ export default function PatientDashboardPage() {
       !bookedAppointmentRequestIds.has(request.id) &&
       !["cancelled", "completed"].includes(request.status || "")
   );
-  const treatmentPlans = patient?.treatmentPlans || [];
-  const directPayments = patient?.payments || [];
+  const therapyItemCount = therapyRecommendations.reduce(
+    (sum, recommendation) => sum + (recommendation.items?.length || 0),
+    0
+  );
   const treatmentPayments = treatmentPlans.flatMap((plan) =>
     (plan.payments || []).map((payment) => ({
       ...payment,
@@ -140,52 +224,18 @@ export default function PatientDashboardPage() {
 
   const stats = useMemo(
     () => [
-      { label: "Clinical Notes", value: clinicalNotes.length, icon: FolderOpen },
+      { label: "Therapy Items", value: therapyItemCount, icon: FolderOpen },
       { label: "Appointments", value: appointments.length, icon: CalendarDays },
       { label: "Sessions", value: treatmentPlans.length, icon: Stethoscope },
       { label: "Payments", value: payments.length, icon: CreditCard },
     ],
-    [appointments.length, clinicalNotes.length, payments.length, treatmentPlans.length]
+    [appointments.length, payments.length, therapyItemCount, treatmentPlans.length]
   );
 
   const handleLogout = () => {
     clearPatientUser();
     setPatientUser(null);
     navigate("/patient-login?redirect=/patient-dashboard", { replace: true });
-  };
-
-  const handleClinicalNoteSubmit = async (event) => {
-    event.preventDefault();
-
-    if (!noteForm.title.trim() && !noteForm.note.trim() && !noteForm.documents.length) {
-      setStatus({ type: "error", message: "Please add note details or upload a document." });
-      return;
-    }
-
-    try {
-      setSavingNote(true);
-      const payload = new FormData();
-      payload.append("title", noteForm.title.trim() || "Previous Doctor Clinical Note");
-      payload.append("note", noteForm.note.trim());
-      payload.append("addedByType", "patient");
-      payload.append("addedByLabel", patientUser.name || "Patient");
-      noteForm.documents.forEach((file) => payload.append("documents", file));
-
-      const response = await API.post(`/patients/${patientId}/clinical-notes`, payload, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      setPatient(response.data);
-      setNoteForm({ title: "", note: "", documents: [] });
-      setStatus({ type: "success", message: "Clinical note shared with clinic." });
-    } catch (error) {
-      setStatus({
-        type: "error",
-        message: error.response?.data?.message || "Failed to save clinical note.",
-      });
-    } finally {
-      setSavingNote(false);
-    }
   };
 
   const handleAppointmentSubmit = async (event) => {
@@ -206,18 +256,22 @@ export default function PatientDashboardPage() {
 
     try {
       setSendingAppointment(true);
-      const response = await API.post("/appointments", {
-        name: patientUser.name,
-        email: patientUser.email,
-        phone: patientUser.mobile,
-        patientId,
-        service: appointmentForm.service.trim(),
-        date: appointmentForm.date,
-        time: appointmentForm.time,
-        message: appointmentForm.message.trim(),
+      const payload = new FormData();
+      payload.append("name", patientUser.name || "");
+      payload.append("email", patientUser.email || "");
+      payload.append("phone", patientUser.mobile || "");
+      payload.append("patientId", patientId);
+      payload.append("service", appointmentForm.service.trim());
+      payload.append("date", appointmentForm.date);
+      payload.append("time", appointmentForm.time);
+      payload.append("message", appointmentForm.message.trim());
+      appointmentForm.files.forEach((file) => payload.append("files", file));
+
+      const response = await API.post("/appointments", payload, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
 
-      setAppointmentForm({ service: "", date: "", time: "", message: "" });
+      setAppointmentForm({ service: "", date: "", time: "", message: "", files: [] });
       setStatus({
         type: "success",
         message: response.data?.message || "Appointment request submitted.",
@@ -231,6 +285,86 @@ export default function PatientDashboardPage() {
     } finally {
       setSendingAppointment(false);
     }
+  };
+
+  const handleAppointmentFilesChange = (event) => {
+    const nextFiles = Array.from(event.target.files || []);
+
+    if (!nextFiles.length) {
+      return;
+    }
+
+    setAppointmentForm((current) => {
+      const mergedFiles = [...current.files];
+
+      nextFiles.forEach((file) => {
+        const exists = mergedFiles.some(
+          (entry) =>
+            entry.name === file.name &&
+            entry.size === file.size &&
+            entry.lastModified === file.lastModified
+        );
+
+        if (!exists) {
+          mergedFiles.push(file);
+        }
+      });
+
+      return {
+        ...current,
+        files: mergedFiles,
+      };
+    });
+
+    event.target.value = "";
+  };
+
+  const handleRemoveAppointmentFile = (fileToRemove) => {
+    setAppointmentForm((current) => ({
+      ...current,
+      files: current.files.filter(
+        (file) =>
+          !(
+            file.name === fileToRemove.name &&
+            file.size === fileToRemove.size &&
+            file.lastModified === fileToRemove.lastModified
+          )
+      ),
+    }));
+  };
+
+  const handleTherapyFileAction = async (item, action) => {
+    const actionKey = `${action}:${item.id}`;
+
+    try {
+      setActiveFileAction(actionKey);
+      setStatus({ type: "", message: "" });
+
+      const response = await API.get(item.fileUrl, { responseType: "blob" });
+      const objectUrl = window.URL.createObjectURL(response.data);
+
+      setPreviewItem({
+        ...item,
+        objectUrl,
+      });
+    } catch (error) {
+      setStatus({
+        type: "error",
+        message:
+          error.response?.data?.message ||
+          "Failed to open therapy file.",
+      });
+    } finally {
+      setActiveFileAction("");
+    }
+  };
+
+  const closePreview = () => {
+    if (previewItem?.objectUrl) {
+      window.URL.revokeObjectURL(previewItem.objectUrl);
+    }
+
+    setPreviewItem(null);
   };
 
   if (!patientUser) {
@@ -332,43 +466,157 @@ export default function PatientDashboardPage() {
               )}
 
               {activeTab === "notes" && (
-                <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-                  <Panel title="Share Clinical Note" subtitle="Upload PDF/images and previous doctor notes.">
-                    <form onSubmit={handleClinicalNoteSubmit} className="grid gap-4">
-                      <input
-                        className="input rounded-2xl border-slate-200 bg-slate-50"
-                        placeholder="Note title"
-                        value={noteForm.title}
-                        onChange={(event) => setNoteForm({ ...noteForm, title: event.target.value })}
-                      />
-                      <textarea
-                        className="input min-h-[150px] rounded-2xl border-slate-200 bg-slate-50"
-                        placeholder="Clinical note details"
-                        value={noteForm.note}
-                        onChange={(event) => setNoteForm({ ...noteForm, note: event.target.value })}
-                      />
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/*,.pdf"
-                        className="input rounded-2xl border-slate-200 bg-slate-50 file:mr-4 file:rounded-full file:border-0 file:bg-slate-950 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white"
-                        onChange={(event) =>
-                          setNoteForm({
-                            ...noteForm,
-                            documents: Array.from(event.target.files || []),
-                          })
-                        }
-                      />
-                      <button disabled={savingNote} className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
-                        <UploadCloud size={18} />
-                        {savingNote ? "Sharing..." : "Share With Clinic"}
-                      </button>
-                    </form>
+                <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
+                  <Panel title="Recommended Therapy" subtitle="Service-wise therapy shared by OPW for this patient.">
+                    {!therapyRecommendations.length ? (
+                      <div className="rounded-2xl bg-slate-50 px-4 py-5 text-sm leading-6 text-slate-500">
+                        No therapy recommendations available yet.
+                      </div>
+                    ) : (
+                      <div className="grid gap-4">
+                        {therapyRecommendations.map((recommendation) => (
+                          <div
+                            key={recommendation.id}
+                            className="overflow-hidden rounded-[24px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff,#f8fafc)] shadow-sm"
+                          >
+                            <div className="border-b border-slate-200 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.12),transparent_40%),linear-gradient(135deg,#f8fbff,#eef6ff)] px-5 py-4">
+                              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                <div>
+                                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700/70">
+                                    Therapy Service
+                                  </p>
+                                  <h3 className="mt-1 text-lg font-semibold text-slate-950">
+                                    {recommendation.serviceName || "Therapy Service"}
+                                  </h3>
+                                  <p className="mt-1 text-sm text-slate-500">
+                                    Updated on {formatDate(recommendation.updatedAt || recommendation.createdAt)}
+                                  </p>
+                                </div>
+                                <span className="inline-flex w-fit rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm">
+                                  {(recommendation.items || []).length} item
+                                  {(recommendation.items || []).length === 1 ? "" : "s"}
+                                </span>
+                              </div>
+
+                              {recommendation.note ? (
+                                <p className="mt-4 rounded-2xl bg-white/90 px-4 py-3 text-sm leading-6 text-slate-700 shadow-sm">
+                                  {recommendation.note}
+                                </p>
+                              ) : null}
+                            </div>
+
+                            <div className="grid gap-3 p-4 sm:grid-cols-2">
+                              {(recommendation.items || []).map((item) => (
+                                <div
+                                  key={item.id}
+                                  className="rounded-[22px] border border-slate-200 bg-white p-4 shadow-sm"
+                                >
+                                  <div className="mb-4 overflow-hidden rounded-[20px] border border-slate-200 bg-slate-100">
+                                    {therapyCardPreviewUrls[item.id] &&
+                                    (item.resourceType === "image" ||
+                                      item.resourceType === "gif") ? (
+                                      <img
+                                        src={therapyCardPreviewUrls[item.id]}
+                                        alt={item.title || item.fileName || "Therapy Item"}
+                                        className="h-48 w-full object-cover"
+                                      />
+                                    ) : null}
+
+                                    {therapyCardPreviewUrls[item.id] &&
+                                    item.resourceType === "video" ? (
+                                      <video
+                                        src={therapyCardPreviewUrls[item.id]}
+                                        controls
+                                        preload="metadata"
+                                        className="h-48 w-full bg-black object-cover"
+                                      />
+                                    ) : null}
+
+                                    {therapyCardPreviewUrls[item.id] &&
+                                    item.mimeType === "application/pdf" ? (
+                                      <iframe
+                                        src={therapyCardPreviewUrls[item.id]}
+                                        title={item.title || item.fileName || "Therapy PDF"}
+                                        className="h-48 w-full bg-white"
+                                      />
+                                    ) : null}
+
+                                    {!therapyCardPreviewUrls[item.id] ? (
+                                      <div className="flex h-48 flex-col items-center justify-center gap-3 px-4 text-center">
+                                        <div className="rounded-2xl bg-white p-4 text-slate-700 shadow-sm">
+                                          <FileText size={28} />
+                                        </div>
+                                        <div>
+                                          <p className="text-sm font-medium text-slate-900">
+                                            {isInlinePreviewableTherapyItem(item)
+                                              ? "Loading preview"
+                                              : "Document file"}
+                                          </p>
+                                          <p className="mt-1 text-xs text-slate-500">
+                                            {isInlinePreviewableTherapyItem(item)
+                                              ? "Preparing secure preview..."
+                                              : "Preview will open in the viewer"}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    ) : null}
+                                  </div>
+
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <p className="font-semibold text-slate-950">
+                                          {item.title || item.fileName || "Therapy Item"}
+                                        </p>
+                                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold uppercase text-slate-600">
+                                          {item.resourceType || "file"}
+                                        </span>
+                                      </div>
+                                      <p className="mt-1 truncate text-xs text-slate-500">
+                                        {item.fileName || "No file name"}
+                                      </p>
+                                    </div>
+                                    <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-sky-50 text-sky-700">
+                                      <FolderOpen size={18} />
+                                    </div>
+                                  </div>
+
+                                  <p className="mt-3 min-h-[48px] text-sm leading-6 text-slate-600">
+                                    {item.description || "Therapy content shared by OPW for your recovery plan."}
+                                  </p>
+
+                                  <div className="mt-4 flex items-center justify-between">
+                                    <span className="text-xs font-medium text-slate-400">
+                                      View only
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleTherapyFileAction(item, "view")}
+                                      className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-700 hover:bg-sky-100"
+                                    >
+                                      <Eye size={14} />
+                                      View
+                                    </button>
+                                  </div>
+
+                                  {activeFileAction === `view:${item.id}` ||
+                                  activeFileAction === `download:${item.id}` ? (
+                                    <p className="mt-2 text-xs font-medium text-slate-500">
+                                      Working...
+                                    </p>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </Panel>
-                  <Panel title="Clinical Notes & Documents" subtitle="Notes added by you or OPW will appear here.">
-                    <RecordList emptyText="No clinical notes yet.">
+                  <Panel title="Doctors Note & Documents" subtitle="You can only view notes and files shared here.">
+                    <RecordList emptyText="No doctor notes available yet.">
                       {clinicalNotes.map((note) => (
-                        <RecordCard key={note.id || note._id} title={note.title || "Clinical Note"} subtitle={note.note || "No note details added."}>
+                        <RecordCard key={note.id || note._id} title={note.title || "Doctors Note"} subtitle={note.note || "No note details added."}>
                           <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
                             Added by {note.addedByLabel || (note.addedByType === "patient" ? "Patient" : "OPW")}
                           </p>
@@ -390,7 +638,10 @@ export default function PatientDashboardPage() {
 
               {activeTab === "appointments" && (
                 <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-                  <Panel title="Request Appointment" subtitle="Only logged-in patients can submit this request.">
+                  <Panel
+                    title="Request Appointment"
+                    subtitle="Only logged-in patients can submit this request. Upload PDF/images and previous doctor notes."
+                  >
                     <form onSubmit={handleAppointmentSubmit} className="grid gap-4">
                       <select
                         className="input rounded-2xl border-slate-200 bg-slate-50"
@@ -424,6 +675,44 @@ export default function PatientDashboardPage() {
                         value={appointmentForm.message}
                         onChange={(event) => setAppointmentForm({ ...appointmentForm, message: event.target.value })}
                       />
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                        <label className="mb-3 block text-sm font-medium text-slate-700">
+                          Upload PDF/images and previous doctor notes
+                        </label>
+                        <label className="inline-flex cursor-pointer items-center justify-center rounded-full bg-slate-950 px-5 py-3 text-sm font-medium text-white hover:bg-slate-800">
+                          Upload Documents
+                          <input
+                            type="file"
+                            multiple
+                            accept="image/*,.pdf"
+                            className="hidden"
+                            onChange={handleAppointmentFilesChange}
+                          />
+                        </label>
+                        <p className="mt-2 text-xs text-slate-500">
+                          Multiple documents/images can be added.
+                        </p>
+                        {appointmentForm.files.length ? (
+                          <div className="mt-3 grid gap-2">
+                            {appointmentForm.files.map((file) => (
+                              <div
+                                key={`${file.name}-${file.size}`}
+                                className="flex items-center justify-between gap-3 rounded-2xl border border-sky-100 bg-white px-3 py-2 text-xs font-medium text-sky-700"
+                              >
+                                <span className="truncate">{file.name}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveAppointmentFile(file)}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
+                                  title="Remove file"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
                       <button disabled={sendingAppointment} className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-5 py-3 text-sm font-medium text-white disabled:opacity-60">
                         <Send size={18} />
                         {sendingAppointment ? "Sending..." : "Request Appointment"}
@@ -539,6 +828,84 @@ export default function PatientDashboardPage() {
             </>
           )}
         </div>
+
+        {previewItem ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm">
+            <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl">
+              <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-sky-600">Therapy Preview</p>
+                  <h3 className="truncate text-xl font-semibold text-slate-900">
+                    {previewItem.title || previewItem.fileName || "Therapy File"}
+                  </h3>
+                  <p className="mt-1 truncate text-sm text-slate-500">
+                    {previewItem.fileName}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={closePreview}
+                  className="rounded-xl border border-slate-200 p-2 text-slate-600 transition hover:bg-slate-50"
+                  title="Close preview"
+                >
+                  <CircleX size={18} />
+                </button>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-auto bg-slate-100 p-4">
+                {(previewItem.resourceType === "image" ||
+                  previewItem.resourceType === "gif") ? (
+                  <div className="flex min-h-[60vh] items-center justify-center">
+                    <img
+                      src={previewItem.objectUrl}
+                      alt={previewItem.title || previewItem.fileName || "Therapy File"}
+                      className="max-h-[75vh] max-w-full rounded-2xl bg-white object-contain shadow-sm"
+                    />
+                  </div>
+                ) : null}
+
+                {previewItem.resourceType === "video" ? (
+                  <div className="flex min-h-[60vh] items-center justify-center">
+                    <video
+                      src={previewItem.objectUrl}
+                      controls
+                      className="max-h-[75vh] w-full rounded-2xl bg-black shadow-sm"
+                    />
+                  </div>
+                ) : null}
+
+                {previewItem.mimeType === "application/pdf" ? (
+                  <iframe
+                    src={previewItem.objectUrl}
+                    title={previewItem.title || previewItem.fileName || "Therapy File"}
+                    className="h-[75vh] w-full rounded-2xl border border-slate-200 bg-white"
+                  />
+                ) : null}
+
+                {!(
+                  previewItem.resourceType === "image" ||
+                  previewItem.resourceType === "gif" ||
+                  previewItem.resourceType === "video" ||
+                  previewItem.mimeType === "application/pdf"
+                ) ? (
+                  <div className="flex min-h-[60vh] flex-col items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-white px-6 text-center">
+                    <div className="rounded-3xl bg-slate-100 p-4 text-slate-700">
+                      <FileText size={32} />
+                    </div>
+                    <h4 className="mt-5 text-xl font-semibold text-slate-900">
+                      Preview not available for this file type
+                    </h4>
+                    <p className="mt-2 max-w-md text-sm text-slate-500">
+                      This therapy file cannot be previewed directly inside the
+                      patient panel.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </section>
     </PublicLayout>
   );

@@ -23,6 +23,7 @@ const MODULE_LABELS = {
   documents: "Patient Documents",
   chat: "Chat",
   services: "Services",
+  therapy: "Therapy",
   staff: "Staff",
   mailbox: "Mailbox",
   treatment_tracker: "Treatment Tracker",

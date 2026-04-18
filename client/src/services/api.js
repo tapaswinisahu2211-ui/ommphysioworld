@@ -1,5 +1,8 @@
 import axios from "axios";
 
+const SESSION_EXPIRED_MESSAGE_KEY = "opwSessionExpiredMessage";
+let isHandlingSessionExpiry = false;
+
 const resolveBaseUrl = () => {
   const envBaseUrl = process.env.REACT_APP_API_BASE_URL?.trim();
 
@@ -44,5 +47,48 @@ API.interceptors.request.use((config) => {
 
   return config;
 });
+
+API.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = Number(error?.response?.status || 0);
+
+    if (status === 401 && typeof window !== "undefined") {
+      const adminToken = localStorage.getItem("token") || "";
+      const patientSession = localStorage.getItem("ommphysioPatientUser") || "";
+      const hadAdminSession = Boolean(adminToken);
+      const hadPatientSession = Boolean(patientSession);
+
+      if ((hadAdminSession || hadPatientSession) && !isHandlingSessionExpiry) {
+        isHandlingSessionExpiry = true;
+
+        try {
+          sessionStorage.setItem(
+            SESSION_EXPIRED_MESSAGE_KEY,
+            "Session expired. Please login again."
+          );
+        } catch (_) {
+          // Ignore storage failures and continue logout flow.
+        }
+
+        localStorage.removeItem("token");
+        localStorage.removeItem("adminUser");
+        localStorage.removeItem("ommphysioPatientUser");
+
+        const currentPath = `${window.location.pathname}${window.location.search}`;
+        const nextLocation =
+          hadPatientSession && !hadAdminSession
+            ? `/patient-login?redirect=${encodeURIComponent(currentPath || "/patient-dashboard")}`
+            : "/admin";
+
+        window.setTimeout(() => {
+          window.location.replace(nextLocation);
+        }, 0);
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 export default API;

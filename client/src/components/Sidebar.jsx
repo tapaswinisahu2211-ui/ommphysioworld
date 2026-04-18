@@ -2,6 +2,7 @@
   BarChart3,
   BriefcaseMedical,
   ClipboardList,
+  FolderOpen,
   LayoutDashboard,
   Mail,
   MessageSquareQuote,
@@ -28,6 +29,7 @@ export default function Sidebar({ collapsed, onNavigate }) {
     { name: "Patients", path: "/patients", icon: Users, hint: "Records", moduleKey: "patients" },
     { name: "Treatment Tracker", path: "/treatment-tracker", icon: ClipboardList, hint: "Follow-up", moduleKey: "treatment_tracker" },
     { name: "Services", path: "/services", icon: Stethoscope, hint: "Treatments", moduleKey: "services" },
+    { name: "Therapy", path: "/therapy", icon: FolderOpen, hint: "Media", moduleKey: "therapy" },
     ...(adminUser
       ? [
           { name: "Feedback", path: "/feedback", icon: MessageSquareQuote, hint: "Reviews", moduleKey: "" },

@@ -236,6 +236,12 @@ const submitAppointment = async (req, res) => {
     const uploadedFiles = getAppointmentUploadFiles(req);
     const primaryAttachment = uploadedFiles[0] || null;
 
+    if (uploadedFiles.length > 5) {
+      return res.status(400).json({
+        message: "You can upload up to 5 documents or images per appointment request.",
+      });
+    }
+
     if (patientToken && patientToken.patientId && requestedPatientId && requestedPatientId !== patientToken.patientId) {
       return res.status(403).json({ message: "Invalid patient session for this appointment request." });
     }

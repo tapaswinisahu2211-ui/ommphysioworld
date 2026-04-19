@@ -18,11 +18,7 @@ router.post(
   "/appointments",
   requirePatientOrStaffAuth,
   publicFormRateLimiter,
-  upload.fields([
-    { name: "file", maxCount: 1 },
-    { name: "files", maxCount: 5 },
-    { name: "documents", maxCount: 5 },
-  ]),
+  upload.any(),
   submitAppointment
 );
 router.post(

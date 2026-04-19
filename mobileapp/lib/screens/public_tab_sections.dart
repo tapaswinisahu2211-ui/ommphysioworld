@@ -2,7 +2,10 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:omphysioworld/screens/login_screen.dart';
 import 'package:omphysioworld/services/app_api_service.dart';
+import 'package:omphysioworld/storage/patient_session_storage.dart';
+import 'package:omphysioworld/storage/shop_cart_storage.dart';
 import 'package:omphysioworld/utils/form_validators.dart';
 
 class WebsiteHomeTab extends StatelessWidget {
@@ -254,6 +257,607 @@ class _WebsiteServicesTabState extends State<WebsiteServicesTab> {
             'Functional Movement Training',
           ],
         ),
+      ],
+    );
+  }
+}
+
+class WebsiteShopTab extends StatefulWidget {
+  const WebsiteShopTab({super.key});
+
+  @override
+  State<WebsiteShopTab> createState() => _WebsiteShopTabState();
+}
+
+class _WebsiteShopTabState extends State<WebsiteShopTab> {
+  final _apiService = AppApiService();
+  final _patientSessionStorage = PatientSessionStorage();
+  final _shopCartStorage = ShopCartStorage();
+  final _orderNoteController = TextEditingController();
+  List<Map<String, dynamic>> _products = [];
+  List<Map<String, dynamic>> _cartItems = [];
+  Map<String, dynamic>? _patientUser;
+  bool _isLoading = true;
+  bool _isLoadingCart = true;
+  bool _isPlacingOrder = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+    _loadCart();
+  }
+
+  @override
+  void dispose() {
+    _orderNoteController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadProducts() async {
+    try {
+      final products = await _apiService.getShopProducts();
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _products = products;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _products = [];
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadCart() async {
+    final items = await _shopCartStorage.getItems();
+    final patientUser = await _patientSessionStorage.getPatientUser();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _cartItems = items;
+      _patientUser = patientUser;
+      _isLoadingCart = false;
+    });
+  }
+
+  String _formatMoney(dynamic value) {
+    final amount = value is num ? value : num.tryParse(value?.toString() ?? '') ?? 0;
+    return 'Rs. ${amount.toStringAsFixed(0)}';
+  }
+
+  int _quantityForProduct(String productId) {
+    final index = _cartItems.indexWhere((item) => item['productId']?.toString() == productId);
+    if (index < 0) {
+      return 0;
+    }
+
+    final quantity = _cartItems[index]['quantity'];
+    return quantity is num ? quantity.toInt() : int.tryParse(quantity?.toString() ?? '') ?? 0;
+  }
+
+  int get _cartCount => _cartItems.fold<int>(
+        0,
+        (count, item) {
+          final quantity = item['quantity'];
+          return count + (quantity is num ? quantity.toInt() : int.tryParse(quantity?.toString() ?? '') ?? 0);
+        },
+      );
+
+  num get _cartTotal => _cartItems.fold<num>(
+        0,
+        (total, item) {
+          final quantity = item['quantity'];
+          final price = item['price'];
+          final nextQuantity =
+              quantity is num ? quantity.toInt() : int.tryParse(quantity?.toString() ?? '') ?? 0;
+          final nextPrice = price is num ? price : num.tryParse(price?.toString() ?? '') ?? 0;
+          return total + (nextQuantity * nextPrice);
+        },
+      );
+
+  Future<void> _saveCart(List<Map<String, dynamic>> items) async {
+    await _shopCartStorage.saveItems(items);
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _cartItems = items;
+    });
+  }
+
+  Future<void> _addToCart(Map<String, dynamic> product) async {
+    final productId = product['id']?.toString() ?? '';
+    if (productId.isEmpty) {
+      return;
+    }
+
+    final stockQuantity = product['stockQuantity'] is num
+        ? (product['stockQuantity'] as num).toInt()
+        : int.tryParse(product['stockQuantity']?.toString() ?? '') ?? 0;
+    if (stockQuantity <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This product is currently out of stock.')),
+      );
+      return;
+    }
+
+    final nextItems = [..._cartItems];
+    final index = nextItems.indexWhere((item) => item['productId']?.toString() == productId);
+    if (index < 0) {
+      nextItems.add({
+        'productId': productId,
+        'name': product['name']?.toString() ?? 'OPW Product',
+        'price': product['price'] ?? 0,
+        'imageUrl': product['imageUrl']?.toString() ?? '',
+        'stockQuantity': stockQuantity,
+        'quantity': 1,
+      });
+    } else {
+      final quantity = nextItems[index]['quantity'] is num
+          ? (nextItems[index]['quantity'] as num).toInt()
+          : int.tryParse(nextItems[index]['quantity']?.toString() ?? '') ?? 0;
+      if (quantity >= stockQuantity) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You already reached the available stock for this product.')),
+        );
+        return;
+      }
+      nextItems[index] = {
+        ...nextItems[index],
+        'quantity': quantity + 1,
+      };
+    }
+
+    await _saveCart(nextItems);
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${product['name'] ?? 'Product'} added to cart.')),
+    );
+  }
+
+  Future<void> _updateCartItemQuantity(String productId, int nextQuantity) async {
+    final nextItems = [..._cartItems];
+    final index = nextItems.indexWhere((item) => item['productId']?.toString() == productId);
+    if (index < 0) {
+      return;
+    }
+
+    if (nextQuantity <= 0) {
+      nextItems.removeAt(index);
+    } else {
+      final stockQuantity = nextItems[index]['stockQuantity'] is num
+          ? (nextItems[index]['stockQuantity'] as num).toInt()
+          : int.tryParse(nextItems[index]['stockQuantity']?.toString() ?? '') ?? 0;
+      if (stockQuantity > 0 && nextQuantity > stockQuantity) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Selected quantity is above available stock.')),
+        );
+        return;
+      }
+
+      nextItems[index] = {
+        ...nextItems[index],
+        'quantity': nextQuantity,
+      };
+    }
+
+    await _saveCart(nextItems);
+  }
+
+  Future<void> _openLoginForCheckout() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const LoginScreen(),
+      ),
+    );
+    await _loadCart();
+  }
+
+  Future<void> _placeOrder(BuildContext sheetContext) async {
+    if (_cartItems.isEmpty) {
+      return;
+    }
+
+    if (_patientUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please login with your patient account to place an order.')),
+      );
+      await _openLoginForCheckout();
+      return;
+    }
+
+    setState(() {
+      _isPlacingOrder = true;
+    });
+
+    try {
+      final response = await _apiService.placeShopOrder(
+        items: _cartItems
+            .map(
+              (item) => {
+                'productId': item['productId'],
+                'quantity': item['quantity'],
+              },
+            )
+            .toList(),
+        note: _orderNoteController.text.trim(),
+      );
+      await _shopCartStorage.clear();
+      _orderNoteController.clear();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _cartItems = [];
+      });
+      if (sheetContext.mounted) {
+        Navigator.of(sheetContext).pop();
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            response['message']?.toString() ?? 'Shop order placed successfully.',
+          ),
+        ),
+      );
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to place the order right now.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isPlacingOrder = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _openCartSheet() async {
+    await _loadCart();
+    if (!mounted) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.82,
+          minChildSize: 0.5,
+          maxChildSize: 0.94,
+          builder: (context, controller) {
+            return StatefulBuilder(
+              builder: (context, setModalState) {
+                Future<void> syncQuantity(String productId, int quantity) async {
+                  await _updateCartItemQuantity(productId, quantity);
+                  setModalState(() {});
+                }
+
+                return Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                  ),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 12),
+                      Container(
+                        height: 5,
+                        width: 56,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE2E8F0),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Your Cart',
+                                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                      color: const Color(0xFF0F172A),
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                              ),
+                            ),
+                            Text(
+                              '$_cartCount item${_cartCount == 1 ? '' : 's'}',
+                              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                    color: const Color(0xFF64748B),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: _cartItems.isEmpty
+                            ? Center(
+                                child: Text(
+                                  'Your cart is empty.',
+                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                        color: const Color(0xFF64748B),
+                                      ),
+                                ),
+                              )
+                            : ListView(
+                                controller: controller,
+                                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                                children: [
+                                  ..._cartItems.map((item) {
+                                    final quantity = item['quantity'] is num
+                                        ? (item['quantity'] as num).toInt()
+                                        : int.tryParse(item['quantity']?.toString() ?? '') ?? 0;
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 12),
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFF8FBFF),
+                                        borderRadius: BorderRadius.circular(22),
+                                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            item['name']?.toString() ?? 'Product',
+                                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                                  color: const Color(0xFF0F172A),
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            _formatMoney(item['price']),
+                                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                                  color: const Color(0xFF475569),
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Row(
+                                            children: [
+                                              IconButton(
+                                                onPressed: () => syncQuantity(
+                                                  item['productId']?.toString() ?? '',
+                                                  quantity - 1,
+                                                ),
+                                                icon: const Icon(Icons.remove_circle_outline_rounded),
+                                              ),
+                                              Text(
+                                                '$quantity',
+                                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                                      fontWeight: FontWeight.w900,
+                                                    ),
+                                              ),
+                                              IconButton(
+                                                onPressed: () => syncQuantity(
+                                                  item['productId']?.toString() ?? '',
+                                                  quantity + 1,
+                                                ),
+                                                icon: const Icon(Icons.add_circle_outline_rounded),
+                                              ),
+                                              const Spacer(),
+                                              TextButton(
+                                                onPressed: () => syncQuantity(
+                                                  item['productId']?.toString() ?? '',
+                                                  0,
+                                                ),
+                                                child: const Text('Remove'),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }),
+                                  Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF8FBFF),
+                                      borderRadius: BorderRadius.circular(22),
+                                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        TextField(
+                                          controller: _orderNoteController,
+                                          minLines: 2,
+                                          maxLines: 4,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Order note',
+                                            hintText: 'Any delivery note or product note for OPW',
+                                          ),
+                                        ),
+                                        const SizedBox(height: 14),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                'Total',
+                                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                                      color: const Color(0xFF0F172A),
+                                                      fontWeight: FontWeight.w800,
+                                                    ),
+                                              ),
+                                            ),
+                                            Text(
+                                              _formatMoney(_cartTotal),
+                                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                                    color: const Color(0xFF0F172A),
+                                                    fontWeight: FontWeight.w900,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 16),
+                                        SizedBox(
+                                          width: double.infinity,
+                                          child: FilledButton.icon(
+                                            onPressed: _isPlacingOrder
+                                                ? null
+                                                : (_patientUser == null
+                                                    ? _openLoginForCheckout
+                                                    : () => _placeOrder(sheetContext)),
+                                            style: FilledButton.styleFrom(
+                                              padding: const EdgeInsets.symmetric(vertical: 16),
+                                              backgroundColor: const Color(0xFF0F172A),
+                                            ),
+                                            icon: _isPlacingOrder
+                                                ? const SizedBox(
+                                                    height: 18,
+                                                    width: 18,
+                                                    child: CircularProgressIndicator(
+                                                      strokeWidth: 2.2,
+                                                      color: Colors.white,
+                                                    ),
+                                                  )
+                                                : Icon(
+                                                    _patientUser == null
+                                                        ? Icons.login_rounded
+                                                        : Icons.shopping_bag_rounded,
+                                                  ),
+                                            label: Text(
+                                              _isPlacingOrder
+                                                  ? 'Placing Order...'
+                                                  : (_patientUser == null ? 'Login to Buy' : 'Buy Now'),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+
+    await _loadCart();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: _SectionTitle(
+                eyebrow: 'OPW Shop',
+                title: 'Browse OPW products from the mobile app.',
+              ),
+            ),
+            if (!_isLoadingCart)
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  FilledButton.icon(
+                    onPressed: _openCartSheet,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF0F172A),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    ),
+                    icon: const Icon(Icons.shopping_cart_rounded),
+                    label: const Text('Cart'),
+                  ),
+                  if (_cartCount > 0)
+                    Positioned(
+                      right: -6,
+                      top: -8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2563EB),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: Text(
+                          _cartCount > 99 ? '99+' : '$_cartCount',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                              ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _AccentInfoCard(
+          title: 'Shop online',
+          body: _patientUser == null
+              ? 'Browse OPW products here on mobile. Add items to cart now and login before purchase.'
+              : 'Browse OPW products here on mobile. Your purchases and order updates stay linked with your patient account.',
+        ),
+        const SizedBox(height: 16),
+        if (_isLoading)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else if (_products.isEmpty)
+          const _AccentInfoCard(
+            title: 'No products yet',
+            body: 'Shop products will appear here once OPW adds them.',
+          )
+        else
+          ..._products.map(
+            (product) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _ShopProductCard(
+                product: product,
+                formatMoney: _formatMoney,
+                apiService: _apiService,
+                currentQuantity: _quantityForProduct(product['id']?.toString() ?? ''),
+                onAddToCart: () => _addToCart(product),
+                onOpenCart: _openCartSheet,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -948,6 +1552,217 @@ class _WebsiteAppointmentTabState extends State<WebsiteAppointmentTab> {
           icon: Icons.mark_email_read_rounded,
         ),
       ],
+    );
+  }
+}
+
+class _ShopProductCard extends StatelessWidget {
+  const _ShopProductCard({
+    required this.product,
+    required this.formatMoney,
+    required this.apiService,
+    required this.currentQuantity,
+    required this.onAddToCart,
+    required this.onOpenCart,
+  });
+
+  final Map<String, dynamic> product;
+  final String Function(dynamic value) formatMoney;
+  final AppApiService apiService;
+  final int currentQuantity;
+  final VoidCallback onAddToCart;
+  final VoidCallback onOpenCart;
+
+  @override
+  Widget build(BuildContext context) {
+    final imagePath = product['imageUrl']?.toString() ?? '';
+    final stockQuantity = product['stockQuantity'] is num
+        ? (product['stockQuantity'] as num).toInt()
+        : int.tryParse(product['stockQuantity']?.toString() ?? '') ?? 0;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x120F172A),
+            blurRadius: 18,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (imagePath.isNotEmpty)
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              child: SizedBox(
+                height: 180,
+                width: double.infinity,
+                child: FutureBuilder<String>(
+                  future: apiService.resolveResourceUrl(imagePath),
+                  builder: (context, snapshot) {
+                    final resolvedUrl = snapshot.data ?? '';
+                    if (resolvedUrl.isEmpty) {
+                      return Container(
+                        color: const Color(0xFFE2E8F0),
+                        child: const Icon(
+                          Icons.shopping_bag_rounded,
+                          size: 42,
+                          color: Color(0xFF64748B),
+                        ),
+                      );
+                    }
+
+                    return Image.network(
+                      resolvedUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        color: const Color(0xFFE2E8F0),
+                        child: const Icon(
+                          Icons.shopping_bag_rounded,
+                          size: 42,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            )
+          else
+            Container(
+              height: 180,
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: Color(0xFFE2E8F0),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: const Icon(
+                Icons.shopping_bag_rounded,
+                size: 42,
+                color: Color(0xFF64748B),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        product['name']?.toString() ?? 'OPW Product',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              color: const Color(0xFF0F172A),
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: stockQuantity > 0
+                            ? const Color(0xFFDCFCE7)
+                            : const Color(0xFFFEE2E2),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        stockQuantity > 0 ? 'In Stock' : 'Out of Stock',
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                              color: stockQuantity > 0
+                                  ? const Color(0xFF166534)
+                                  : const Color(0xFFB91C1C),
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
+                if ((product['category']?.toString() ?? '').isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    product['category'].toString(),
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: const Color(0xFF2563EB),
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Text(
+                  formatMoney(product['price']),
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: const Color(0xFF0F172A),
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  (product['description']?.toString() ?? '').trim().isEmpty
+                      ? 'OPW product details will appear here.'
+                      : product['description'].toString(),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: const Color(0xFF475569),
+                        height: 1.5,
+                      ),
+                ),
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FBFF),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  child: Text(
+                    'Login with your patient account to continue shopping and track your orders.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: const Color(0xFF475569),
+                          height: 1.45,
+                          fontWeight: FontWeight.w600,
+                      ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: currentQuantity > 0 ? onOpenCart : null,
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        icon: const Icon(Icons.shopping_cart_checkout_rounded),
+                        label: Text(
+                          currentQuantity > 0 ? 'In Cart: $currentQuantity' : 'Cart Empty',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: stockQuantity > 0 ? onAddToCart : null,
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          backgroundColor: const Color(0xFF0F172A),
+                        ),
+                        icon: const Icon(Icons.add_shopping_cart_rounded),
+                        label: const Text('Add to Cart'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

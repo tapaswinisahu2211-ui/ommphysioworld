@@ -24,6 +24,7 @@ class _HomeScreenState extends State<HomeScreen>
     _WebsiteTab('Home', Icons.home_rounded),
     _WebsiteTab('About', Icons.info_rounded),
     _WebsiteTab('Services', Icons.medical_services_rounded),
+    _WebsiteTab('Shop', Icons.shopping_bag_rounded),
     _WebsiteTab('Career', Icons.work_rounded),
     _WebsiteTab('FAQ', Icons.psychology_alt_rounded),
     _WebsiteTab('Live Chat', Icons.forum_rounded),
@@ -228,7 +229,7 @@ class _HomeScreenState extends State<HomeScreen>
                   if (patientUser != null) ...[
                     _DrawerActionTile(
                       icon: Icons.dashboard_rounded,
-                      label: 'Dashboard',
+                      label: 'My Account',
                       selected: false,
                       onTap: _openDashboard,
                     ),
@@ -312,7 +313,7 @@ class _HomeScreenState extends State<HomeScreen>
                           ? Icons.login_rounded
                           : Icons.dashboard_rounded,
                     ),
-                    label: Text(patientUser == null ? 'Login' : 'Dashboard'),
+                    label: Text(patientUser == null ? 'Login' : 'My Account'),
                   ),
                   const SizedBox(height: 12),
                   if (patientUser != null) ...[
@@ -464,7 +465,7 @@ class _HomeScreenState extends State<HomeScreen>
                                 ),
                               ),
                               child: Text(
-                                patientUser == null ? 'Login' : 'Dashboard',
+                                patientUser == null ? 'Login' : 'My Account',
                               ),
                             ),
                           ],
@@ -486,21 +487,24 @@ class _HomeScreenState extends State<HomeScreen>
                       WebsiteServicesTab(
                         key: ValueKey('services-${_tabResetKeys[2]}'),
                       ),
+                      WebsiteShopTab(
+                        key: ValueKey('shop-${_tabResetKeys[3]}'),
+                      ),
                       WebsiteCareerTab(
-                        key: ValueKey('career-${_tabResetKeys[3]}'),
+                        key: ValueKey('career-${_tabResetKeys[4]}'),
                       ),
                       WebsiteFaqTab(
-                        key: ValueKey('faq-${_tabResetKeys[4]}'),
+                        key: ValueKey('faq-${_tabResetKeys[5]}'),
                       ),
                       PatientChatPanel(
-                        key: ValueKey('chat-${_tabResetKeys[5]}'),
+                        key: ValueKey('chat-${_tabResetKeys[6]}'),
                         visitorName: '',
                         visitorContact: '',
                         requireVisitorDetails: true,
                         onContactPressed: _jumpToContact,
                       ),
                       WebsiteContactTab(
-                        key: ValueKey('contact-${_tabResetKeys[6]}'),
+                        key: ValueKey('contact-${_tabResetKeys[7]}'),
                       ),
                     ],
                   ),

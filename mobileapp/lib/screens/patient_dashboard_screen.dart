@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:omphysioworld/screens/patient_chat_panel.dart';
 import 'package:omphysioworld/screens/patient_profile_screen.dart';
@@ -24,20 +25,18 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final _apiService = AppApiService();
   final _sessionStorage = PatientSessionStorage();
-  final _noteTitleController = TextEditingController();
-  final _clinicalNoteController = TextEditingController();
   final _appointmentMessageController = TextEditingController();
   late final TabController _tabController;
 
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   Map<String, dynamic>? _patient;
-  List<AppUploadFile> _selectedDocuments = [];
+  List<AppUploadFile> _appointmentDocuments = [];
   List<Map<String, dynamic>> _appointmentRequests = [];
+  List<Map<String, dynamic>> _shopOrders = [];
   List<Map<String, dynamic>> _services = [];
   DateTime? _notificationsSeenAt;
   bool _isLoadingPatient = false;
-  bool _isSubmittingNote = false;
   bool _isSubmittingAppointment = false;
   String _selectedService = '';
 
@@ -49,7 +48,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
     _tabController.addListener(() {
       if (mounted) {
         setState(() {});
@@ -62,8 +61,6 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
   @override
   void dispose() {
     _tabController.dispose();
-    _noteTitleController.dispose();
-    _clinicalNoteController.dispose();
     _appointmentMessageController.dispose();
     super.dispose();
   }
@@ -136,11 +133,18 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
     });
 
     try {
-      final patient = await _apiService.getPatient(patientId: _patientId);
-      final appointmentRequests = await _apiService.getPatientAppointmentRequests(
-        patientId: _patientId,
-      );
-      final services = await _apiService.getServices();
+      final results = await Future.wait([
+        _apiService.getPatient(patientId: _patientId),
+        _apiService.getPatientAppointmentRequests(
+          patientId: _patientId,
+        ),
+        _apiService.getServices(),
+        _apiService.getMyShopOrders(),
+      ]);
+      final patient = results[0] as Map<String, dynamic>;
+      final appointmentRequests = results[1] as List<Map<String, dynamic>>;
+      final services = results[2] as List<Map<String, dynamic>>;
+      final shopOrders = results[3] as List<Map<String, dynamic>>;
 
       if (!mounted) {
         return;
@@ -150,6 +154,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
         _patient = patient;
         _appointmentRequests = appointmentRequests;
         _services = services;
+        _shopOrders = shopOrders;
       });
     } catch (_) {
       if (!mounted) {
@@ -177,7 +182,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
     });
   }
 
-  Future<void> _pickClinicalDocuments() async {
+  Future<void> _pickAppointmentDocuments() async {
     final result = await FilePicker.platform.pickFiles(
       allowMultiple: true,
       withData: true,
@@ -205,7 +210,10 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
     }
 
     setState(() {
-      _selectedDocuments = [..._selectedDocuments, ...pickedFiles].take(10).toList();
+      _appointmentDocuments = [
+        ..._appointmentDocuments,
+        ...pickedFiles,
+      ].take(10).toList();
     });
   }
 
@@ -242,67 +250,16 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
     });
   }
 
-  Future<void> _submitClinicalNote() async {
-    final title = _noteTitleController.text.trim();
-    final note = _clinicalNoteController.text.trim();
-
-    if (_patientId.isEmpty) {
-      _showMessage('Patient profile link is missing. Please register/login again.');
-      return;
-    }
-
-    if (title.isEmpty && note.isEmpty && _selectedDocuments.isEmpty) {
-      _showMessage('Please add a note title or clinical note details.');
-      return;
-    }
-
-    FocusScope.of(context).unfocus();
-    setState(() {
-      _isSubmittingNote = true;
-    });
-
-    try {
-      final patient = await _apiService.submitPatientClinicalNote(
-        patientId: _patientId,
-        title: title.isEmpty ? 'Previous Doctor Clinical Note' : title,
-        note: note,
-        addedByLabel: _name.isEmpty ? 'Patient' : _name,
-        documents: _selectedDocuments,
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      _noteTitleController.clear();
-      _clinicalNoteController.clear();
-      setState(() {
-        _selectedDocuments = [];
-        _patient = patient;
-      });
-      _showMessage('Clinical note shared with OPW.');
-    } on ApiException catch (error) {
-      if (!mounted) {
-        return;
-      }
-      _showMessage(error.message);
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      _showMessage('Unable to share clinical note. Please check the server connection.');
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSubmittingNote = false;
-        });
-      }
-    }
-  }
-
   Future<void> _submitAppointmentRequest() async {
     final service = _selectedService.trim();
     final message = _appointmentMessageController.text.trim();
+
+    if (_hasPendingAppointmentRequest) {
+      _showMessage(
+        'Your previous appointment request is still pending. Please wait for OPW to review it first.',
+      );
+      return;
+    }
 
     if (service.isEmpty || _selectedDate == null) {
       _showMessage('Please add service needed and preferred appointment date.');
@@ -329,6 +286,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
         date: _formatApiDate(_selectedDate!),
         time: _selectedTime == null ? '' : _formatApiTime(_selectedTime!),
         message: message,
+        documents: _appointmentDocuments,
       );
 
       if (!mounted) {
@@ -340,6 +298,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
         _selectedDate = null;
         _selectedTime = null;
         _selectedService = '';
+        _appointmentDocuments = [];
       });
       await _refreshPatient();
       _showMessage(
@@ -479,6 +438,9 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
   List<Map<String, dynamic>> get _clinicalNotes =>
       _listFromPatient('clinicalNotes');
 
+  List<Map<String, dynamic>> get _therapyRecommendations =>
+      _listFromPatient('therapyRecommendations');
+
   List<Map<String, dynamic>> get _appointments =>
       _listFromPatient('appointments');
 
@@ -505,6 +467,18 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
       _listFromPatient('treatmentPlans');
 
   List<Map<String, dynamic>> get _payments => _listFromPatient('payments');
+
+  bool get _hasPendingAppointmentRequest => _visibleAppointmentRequests.any(
+        (request) => (request['status']?.toString().toLowerCase() ?? 'pending') == 'pending',
+      );
+
+  int get _therapyItemCount => _therapyRecommendations.fold<int>(
+        0,
+        (count, recommendation) {
+          final items = recommendation['items'] is List ? recommendation['items'] as List : const [];
+          return count + items.length;
+        },
+      );
 
   int get _totalPaymentCount {
     final sessionPayments = _treatmentPlans.fold<int>(
@@ -762,7 +736,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
                             child: Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 28),
                               child: Text(
-                                'OPW updates for notes, appointments, sessions, and payments will appear here.',
+                                'OPW updates for therapy, appointments, sessions, payments, and orders will appear here.',
                                 textAlign: TextAlign.center,
                                 style: theme.textTheme.bodyLarge?.copyWith(
                                   color: const Color(0xFF64748B),
@@ -851,7 +825,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _name.isEmpty ? 'Patient Dashboard' : _name,
+                  _name.isEmpty ? 'My Account' : _name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleLarge?.copyWith(
@@ -922,7 +896,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
               border: Border.all(color: const Color(0xFFE2E8F0)),
             ),
             child: Text(
-              'Patient Area',
+              'My Account',
               style: theme.textTheme.labelLarge?.copyWith(
                 color: const Color(0xFF2563EB),
                 fontWeight: FontWeight.w800,
@@ -969,7 +943,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Patient Area',
+                        'My Account',
                         style: theme.textTheme.labelLarge?.copyWith(
                           color: const Color(0xFFE0F2FE),
                           fontWeight: FontWeight.w800,
@@ -978,7 +952,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
                       ),
                       const SizedBox(height: 14),
                       Text(
-                        _name.isEmpty ? 'Patient Dashboard' : _name,
+                        _name.isEmpty ? 'My Account' : _name,
                         style: theme.textTheme.headlineSmall?.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.w900,
@@ -1015,31 +989,38 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
                       ),
                       const SizedBox(height: 10),
                       _DashboardDrawerTile(
-                        icon: Icons.note_alt_rounded,
-                        label: 'Notes',
+                        icon: Icons.event_available_rounded,
+                        label: 'Appointment',
                         selected: _tabController.index == 1,
                         onTap: () => _selectDashboardTab(1),
                       ),
                       const SizedBox(height: 10),
                       _DashboardDrawerTile(
-                        icon: Icons.event_available_rounded,
-                        label: 'Appointments',
+                        icon: Icons.auto_awesome_rounded,
+                        label: 'Therapy',
                         selected: _tabController.index == 2,
                         onTap: () => _selectDashboardTab(2),
                       ),
                       const SizedBox(height: 10),
                       _DashboardDrawerTile(
                         icon: Icons.healing_rounded,
-                        label: 'Sessions',
+                        label: 'Session',
                         selected: _tabController.index == 3,
                         onTap: () => _selectDashboardTab(3),
                       ),
                       const SizedBox(height: 10),
                       _DashboardDrawerTile(
                         icon: Icons.payments_rounded,
-                        label: 'Payments',
+                        label: 'Payment',
                         selected: _tabController.index == 4,
                         onTap: () => _selectDashboardTab(4),
+                      ),
+                      const SizedBox(height: 10),
+                      _DashboardDrawerTile(
+                        icon: Icons.shopping_bag_rounded,
+                        label: 'Order',
+                        selected: _tabController.index == 5,
+                        onTap: () => _selectDashboardTab(5),
                       ),
                       const SizedBox(height: 10),
                       _DashboardDrawerTile(
@@ -1116,10 +1097,11 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
         ),
         tabs: const [
           Tab(icon: Icon(Icons.dashboard_rounded), text: 'Overview'),
-          Tab(icon: Icon(Icons.note_alt_rounded), text: 'Notes'),
-          Tab(icon: Icon(Icons.event_available_rounded), text: 'Appointments'),
-          Tab(icon: Icon(Icons.healing_rounded), text: 'Sessions'),
-          Tab(icon: Icon(Icons.payments_rounded), text: 'Payments'),
+          Tab(icon: Icon(Icons.event_available_rounded), text: 'Appointment'),
+          Tab(icon: Icon(Icons.auto_awesome_rounded), text: 'Therapy'),
+          Tab(icon: Icon(Icons.healing_rounded), text: 'Session'),
+          Tab(icon: Icon(Icons.payments_rounded), text: 'Payment'),
+          Tab(icon: Icon(Icons.shopping_bag_rounded), text: 'Order'),
         ],
       ),
     );
@@ -1136,16 +1118,28 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
         crossAxisSpacing: 12,
         children: [
           _SummaryStatCard(
-            label: 'Clinical Notes',
-            value: _clinicalNotes.length.toString(),
-            icon: Icons.folder_shared_rounded,
+            label: 'Therapy Items',
+            value: _therapyItemCount.toString(),
+            icon: Icons.auto_awesome_rounded,
             color: const Color(0xFF2563EB),
           ),
           _SummaryStatCard(
-            label: 'Appointments',
+            label: 'Booked Visits',
             value: _appointments.length.toString(),
             icon: Icons.event_note_rounded,
             color: const Color(0xFF0891B2),
+          ),
+          _SummaryStatCard(
+            label: 'Pending Request',
+            value: _visibleAppointmentRequests
+                .where(
+                  (request) =>
+                      (request['status']?.toString().toLowerCase() ?? 'pending') == 'pending',
+                )
+                .length
+                .toString(),
+            icon: Icons.hourglass_top_rounded,
+            color: const Color(0xFFF59E0B),
           ),
           _SummaryStatCard(
             label: 'Sessions',
@@ -1159,30 +1153,36 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
             icon: Icons.receipt_long_rounded,
             color: const Color(0xFFF97316),
           ),
+          _SummaryStatCard(
+            label: 'Orders',
+            value: _shopOrders.length.toString(),
+            icon: Icons.shopping_bag_rounded,
+            color: const Color(0xFF06B6D4),
+          ),
         ],
       ),
       const SizedBox(height: 18),
       _DashboardCard(
-        title: 'Your Care Timeline',
+        title: 'Your Account Journey',
         subtitle:
-            'Use the tabs above to share documents, request appointments, and review OPW updates.',
+            'Use the tabs above to request appointments, review doctor updates, and track your OPW records.',
         icon: Icons.auto_awesome_rounded,
         child: Column(
           children: const [
             _TimelineHintTile(
-              icon: Icons.upload_file_rounded,
-              title: 'Upload clinical documents',
-              subtitle: 'PDF and images added by you stay visible in your account.',
+              icon: Icons.cloud_upload_rounded,
+              title: 'Request appointment with documents',
+              subtitle: 'Upload PDF and image files before you submit your appointment request.',
             ),
             _TimelineHintTile(
-              icon: Icons.medical_information_rounded,
-              title: 'Doctor notes come back here',
-              subtitle: 'Clinical notes added by OPW will appear in Notes.',
+              icon: Icons.auto_awesome_rounded,
+              title: 'Therapy is view only',
+              subtitle: 'Recommended therapy items and doctor notes shared by OPW appear in the Therapy tab.',
             ),
             _TimelineHintTile(
-              icon: Icons.payments_rounded,
-              title: 'Track sessions and payments',
-              subtitle: 'Booked sessions and payment details are grouped in separate tabs.',
+              icon: Icons.shopping_bag_rounded,
+              title: 'Track sessions, payments, and orders',
+              subtitle: 'Your treatment plan, payments, and shop orders stay linked with your patient account.',
             ),
           ],
         ),
@@ -1190,62 +1190,52 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
     ]);
   }
 
-  Widget _buildClinicalNoteFormCard() {
+  Widget _buildTherapySummaryCard() {
     return _DashboardCard(
-      title: 'Share Clinical Note',
-      subtitle:
-          'Upload PDF/images and previous doctor notes for OPW review.',
-      icon: Icons.note_alt_rounded,
+      title: 'Therapy & Doctors Note',
+      subtitle: 'This section is view only for patients.',
+      icon: Icons.auto_awesome_rounded,
       child: Column(
         children: [
-          TextField(
-            controller: _noteTitleController,
-            decoration: const InputDecoration(
-              labelText: 'Note title',
-              hintText: 'Example: Orthopedic consultation summary',
-              prefixIcon: Icon(Icons.title_rounded),
-            ),
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _clinicalNoteController,
-            minLines: 5,
-            maxLines: 8,
-            decoration: const InputDecoration(
-              labelText: 'Clinical note details',
-              hintText: 'Write previous doctor notes, medicine advice, reports summary...',
-              alignLabelWithHint: true,
-            ),
-          ),
-          const SizedBox(height: 14),
-          _SelectedDocumentsPanel(
-            documents: _selectedDocuments,
-            onPickFiles: _pickClinicalDocuments,
-            onRemoveFile: (index) {
-              setState(() {
-                _selectedDocuments = [..._selectedDocuments]..removeAt(index);
-              });
-            },
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _isSubmittingNote ? null : _submitClinicalNote,
-              icon: _isSubmittingNote
-                  ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.cloud_upload_rounded),
-              label: Text(_isSubmittingNote ? 'Sharing...' : 'Share With Clinic'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _TherapyMiniStat(
+                  label: 'Services',
+                  value: _therapyRecommendations.length.toString(),
+                ),
               ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _TherapyMiniStat(
+                  label: 'Therapy Items',
+                  value: _therapyItemCount.toString(),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _TherapyMiniStat(
+                  label: 'Doctors Note',
+                  value: _clinicalNotes.length.toString(),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FBFF),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Text(
+              'Patients cannot edit, upload, or download anything here. OPW-shared therapy items and doctor notes will appear automatically.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF475569),
+                    height: 1.5,
+                  ),
             ),
           ),
         ],
@@ -1253,35 +1243,104 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
     );
   }
 
-  Widget _buildClinicalNotesRecordCard() {
+  Widget _buildTherapyRecommendationsCard() {
     return _RecordCard(
-      title: 'Clinical Notes & Documents',
-      subtitle:
-          'Notes added by you or OPW will appear here.',
+      title: 'Recommended Therapy',
+      subtitle: 'Service-wise therapy items shared by OPW appear here.',
+      icon: Icons.auto_awesome_rounded,
+      emptyText: 'No therapy recommendations added yet.',
+      children: _therapyRecommendations
+          .map(
+            (recommendation) => _TherapyRecommendationTile(
+              recommendation: recommendation,
+              apiService: _apiService,
+              onViewItem: _viewTherapyItem,
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _buildDoctorsNotesRecordCard() {
+    return _RecordCard(
+      title: 'Doctors Note & Documents',
+      subtitle: 'You can only view notes and files shared here.',
       icon: Icons.folder_shared_rounded,
-      emptyText: 'No clinical notes yet.',
+      emptyText: 'No doctor notes available yet.',
       children: _clinicalNotes.map((note) => _ClinicalNoteTile(note: note)).toList(),
     );
   }
 
-  Widget _buildClinicalNotesTab() {
+  Widget _buildTherapyTab() {
     return _buildTabList([
-      _buildClinicalNoteFormCard(),
+      _buildTherapySummaryCard(),
       const SizedBox(height: 18),
-      _buildClinicalNotesRecordCard(),
+      _buildTherapyRecommendationsCard(),
+      const SizedBox(height: 18),
+      _buildDoctorsNotesRecordCard(),
     ]);
   }
 
   Widget _buildAppointmentRequestCard() {
     final theme = Theme.of(context);
+    final pendingRequestCount = _visibleAppointmentRequests
+        .where(
+          (request) => (request['status']?.toString().toLowerCase() ?? 'pending') == 'pending',
+        )
+        .length;
 
     return _DashboardCard(
       title: 'Request Appointment',
       subtitle:
-          'Only logged-in patients can submit this request.',
+          'Only logged-in patients can submit this request. Upload PDF/images and previous doctor notes.',
       icon: Icons.calendar_month_rounded,
       child: Column(
         children: [
+          Row(
+            children: [
+              Expanded(
+                child: _TherapyMiniStat(
+                  label: 'Pending',
+                  value: pendingRequestCount.toString(),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _TherapyMiniStat(
+                  label: 'Booked',
+                  value: _appointments.length.toString(),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _TherapyMiniStat(
+                  label: 'Files',
+                  value: _appointmentDocuments.length.toString(),
+                ),
+              ),
+            ],
+          ),
+          if (_hasPendingAppointmentRequest) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFFBEB),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: const Color(0xFFFDE68A)),
+              ),
+              child: Text(
+                'Your previous appointment request is still pending. You can send a new request after OPW reviews it.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                      color: const Color(0xFF92400E),
+                      height: 1.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
           DropdownButtonFormField<String>(
             initialValue: _selectedService.isEmpty ? null : _selectedService,
             isExpanded: true,
@@ -1313,15 +1372,17 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
                 );
               }).toList();
             },
-            onChanged: (value) {
-              setState(() {
-                _selectedService = value ?? '';
-              });
-            },
+            onChanged: _hasPendingAppointmentRequest
+                ? null
+                : (value) {
+                    setState(() {
+                      _selectedService = value ?? '';
+                    });
+                  },
           ),
           const SizedBox(height: 14),
           InkWell(
-            onTap: _pickAppointmentDate,
+            onTap: _hasPendingAppointmentRequest ? null : _pickAppointmentDate,
             borderRadius: BorderRadius.circular(20),
             child: Ink(
               padding: const EdgeInsets.symmetric(
@@ -1357,7 +1418,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
           ),
           const SizedBox(height: 14),
           InkWell(
-            onTap: _pickAppointmentTime,
+            onTap: _hasPendingAppointmentRequest ? null : _pickAppointmentTime,
             borderRadius: BorderRadius.circular(20),
             child: Ink(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
@@ -1393,18 +1454,33 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
             controller: _appointmentMessageController,
             minLines: 4,
             maxLines: 6,
+            enabled: !_hasPendingAppointmentRequest,
             decoration: const InputDecoration(
               labelText: 'Message for clinic',
               hintText: 'Tell us about your pain, injury, or preferred timing',
               alignLabelWithHint: true,
             ),
           ),
+          const SizedBox(height: 14),
+          _SelectedDocumentsPanel(
+            documents: _appointmentDocuments,
+            panelTitle: 'Upload PDF/images and previous doctor notes',
+            helperText: 'Multiple documents/images can be added. Files upload only after you request the appointment.',
+            actionLabel: 'Upload Documents',
+            onPickFiles: _hasPendingAppointmentRequest ? null : _pickAppointmentDocuments,
+            onRemoveFile: (index) {
+              setState(() {
+                _appointmentDocuments = [..._appointmentDocuments]..removeAt(index);
+              });
+            },
+          ),
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed:
-                  _isSubmittingAppointment ? null : _submitAppointmentRequest,
+              onPressed: _isSubmittingAppointment || _hasPendingAppointmentRequest
+                  ? null
+                  : _submitAppointmentRequest,
               icon: _isSubmittingAppointment
                   ? const SizedBox(
                       height: 18,
@@ -1542,6 +1618,99 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
     ]);
   }
 
+  Widget _buildOrdersTab() {
+    final latestOrder = _shopOrders.isEmpty ? null : _shopOrders.first;
+
+    return _buildTabList([
+      _DashboardCard(
+        title: 'My Orders',
+        subtitle: 'All shop orders placed from your patient account will appear here.',
+        icon: Icons.shopping_bag_rounded,
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _TherapyMiniStat(
+                    label: 'Orders',
+                    value: _shopOrders.length.toString(),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _TherapyMiniStat(
+                    label: 'Latest Status',
+                    value: latestOrder == null
+                        ? 'None'
+                        : _formatStatusLabel(latestOrder['status']?.toString() ?? 'pending'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _TherapyMiniStat(
+                    label: 'Latest Total',
+                    value: latestOrder == null
+                        ? _formatMoney(0)
+                        : _formatMoney(latestOrder['totalAmount']),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            if (_shopOrders.isEmpty)
+              Text(
+                'No shop orders placed yet.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: const Color(0xFF64748B),
+                    ),
+              )
+            else
+              ..._shopOrders.map((order) => _ShopOrderTile(order: order)),
+          ],
+        ),
+      ),
+    ]);
+  }
+
+  String _formatStatusLabel(String value) {
+    if (value.trim().isEmpty) {
+      return 'Pending';
+    }
+
+    final words = value
+        .replaceAll('_', ' ')
+        .split(' ')
+        .where((word) => word.trim().isNotEmpty)
+        .map(
+          (word) => '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
+        );
+    return words.join(' ');
+  }
+
+  Future<void> _viewTherapyItem(Map<String, dynamic> item) async {
+    final rawUrl = item['fileUrl']?.toString().trim() ?? '';
+    if (rawUrl.isEmpty) {
+      _showMessage('Therapy file is not available right now.');
+      return;
+    }
+
+    try {
+      final resolvedUrl = await _apiService.resolveResourceUrl(rawUrl);
+      final uri = Uri.tryParse(resolvedUrl);
+      if (uri == null) {
+        _showMessage('Unable to open this therapy file.');
+        return;
+      }
+
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened) {
+        _showMessage('Unable to open this therapy file right now.');
+      }
+    } catch (_) {
+      _showMessage('Unable to open this therapy file right now.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1575,10 +1744,11 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen>
                     controller: _tabController,
                     children: [
                       _buildOverviewTab(),
-                      _buildClinicalNotesTab(),
                       _buildAppointmentsTab(),
+                      _buildTherapyTab(),
                       _buildSessionsTab(),
                       _buildPaymentsTab(),
+                      _buildOrdersTab(),
                     ],
                   ),
                 ),
@@ -1846,15 +2016,438 @@ class _DashboardCard extends StatelessWidget {
   }
 }
 
+class _TherapyMiniStat extends StatelessWidget {
+  const _TherapyMiniStat({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FBFF),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: const Color(0xFF64748B),
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.7,
+                ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: const Color(0xFF0F172A),
+                  fontWeight: FontWeight.w900,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TherapyRecommendationTile extends StatelessWidget {
+  const _TherapyRecommendationTile({
+    required this.recommendation,
+    required this.apiService,
+    required this.onViewItem,
+  });
+
+  final Map<String, dynamic> recommendation;
+  final AppApiService apiService;
+  final Future<void> Function(Map<String, dynamic> item) onViewItem;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = (recommendation['items'] is List)
+        ? (recommendation['items'] as List).whereType<Map<String, dynamic>>().toList()
+        : <Map<String, dynamic>>[];
+    final note = recommendation['note']?.toString().trim() ?? '';
+
+    return _RecordTileShell(
+      icon: Icons.auto_awesome_rounded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            recommendation['serviceName']?.toString().trim().isNotEmpty == true
+                ? recommendation['serviceName'].toString().trim()
+                : 'Therapy Service',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: const Color(0xFF0F172A),
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          if (note.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                note,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: const Color(0xFF1E3A8A),
+                      height: 1.45,
+                    ),
+              ),
+            ),
+          ],
+          if (items.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ...items.map(
+              (item) => _TherapyItemCard(
+                item: item,
+                apiService: apiService,
+                onView: () => onViewItem(item),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TherapyItemCard extends StatelessWidget {
+  const _TherapyItemCard({
+    required this.item,
+    required this.apiService,
+    required this.onView,
+  });
+
+  final Map<String, dynamic> item;
+  final AppApiService apiService;
+  final VoidCallback onView;
+
+  @override
+  Widget build(BuildContext context) {
+    final resourceType = item['resourceType']?.toString().trim().isNotEmpty == true
+        ? item['resourceType'].toString().trim()
+        : 'file';
+    final description = item['description']?.toString().trim() ?? '';
+    final fileUrl = item['fileUrl']?.toString().trim() ?? '';
+    final showImagePreview = fileUrl.isNotEmpty && (resourceType == 'image' || resourceType == 'gif');
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  item['title']?.toString().trim().isNotEmpty == true
+                      ? item['title'].toString().trim()
+                      : item['fileName']?.toString() ?? 'Therapy Item',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: const Color(0xFF0F172A),
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  resourceType.toUpperCase(),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: const Color(0xFF2563EB),
+                        fontWeight: FontWeight.w900,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            item['fileName']?.toString() ?? 'No file name',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFF64748B),
+                ),
+          ),
+          if (showImagePreview) ...[
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: SizedBox(
+                height: 170,
+                width: double.infinity,
+                child: FutureBuilder<String>(
+                  future: apiService.resolveResourceUrl(fileUrl),
+                  builder: (context, snapshot) {
+                    final resolvedUrl = snapshot.data ?? '';
+                    if (resolvedUrl.isEmpty) {
+                      return Container(
+                        color: const Color(0xFFF8FBFF),
+                        alignment: Alignment.center,
+                        child: const CircularProgressIndicator(),
+                      );
+                    }
+
+                    return Image.network(
+                      resolvedUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        color: const Color(0xFFF8FBFF),
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.image_not_supported_rounded,
+                          color: Color(0xFF64748B),
+                          size: 30,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+          if (description.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              description,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xFF475569),
+                    height: 1.45,
+                  ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Text(
+            'View only',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: const Color(0xFF2563EB),
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onView,
+              icon: const Icon(Icons.visibility_rounded),
+              label: const Text('View'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrderStatusChip extends StatelessWidget {
+  const _OrderStatusChip({
+    required this.status,
+  });
+
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = status.toLowerCase();
+    final Color backgroundColor;
+    final Color textColor;
+
+    switch (normalized) {
+      case 'confirmed':
+      case 'completed':
+        backgroundColor = const Color(0xFFDCFCE7);
+        textColor = const Color(0xFF166534);
+        break;
+      case 'cancelled':
+        backgroundColor = const Color(0xFFFFE4E6);
+        textColor = const Color(0xFFBE123C);
+        break;
+      default:
+        backgroundColor = const Color(0xFFFEF3C7);
+        textColor = const Color(0xFF92400E);
+        break;
+    }
+
+    final label = status.trim().isEmpty
+        ? 'Pending'
+        : status
+            .replaceAll('_', ' ')
+            .split(' ')
+            .where((word) => word.trim().isNotEmpty)
+            .map((word) => '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}')
+            .join(' ');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: textColor,
+              fontWeight: FontWeight.w800,
+            ),
+      ),
+    );
+  }
+}
+
+class _ShopOrderTile extends StatelessWidget {
+  const _ShopOrderTile({
+    required this.order,
+  });
+
+  final Map<String, dynamic> order;
+
+  String _formatMoney(dynamic value) {
+    final amount = value is num ? value : num.tryParse(value?.toString() ?? '') ?? 0;
+    return 'Rs. ${amount.toStringAsFixed(0)}';
+  }
+
+  String _formatDate(dynamic value) {
+    final raw = value?.toString() ?? '';
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) {
+      return raw.isEmpty ? 'Date not added' : raw;
+    }
+
+    final localDate = parsed.toLocal();
+    final month = localDate.month.toString().padLeft(2, '0');
+    final day = localDate.day.toString().padLeft(2, '0');
+    return '$day/$month/${localDate.year}';
+  }
+
+  String _formatStatusLabel(String value) {
+    if (value.trim().isEmpty) {
+      return 'Pending';
+    }
+
+    return value
+        .replaceAll('_', ' ')
+        .split(' ')
+        .where((word) => word.trim().isNotEmpty)
+        .map((word) => '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}')
+        .join(' ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = (order['items'] is List)
+        ? (order['items'] as List).whereType<Map<String, dynamic>>().toList()
+        : <Map<String, dynamic>>[];
+
+    return _RecordTileShell(
+      icon: Icons.shopping_bag_rounded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            order['orderNumber']?.toString().trim().isNotEmpty == true
+                ? order['orderNumber'].toString().trim()
+                : 'OPW Shop Order',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: const Color(0xFF0F172A),
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Ordered on ${_formatDate(order['createdAt'])} | ${order['totalQuantity'] ?? 0} item(s) | ${_formatMoney(order['totalAmount'])}',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFF475569),
+                  height: 1.45,
+                ),
+          ),
+          const SizedBox(height: 10),
+          _OrderStatusChip(
+            status: _formatStatusLabel(order['status']?.toString() ?? 'pending'),
+          ),
+          if (items.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: items
+                  .map(
+                    (item) => Chip(
+                      label: Text(
+                        '${item['productName']?.toString() ?? 'Product'} x ${item['quantity'] ?? 0}',
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+          if ((order['note']?.toString() ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                'Note: ${order['note'].toString().trim()}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFF475569),
+                      height: 1.45,
+                    ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _SelectedDocumentsPanel extends StatelessWidget {
   const _SelectedDocumentsPanel({
     required this.documents,
+    required this.panelTitle,
+    required this.helperText,
+    required this.actionLabel,
     required this.onPickFiles,
     required this.onRemoveFile,
   });
 
   final List<AppUploadFile> documents;
-  final VoidCallback onPickFiles;
+  final String panelTitle;
+  final String helperText;
+  final String actionLabel;
+  final VoidCallback? onPickFiles;
   final void Function(int index) onRemoveFile;
 
   @override
@@ -1881,7 +2474,7 @@ class _SelectedDocumentsPanel extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'PDF / Image Attachments',
+                  panelTitle,
                   style: theme.textTheme.titleSmall?.copyWith(
                     color: const Color(0xFF0F172A),
                     fontWeight: FontWeight.w800,
@@ -1890,14 +2483,14 @@ class _SelectedDocumentsPanel extends StatelessWidget {
               ),
               TextButton(
                 onPressed: onPickFiles,
-                child: const Text('Add'),
+                child: Text(actionLabel),
               ),
             ],
           ),
           const SizedBox(height: 8),
           if (documents.isEmpty)
             Text(
-              'No documents selected yet. You can add PDF, JPG, PNG, or WEBP files.',
+              helperText,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: const Color(0xFF64748B),
                 height: 1.45,
@@ -1946,112 +2539,6 @@ class _SelectedDocumentsPanel extends StatelessWidget {
                 ),
         ],
       ),
-    );
-  }
-}
-
-class _PatientRecordsSection extends StatelessWidget {
-  const _PatientRecordsSection({
-    required this.clinicalNotes,
-    required this.appointments,
-    required this.treatmentPlans,
-    required this.payments,
-    required this.formatMoney,
-  });
-
-  final List<Map<String, dynamic>> clinicalNotes;
-  final List<Map<String, dynamic>> appointments;
-  final List<Map<String, dynamic>> treatmentPlans;
-  final List<Map<String, dynamic>> payments;
-  final String Function(dynamic value) formatMoney;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _RecordCard(
-          title: 'Clinical Notes & Documents',
-          subtitle:
-              'Notes added by you or the doctor will appear here after refresh/login.',
-          icon: Icons.folder_shared_rounded,
-          emptyText: 'No clinical notes yet.',
-          children: clinicalNotes
-              .map((note) => _ClinicalNoteTile(note: note))
-              .toList(),
-        ),
-        const SizedBox(height: 18),
-        _RecordCard(
-          title: 'Booked Appointments',
-          subtitle:
-              'Appointments confirmed by OPW will appear here.',
-          icon: Icons.event_note_rounded,
-          emptyText: 'No booked appointments yet.',
-          children: appointments
-              .map(
-                (appointment) {
-                  final status = appointment['status']?.toString() ?? 'approved';
-                  final remark = appointment['remark']?.toString() ?? '';
-
-                  return _SimpleRecordTile(
-                    title: appointment['service']?.toString() ?? 'Appointment',
-                    subtitle: [
-                      appointment['date']?.toString() ?? 'Date not added',
-                      'Status: ${status == 'completed' ? 'Done' : status}',
-                      if (remark.isNotEmpty) 'OPW remark: $remark',
-                    ].join('\n'),
-                    icon: Icons.calendar_today_rounded,
-                  );
-                },
-              )
-              .toList(),
-        ),
-        const SizedBox(height: 18),
-        _RecordCard(
-          title: 'Session / Treatment Details',
-          subtitle:
-              'Treatment/session plan details from OPW are visible here.',
-          icon: Icons.assignment_turned_in_rounded,
-          emptyText: 'No session details added yet.',
-          children: treatmentPlans
-              .map(
-                (plan) => _TreatmentPlanTile(
-                  plan: plan,
-                  formatMoney: formatMoney,
-                ),
-              )
-              .toList(),
-        ),
-        const SizedBox(height: 18),
-        _RecordCard(
-          title: 'Payment Details',
-          subtitle:
-              'Payment entries from your OPW care plan are visible here.',
-          icon: Icons.payments_rounded,
-          emptyText: 'No payment details added yet.',
-          children: [
-            ...payments.map(
-              (payment) => _SimpleRecordTile(
-                title: formatMoney(payment['amount']),
-                subtitle:
-                    '${payment['method']?.toString() ?? 'Payment'}\nDate: ${_formatLegacyPaymentDate(payment)}',
-                icon: Icons.receipt_long_rounded,
-              ),
-            ),
-            ...treatmentPlans.expand(
-              (plan) => ((plan['payments'] is List) ? plan['payments'] as List : const [])
-                  .whereType<Map<String, dynamic>>()
-                  .map(
-                    (payment) => _SimpleRecordTile(
-                      title: formatMoney(payment['amount']),
-                      subtitle:
-                          '${payment['method']?.toString() ?? 'Payment'} | ${plan['treatmentTypes'] is List ? (plan['treatmentTypes'] as List).join(', ') : 'Treatment'}\nDate: ${_formatLegacyPaymentDate(payment)}',
-                      icon: Icons.receipt_long_rounded,
-                    ),
-                  ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 }
@@ -2120,7 +2607,7 @@ class _ClinicalNoteTile extends StatelessWidget {
           Text(
             note['title']?.toString().isNotEmpty == true
                 ? note['title'].toString()
-                : 'Clinical Note',
+                : 'Doctors Note',
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   color: const Color(0xFF0F172A),
                   fontWeight: FontWeight.w800,
@@ -2172,23 +2659,6 @@ class _ClinicalNoteTile extends StatelessWidget {
       ),
     );
   }
-}
-
-String _formatLegacyPaymentDate(Map record) {
-  final rawDate = record['createdAt']?.toString() ?? '';
-  if (rawDate.isEmpty) {
-    return 'Date not added';
-  }
-
-  final parsed = DateTime.tryParse(rawDate);
-  if (parsed == null) {
-    return rawDate;
-  }
-
-  final localDate = parsed.toLocal();
-  final month = localDate.month.toString().padLeft(2, '0');
-  final day = localDate.day.toString().padLeft(2, '0');
-  return '$day/$month/${localDate.year}';
 }
 
 class _TreatmentPlanTile extends StatelessWidget {
@@ -2639,33 +3109,6 @@ class _DashboardDrawerTile extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _ProfileChip extends StatelessWidget {
-  const _ProfileChip({
-    required this.label,
-  });
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
       ),
     );
   }

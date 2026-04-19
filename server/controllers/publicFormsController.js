@@ -211,7 +211,11 @@ const getAppointmentUploadFiles = (req) => {
   }
 
   if (req.files && typeof req.files === "object") {
-    return [...(req.files.files || []), ...(req.files.file || [])];
+    return [
+      ...(req.files.files || []),
+      ...(req.files.file || []),
+      ...(req.files.documents || []),
+    ];
   }
 
   return req.file ? [req.file] : [];

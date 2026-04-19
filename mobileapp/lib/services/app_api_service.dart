@@ -92,10 +92,11 @@ class AppApiService {
     required String date,
     String time = '',
     required String message,
+    List<AppUploadFile> documents = const [],
   }) {
-    return _postJson(
+    return _postMultipart(
       '/appointments',
-      {
+      fields: {
         'name': name,
         'email': email,
         'phone': phone,
@@ -105,6 +106,8 @@ class AppApiService {
         'time': time,
         'message': message,
       },
+      files: documents,
+      fileFieldName: 'files',
     );
   }
 
@@ -230,6 +233,17 @@ class AppApiService {
     return const [];
   }
 
+  Future<List<Map<String, dynamic>>> getShopProducts() async {
+    final response = await _getJson('/shop/products');
+    final data = response['data'];
+
+    if (data is List) {
+      return data.whereType<Map<String, dynamic>>().toList();
+    }
+
+    return const [];
+  }
+
   Future<List<Map<String, dynamic>>> getPatientAppointmentRequests({
     required String patientId,
   }) async {
@@ -241,6 +255,30 @@ class AppApiService {
     }
 
     return const [];
+  }
+
+  Future<List<Map<String, dynamic>>> getMyShopOrders() async {
+    final response = await _getJson('/shop/orders/my');
+    final data = response['data'];
+
+    if (data is List) {
+      return data.whereType<Map<String, dynamic>>().toList();
+    }
+
+    return const [];
+  }
+
+  Future<Map<String, dynamic>> placeShopOrder({
+    required List<Map<String, dynamic>> items,
+    String note = '',
+  }) {
+    return _postJson(
+      '/shop/orders',
+      {
+        'items': items,
+        'note': note,
+      },
+    );
   }
 
   Future<String> resolveResourceUrl(String pathOrUrl) async {
@@ -467,7 +505,18 @@ class AppApiService {
   }
 
   String _resolveBaseUrl() {
-    return ApiConfig.defaultBaseUrl;
+    final configuredBaseUrl = ApiConfig.defaultBaseUrl.trim();
+
+    if (configuredBaseUrl != 'https://ommphysioworld.com/api') {
+      return configuredBaseUrl;
+    }
+
+    final host = Uri.base.host.toLowerCase();
+    if (host == 'localhost' || host == '127.0.0.1') {
+      return 'http://localhost:5000/api';
+    }
+
+    return configuredBaseUrl;
   }
 
   Future<void> _applyAuthHeader(HttpClientRequest request) async {

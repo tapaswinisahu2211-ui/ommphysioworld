@@ -1,4 +1,4 @@
-﻿import {
+import {
   BarChart3,
   BriefcaseMedical,
   ClipboardList,
@@ -180,4 +180,3 @@ export default function Sidebar({ collapsed, onNavigate }) {
     </aside>
   );
 }
-

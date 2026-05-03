@@ -1,4 +1,4 @@
-﻿import { ArrowLeft } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Seo from "../components/Seo";
@@ -148,4 +148,3 @@ export default function Login() {
     </div>
   );
 }
-

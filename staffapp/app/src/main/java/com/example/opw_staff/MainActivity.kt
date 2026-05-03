@@ -133,7 +133,8 @@ private fun emptyStaffForm() = StaffFormState()
 private fun StaffAdminApp() {
     val context = androidx.compose.ui.platform.LocalContext.current
     val sessionStore = remember { StaffSessionStore(context.applicationContext) }
-    val api = remember { StaffApiService() }
+    var apiBaseUrl by remember { mutableStateOf(sessionStore.getApiBaseUrl()) }
+    val api = remember(apiBaseUrl) { StaffApiService(StaffApiService.normalizeBaseUrl(apiBaseUrl)) }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -146,6 +147,9 @@ private fun StaffAdminApp() {
     var createLoading by remember { mutableStateOf(false) }
     var creationMessage by remember { mutableStateOf("") }
     var loginLoading by remember { mutableStateOf(false) }
+    var apiTestLoading by remember { mutableStateOf(false) }
+    var apiTestMessage by remember { mutableStateOf("") }
+    var apiTestIsSuccess by remember { mutableStateOf(false) }
 
     fun showMessage(message: String) {
         scope.launch {
@@ -233,21 +237,71 @@ private fun StaffAdminApp() {
                 AppRoute.Loading -> LoadingScreen()
                 AppRoute.Login -> LoginScreen(
                     loading = loginLoading,
+                    testLoading = apiTestLoading,
+                    apiTestMessage = apiTestMessage,
+                    apiTestIsSuccess = apiTestIsSuccess,
+                    apiBaseUrl = apiBaseUrl,
+                    onApiBaseUrlChange = { apiBaseUrl = it },
+                    onTestApi = {
+                        apiTestLoading = true
+                        apiTestMessage = ""
+                        apiTestIsSuccess = false
+                        scope.launch {
+                            try {
+                                val normalizedBaseUrl = StaffApiService.normalizeBaseUrl(apiBaseUrl)
+                                apiBaseUrl = normalizedBaseUrl
+                                sessionStore.saveApiBaseUrl(normalizedBaseUrl)
+                                val message = StaffApiService(normalizedBaseUrl).checkHealth()
+                                apiTestMessage = message
+                                apiTestIsSuccess = true
+                            } catch (error: Exception) {
+                                apiTestMessage = networkErrorMessage(
+                                    StaffApiService.normalizeBaseUrl(apiBaseUrl),
+                                    error,
+                                )
+                            } finally {
+                                apiTestLoading = false
+                            }
+                        }
+                    },
                     onLogin = { email, password ->
                         loginLoading = true
                         scope.launch {
                             try {
-                                val nextSession = api.loginAdmin(email, password)
+                                val normalizedBaseUrl = StaffApiService.normalizeBaseUrl(apiBaseUrl)
+                                apiBaseUrl = normalizedBaseUrl
+                                sessionStore.saveApiBaseUrl(normalizedBaseUrl)
+                                val loginApi = StaffApiService(normalizedBaseUrl)
+                                val nextSession = loginApi.loginAdmin(email, password)
                                 sessionStore.saveSession(nextSession)
                                 session = nextSession
                                 route = AppRoute.Dashboard
                                 selectedTab = AdminTab.Overview
                                 showMessage("Welcome back, ${nextSession.user.name}.")
-                                refreshDashboard(nextSession, showLoader = true)
+                                val snapshot = AdminDashboardSnapshot(
+                                    admin = loginApi.getAdminProfile(nextSession.token),
+                                    users = loginApi.getUsers(nextSession.token),
+                                    applications = loginApi.getStaffApplications(nextSession.token),
+                                )
+                                val updatedSession = nextSession.copy(user = snapshot.admin)
+                                session = updatedSession
+                                sessionStore.saveSession(updatedSession)
+                                dashboardState = DashboardUiState(
+                                    loading = false,
+                                    admin = snapshot.admin,
+                                    users = snapshot.users,
+                                    applications = snapshot.applications,
+                                    error = "",
+                                )
                             } catch (error: ApiException) {
                                 showMessage(error.message)
-                            } catch (_: Exception) {
-                                showMessage("Unable to reach the OPW server right now.")
+                            } catch (error: Exception) {
+                                showMessage(
+                                    networkErrorMessage(
+                                        StaffApiService.normalizeBaseUrl(apiBaseUrl),
+                                        error,
+                                    ),
+                                )
                             } finally {
                                 loginLoading = false
                             }
@@ -366,6 +420,12 @@ private fun LoadingScreen() {
 @Composable
 private fun LoginScreen(
     loading: Boolean,
+    testLoading: Boolean,
+    apiTestMessage: String,
+    apiTestIsSuccess: Boolean,
+    apiBaseUrl: String,
+    onApiBaseUrlChange: (String) -> Unit,
+    onTestApi: () -> Unit,
     onLogin: (String, String) -> Unit,
 ) {
     var email by rememberSaveable { mutableStateOf("contact@ommphysioworld.com") }
@@ -406,6 +466,25 @@ private fun LoginScreen(
                 )
 
                 OutlinedTextField(
+                    value = apiBaseUrl,
+                    onValueChange = onApiBaseUrlChange,
+                    label = { Text("API URL") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = ImeAction.Next,
+                    ),
+                )
+
+                if (apiTestMessage.isNotBlank()) {
+                    StatusBanner(
+                        message = apiTestMessage,
+                        tone = if (apiTestIsSuccess) BannerTone.Success else BannerTone.Error,
+                    )
+                }
+
+                OutlinedTextField(
                     value = email,
                     onValueChange = { email = it },
                     label = { Text("Email") },
@@ -430,6 +509,14 @@ private fun LoginScreen(
                     ),
                 )
 
+                OutlinedButton(
+                    onClick = onTestApi,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !loading && !testLoading,
+                ) {
+                    Text(if (testLoading) "Testing API..." else "Test API")
+                }
+
                 Button(
                     onClick = { onLogin(email, password) },
                     modifier = Modifier.fillMaxWidth(),
@@ -439,7 +526,7 @@ private fun LoginScreen(
                 }
 
                 Text(
-                    text = "Default emulator API target: http://10.0.2.2:5000/api",
+                    text = "Use your hosted server URL. If you enter the root domain, /api is added automatically.",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color(0xFF64748B),
                 )
@@ -1342,4 +1429,10 @@ private fun formatTimestamp(value: String): String {
         instant.atZone(ZoneId.systemDefault())
             .format(DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a"))
     }.getOrDefault(value.take(19))
+}
+
+private fun networkErrorMessage(baseUrl: String, error: Exception): String {
+    val detail = error.localizedMessage?.takeIf { it.isNotBlank() }
+        ?: error::class.java.simpleName
+    return "Unable to reach $baseUrl. $detail"
 }

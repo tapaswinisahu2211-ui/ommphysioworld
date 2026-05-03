@@ -14,7 +14,7 @@ class ApiException(
 ) : IOException(message)
 
 class StaffApiService(
-    private val baseUrl: String = "http://10.0.2.2:5000/api",
+    private val baseUrl: String = DEFAULT_BASE_URL,
 ) {
     suspend fun loginAdmin(email: String, password: String): AdminSession =
         withContext(Dispatchers.IO) {
@@ -26,6 +26,14 @@ class StaffApiService(
                 token = response.optString("token").trim(),
                 user = response.getJSONObject("user").toStaffUser(),
             )
+        }
+
+    suspend fun checkHealth(): String =
+        withContext(Dispatchers.IO) {
+            val response = JSONObject(request("GET", "/health"))
+            response.optString("message").trim()
+                .ifBlank { response.optString("status").trim() }
+                .ifBlank { "Server is reachable." }
         }
 
     suspend fun getAdminProfile(token: String): StaffUser =
@@ -120,6 +128,33 @@ class StaffApiService(
             return responseBody
         } finally {
             connection.disconnect()
+        }
+    }
+
+    companion object {
+        const val DEFAULT_BASE_URL = "http://10.0.2.2:5000/api"
+
+        fun normalizeBaseUrl(value: String): String {
+            val raw = value.trim()
+            if (raw.isBlank()) {
+                return DEFAULT_BASE_URL
+            }
+
+            val withScheme = if (
+                raw.startsWith("http://", ignoreCase = true) ||
+                raw.startsWith("https://", ignoreCase = true)
+            ) {
+                raw
+            } else {
+                "https://$raw"
+            }
+            val cleaned = withScheme
+                .substringBefore("?")
+                .substringBefore("#")
+                .trimEnd('/')
+            val apiIndex = cleaned.indexOf("/api", ignoreCase = true)
+
+            return if (apiIndex >= 0) cleaned.substring(0, apiIndex + 4) else "$cleaned/api"
         }
     }
 }

@@ -58,6 +58,35 @@ class StaffApiService(
             }
         }
 
+    suspend fun getPatients(token: String): List<JSONObject> =
+        getJsonArray(token, "/patients")
+
+    suspend fun getAppointments(token: String): List<JSONObject> =
+        getJsonArray(token, "/appointments")
+
+    suspend fun getMailbox(token: String): List<JSONObject> =
+        getJsonArray(token, "/mailbox")
+
+    suspend fun getServices(token: String): List<JSONObject> =
+        getJsonArray(token, "/services")
+
+    suspend fun getTherapyResources(token: String): List<JSONObject> =
+        getJsonArray(token, "/therapy-resources")
+
+    suspend fun getShopProducts(token: String): List<JSONObject> =
+        getJsonArray(token, "/admin/shop/products")
+
+    suspend fun getShopOrders(token: String): List<JSONObject> =
+        getJsonArray(token, "/admin/shop/orders")
+
+    suspend fun getChatConversations(token: String): List<JSONObject> =
+        getJsonArray(token, "/chat/conversations")
+
+    suspend fun getTreatmentTracker(token: String): JSONObject =
+        withContext(Dispatchers.IO) {
+            JSONObject(request("GET", "/treatment-tracker", token = token))
+        }
+
     suspend fun createStaff(token: String, payload: CreateStaffRequest): StaffUser =
         withContext(Dispatchers.IO) {
             JSONObject(
@@ -76,6 +105,12 @@ class StaffApiService(
             request("POST", "/session/logout", token = token, body = body)
         }
     }
+
+    private suspend fun getJsonArray(token: String, path: String): List<JSONObject> =
+        withContext(Dispatchers.IO) {
+            val response = JSONArray(request("GET", path, token = token))
+            List(response.length()) { index -> response.getJSONObject(index) }
+        }
 
     private fun request(
         method: String,

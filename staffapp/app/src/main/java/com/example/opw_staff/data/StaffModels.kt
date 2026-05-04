@@ -60,6 +60,16 @@ data class AdminDashboardSnapshot(
     val admin: StaffUser,
     val users: List<StaffUser>,
     val applications: List<StaffApplication>,
+    val patients: List<JSONObject> = emptyList(),
+    val appointments: List<JSONObject> = emptyList(),
+    val mailboxItems: List<JSONObject> = emptyList(),
+    val services: List<JSONObject> = emptyList(),
+    val therapyResources: List<JSONObject> = emptyList(),
+    val shopProducts: List<JSONObject> = emptyList(),
+    val shopOrders: List<JSONObject> = emptyList(),
+    val chatConversations: List<JSONObject> = emptyList(),
+    val treatmentTracker: JSONObject? = null,
+    val moduleErrors: Map<String, String> = emptyMap(),
 )
 
 data class ModuleTemplate(

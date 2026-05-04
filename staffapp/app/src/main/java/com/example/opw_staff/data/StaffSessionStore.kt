@@ -30,17 +30,6 @@ class StaffSessionStore(context: Context) {
             .apply()
     }
 
-    fun getApiBaseUrl(): String =
-        StaffApiService.normalizeBaseUrl(
-            preferences.getString(KEY_API_BASE_URL, StaffApiService.DEFAULT_BASE_URL).orEmpty(),
-        )
-
-    fun saveApiBaseUrl(baseUrl: String) {
-        preferences.edit()
-            .putString(KEY_API_BASE_URL, StaffApiService.normalizeBaseUrl(baseUrl))
-            .apply()
-    }
-
     fun clearSession() {
         preferences.edit()
             .remove(KEY_TOKEN)
@@ -51,6 +40,5 @@ class StaffSessionStore(context: Context) {
     private companion object {
         const val KEY_TOKEN = "token"
         const val KEY_USER = "user"
-        const val KEY_API_BASE_URL = "api_base_url"
     }
 }

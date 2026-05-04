@@ -133,8 +133,7 @@ private fun emptyStaffForm() = StaffFormState()
 private fun StaffAdminApp() {
     val context = androidx.compose.ui.platform.LocalContext.current
     val sessionStore = remember { StaffSessionStore(context.applicationContext) }
-    var apiBaseUrl by remember { mutableStateOf(sessionStore.getApiBaseUrl()) }
-    val api = remember(apiBaseUrl) { StaffApiService(StaffApiService.normalizeBaseUrl(apiBaseUrl)) }
+    val api = remember { StaffApiService() }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -240,23 +239,18 @@ private fun StaffAdminApp() {
                     testLoading = apiTestLoading,
                     apiTestMessage = apiTestMessage,
                     apiTestIsSuccess = apiTestIsSuccess,
-                    apiBaseUrl = apiBaseUrl,
-                    onApiBaseUrlChange = { apiBaseUrl = it },
                     onTestApi = {
                         apiTestLoading = true
                         apiTestMessage = ""
                         apiTestIsSuccess = false
                         scope.launch {
                             try {
-                                val normalizedBaseUrl = StaffApiService.normalizeBaseUrl(apiBaseUrl)
-                                apiBaseUrl = normalizedBaseUrl
-                                sessionStore.saveApiBaseUrl(normalizedBaseUrl)
-                                val message = StaffApiService(normalizedBaseUrl).checkHealth()
+                                val message = api.checkHealth()
                                 apiTestMessage = message
                                 apiTestIsSuccess = true
                             } catch (error: Exception) {
                                 apiTestMessage = networkErrorMessage(
-                                    StaffApiService.normalizeBaseUrl(apiBaseUrl),
+                                    StaffApiService.DEFAULT_BASE_URL,
                                     error,
                                 )
                             } finally {
@@ -268,20 +262,16 @@ private fun StaffAdminApp() {
                         loginLoading = true
                         scope.launch {
                             try {
-                                val normalizedBaseUrl = StaffApiService.normalizeBaseUrl(apiBaseUrl)
-                                apiBaseUrl = normalizedBaseUrl
-                                sessionStore.saveApiBaseUrl(normalizedBaseUrl)
-                                val loginApi = StaffApiService(normalizedBaseUrl)
-                                val nextSession = loginApi.loginAdmin(email, password)
+                                val nextSession = api.loginAdmin(email, password)
                                 sessionStore.saveSession(nextSession)
                                 session = nextSession
                                 route = AppRoute.Dashboard
                                 selectedTab = AdminTab.Overview
                                 showMessage("Welcome back, ${nextSession.user.name}.")
                                 val snapshot = AdminDashboardSnapshot(
-                                    admin = loginApi.getAdminProfile(nextSession.token),
-                                    users = loginApi.getUsers(nextSession.token),
-                                    applications = loginApi.getStaffApplications(nextSession.token),
+                                    admin = api.getAdminProfile(nextSession.token),
+                                    users = api.getUsers(nextSession.token),
+                                    applications = api.getStaffApplications(nextSession.token),
                                 )
                                 val updatedSession = nextSession.copy(user = snapshot.admin)
                                 session = updatedSession
@@ -298,7 +288,7 @@ private fun StaffAdminApp() {
                             } catch (error: Exception) {
                                 showMessage(
                                     networkErrorMessage(
-                                        StaffApiService.normalizeBaseUrl(apiBaseUrl),
+                                        StaffApiService.DEFAULT_BASE_URL,
                                         error,
                                     ),
                                 )
@@ -423,8 +413,6 @@ private fun LoginScreen(
     testLoading: Boolean,
     apiTestMessage: String,
     apiTestIsSuccess: Boolean,
-    apiBaseUrl: String,
-    onApiBaseUrlChange: (String) -> Unit,
     onTestApi: () -> Unit,
     onLogin: (String, String) -> Unit,
 ) {
@@ -463,18 +451,6 @@ private fun LoginScreen(
                     text = "Sign in with an admin or staff account to check team activity, review staff applications, and create new staff records.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color(0xFF475569),
-                )
-
-                OutlinedTextField(
-                    value = apiBaseUrl,
-                    onValueChange = onApiBaseUrlChange,
-                    label = { Text("API URL") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Uri,
-                        imeAction = ImeAction.Next,
-                    ),
                 )
 
                 if (apiTestMessage.isNotBlank()) {
@@ -524,12 +500,6 @@ private fun LoginScreen(
                 ) {
                     Text(if (loading) "Signing in..." else "Open Admin Panel")
                 }
-
-                Text(
-                    text = "Use your hosted server URL. If you enter the root domain, /api is added automatically.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF64748B),
-                )
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.example.opw_staff.data
 
+import com.example.opw_staff.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -132,12 +133,12 @@ class StaffApiService(
     }
 
     companion object {
-        const val DEFAULT_BASE_URL = "http://10.0.2.2:5000/api"
+        val DEFAULT_BASE_URL: String = BuildConfig.OPW_STAFF_API_BASE_URL
 
         fun normalizeBaseUrl(value: String): String {
             val raw = value.trim()
             if (raw.isBlank()) {
-                return DEFAULT_BASE_URL
+                return normalizeBaseUrl(DEFAULT_BASE_URL)
             }
 
             val withScheme = if (

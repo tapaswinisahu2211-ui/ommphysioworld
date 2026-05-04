@@ -20,7 +20,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         val apiBaseUrl = providers.gradleProperty("OPW_STAFF_API_BASE_URL")
-            .orElse("https://ommphysioworld.onrender.com/api")
+            .orElse("https://ommphysioworld.com/api")
             .get()
             .trim()
         buildConfigField("String", "OPW_STAFF_API_BASE_URL", "\"${apiBaseUrl.escapeForBuildConfig()}\"")

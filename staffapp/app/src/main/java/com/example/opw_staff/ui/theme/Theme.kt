@@ -21,10 +21,10 @@ private val DarkColorScheme = darkColorScheme(
 
 private val LightColorScheme = lightColorScheme(
     primary = OpwBlue,
-    secondary = OpwSky,
+    secondary = OpwAqua,
     tertiary = OpwWarning,
-    background = OpwMist,
-    surface = Color.White,
+    background = OpwFrost,
+    surface = OpwCard,
     onPrimary = Color.White,
     onSecondary = Color.White,
     onTertiary = Color.White,

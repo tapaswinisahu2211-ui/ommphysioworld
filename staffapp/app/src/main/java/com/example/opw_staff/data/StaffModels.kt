@@ -61,6 +61,7 @@ data class AdminDashboardSnapshot(
     val users: List<StaffUser>,
     val applications: List<StaffApplication>,
     val patients: List<JSONObject> = emptyList(),
+    val archivedPatients: List<JSONObject> = emptyList(),
     val appointments: List<JSONObject> = emptyList(),
     val mailboxItems: List<JSONObject> = emptyList(),
     val services: List<JSONObject> = emptyList(),

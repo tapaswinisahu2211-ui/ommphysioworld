@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -136,6 +137,7 @@ private data class DashboardUiState(
     val users: List<StaffUser> = emptyList(),
     val applications: List<StaffApplication> = emptyList(),
     val patients: List<JSONObject> = emptyList(),
+    val archivedPatients: List<JSONObject> = emptyList(),
     val appointments: List<JSONObject> = emptyList(),
     val mailboxItems: List<JSONObject> = emptyList(),
     val services: List<JSONObject> = emptyList(),
@@ -343,6 +345,13 @@ private fun StaffAdminApp() {
                 patients = loadOptional("patients", emptyList()) {
                     api.getPatients(activeSession.token)
                 },
+                archivedPatients = if (isAdmin) {
+                    loadOptional("archived patients", emptyList()) {
+                        api.getArchivedPatients(activeSession.token)
+                    }
+                } else {
+                    emptyList()
+                },
                 appointments = loadOptional("appointments", emptyList()) {
                     api.getAppointments(activeSession.token)
                 },
@@ -399,6 +408,7 @@ private fun StaffAdminApp() {
                 users = snapshot.users,
                 applications = snapshot.applications,
                 patients = snapshot.patients,
+                archivedPatients = snapshot.archivedPatients,
                 appointments = snapshot.appointments,
                 mailboxItems = snapshot.mailboxItems,
                 services = snapshot.services,
@@ -689,11 +699,66 @@ private fun StaffAdminApp() {
         if (id.isBlank()) return
         scope.launch {
             try {
-                api.archivePatient(activeSession.token, id)
+                val response = api.archivePatient(activeSession.token, id)
+                val archivedPatient = response.optJSONObject("patient") ?: item
                 dashboardState = dashboardState.copy(
                     patients = dashboardState.patients.filterNot { it.text("id") == id },
+                    archivedPatients = listOf(archivedPatient) +
+                        dashboardState.archivedPatients.filterNot { it.text("id") == id },
                 )
                 showMessage("Patient archived.")
+            } catch (error: ApiException) {
+                if (error.statusCode == 401 || error.statusCode == 403) {
+                    clearToLogin("Your session ended. Please log in again.")
+                } else {
+                    showMessage(error.message)
+                }
+            } catch (error: Exception) {
+                showMessage(networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error))
+            }
+        }
+    }
+
+    fun restorePatient(item: JSONObject) {
+        val activeSession = session ?: return
+        val id = item.text("id")
+        if (id.isBlank()) return
+        scope.launch {
+            try {
+                val response = api.restorePatient(activeSession.token, id)
+                val restoredPatient = response.optJSONObject("patient")
+                dashboardState = dashboardState.copy(
+                    archivedPatients = dashboardState.archivedPatients.filterNot { it.text("id") == id },
+                    patients = if (restoredPatient != null) {
+                        listOf(restoredPatient) + dashboardState.patients.filterNot { it.text("id") == id }
+                    } else {
+                        dashboardState.patients
+                    },
+                )
+                showMessage("Patient restored.")
+            } catch (error: ApiException) {
+                if (error.statusCode == 401 || error.statusCode == 403) {
+                    clearToLogin("Your session ended. Please log in again.")
+                } else {
+                    showMessage(error.message)
+                }
+            } catch (error: Exception) {
+                showMessage(networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error))
+            }
+        }
+    }
+
+    fun permanentlyDeletePatient(item: JSONObject) {
+        val activeSession = session ?: return
+        val id = item.text("id")
+        if (id.isBlank()) return
+        scope.launch {
+            try {
+                api.permanentlyDeletePatient(activeSession.token, id)
+                dashboardState = dashboardState.copy(
+                    archivedPatients = dashboardState.archivedPatients.filterNot { it.text("id") == id },
+                )
+                showMessage("Archived patient deleted permanently.")
             } catch (error: ApiException) {
                 if (error.statusCode == 401 || error.statusCode == 403) {
                     clearToLogin("Your session ended. Please log in again.")
@@ -1060,6 +1125,8 @@ private fun StaffAdminApp() {
                     onReportApply = ::applyReportFilter,
                     onPatientSave = ::savePatient,
                     onPatientArchive = ::archivePatient,
+                    onPatientRestore = ::restorePatient,
+                    onPatientPermanentDelete = ::permanentlyDeletePatient,
                     onAppointmentApprove = ::approveAppointment,
                     onAppointmentStatusChange = ::updateAppointmentStatus,
                     onMailboxReadChange = ::updateMailboxRead,
@@ -1308,6 +1375,8 @@ private fun DashboardScreen(
     onReportApply: () -> Unit,
     onPatientSave: (String?, JSONObject) -> Unit,
     onPatientArchive: (JSONObject) -> Unit,
+    onPatientRestore: (JSONObject) -> Unit,
+    onPatientPermanentDelete: (JSONObject) -> Unit,
     onAppointmentApprove: (JSONObject) -> Unit,
     onAppointmentStatusChange: (JSONObject, String) -> Unit,
     onMailboxReadChange: (JSONObject) -> Unit,
@@ -1506,8 +1575,11 @@ private fun DashboardScreen(
 
                     AdminTab.Patients -> PatientsTab(
                         patients = state.patients,
+                        archivedPatients = state.archivedPatients,
                         onSave = onPatientSave,
                         onArchive = onPatientArchive,
+                        onRestore = onPatientRestore,
+                        onPermanentDelete = onPatientPermanentDelete,
                     )
                     AdminTab.Appointments -> AppointmentsTab(
                         appointments = state.appointments,
@@ -1619,8 +1691,11 @@ private fun HeroHeader(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top,
             ) {
+                HeaderMenuButton(onClick = onMenu)
                 Column(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     StatusChip(
@@ -1680,7 +1755,6 @@ private fun HeroHeader(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                HeaderActionButton(label = "Menu", onClick = onMenu)
                 HeaderActionButton(label = "Refresh", onClick = onRefresh)
                 TextButton(onClick = onLogout) {
                     Text("Logout", color = Color.White.copy(alpha = 0.88f), fontWeight = FontWeight.Bold)
@@ -1722,6 +1796,34 @@ private fun HeaderMetric(
 }
 
 @Composable
+private fun HeaderMenuButton(
+    onClick: () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = Color.White.copy(alpha = 0.14f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+        onClick = onClick,
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .size(width = 24.dp, height = 18.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            repeat(3) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(2.dp)
+                        .background(Color.White, RoundedCornerShape(999.dp)),
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun HeaderActionButton(
     label: String,
     onClick: () -> Unit,
@@ -1748,6 +1850,7 @@ private fun ModuleHeader(
     subtitle: String,
     countLabel: String,
     accent: Color = OpwBlue,
+    action: @Composable (() -> Unit)? = null,
 ) {
     Surface(
         shape = RoundedCornerShape(28.dp),
@@ -1787,11 +1890,98 @@ private fun ModuleHeader(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            StatusChip(
-                label = countLabel,
-                background = accent.copy(alpha = 0.1f),
-                foreground = accent,
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                StatusChip(
+                    label = countLabel,
+                    background = accent.copy(alpha = 0.1f),
+                    foreground = accent,
+                )
+                action?.invoke()
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddCircleButton(
+    onClick: () -> Unit,
+) {
+    Surface(
+        shape = CircleShape,
+        color = OpwBlue,
+        shadowElevation = 3.dp,
+        onClick = onClick,
+    ) {
+        Box(
+            modifier = Modifier.size(44.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "+",
+                color = Color.White,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.ExtraBold,
             )
+        }
+    }
+}
+
+@Composable
+private fun ArchiveCircleButton(
+    count: Int,
+    onClick: () -> Unit,
+) {
+    Surface(
+        shape = CircleShape,
+        color = Color(0xFF334155),
+        shadowElevation = 3.dp,
+        onClick = onClick,
+    ) {
+        Box(
+            modifier = Modifier.size(44.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 21.dp, height = 4.dp)
+                        .background(Color.White, RoundedCornerShape(999.dp)),
+                )
+                Box(
+                    modifier = Modifier
+                        .size(width = 24.dp, height = 15.dp)
+                        .border(2.dp, Color.White, RoundedCornerShape(4.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(width = 8.dp, height = 2.dp)
+                            .background(Color.White, RoundedCornerShape(999.dp)),
+                    )
+                }
+            }
+            if (count > 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(16.dp)
+                        .background(OpwWarning, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = count.coerceAtMost(9).toString(),
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                }
+            }
         }
     }
 }
@@ -1855,13 +2045,10 @@ private fun CardActionRow(
         color = Color(0xFFF8FAFC),
         border = androidx.compose.foundation.BorderStroke(1.dp, OpwBorder),
     ) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
                 .padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
         ) {
             content()
         }
@@ -2076,8 +2263,11 @@ private fun TeamTab(users: List<StaffUser>) {
 @Composable
 private fun PatientsTab(
     patients: List<JSONObject>,
+    archivedPatients: List<JSONObject>,
     onSave: (String?, JSONObject) -> Unit,
     onArchive: (JSONObject) -> Unit,
+    onRestore: (JSONObject) -> Unit,
+    onPermanentDelete: (JSONObject) -> Unit,
 ) {
     var editingId by rememberSaveable { mutableStateOf("") }
     var name by rememberSaveable { mutableStateOf("") }
@@ -2086,6 +2276,8 @@ private fun PatientsTab(
     var disease by rememberSaveable { mutableStateOf("") }
     var notes by rememberSaveable { mutableStateOf("") }
     var formError by rememberSaveable { mutableStateOf("") }
+    var showPatientDialog by rememberSaveable { mutableStateOf(false) }
+    var showArchiveDialog by rememberSaveable { mutableStateOf(false) }
 
     fun resetForm() {
         editingId = ""
@@ -2097,111 +2289,145 @@ private fun PatientsTab(
         formError = ""
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Card(
-            modifier = Modifier.border(1.dp, Color(0xFFE5EDF7), RoundedCornerShape(30.dp)),
-            shape = RoundedCornerShape(30.dp),
-            colors = CardDefaults.cardColors(containerColor = OpwCard),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        ) {
-            Column(
-                modifier = Modifier.padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    SectionTitle(if (editingId.isBlank()) "Add Patient" else "Edit Patient")
-                    if (editingId.isNotBlank()) {
-                        TextButton(onClick = ::resetForm) {
-                            Text("Cancel")
-                        }
-                    }
-                }
-                if (formError.isNotBlank()) {
-                    StatusBanner(message = formError, tone = BannerTone.Error)
-                }
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = {
-                        name = it
-                        formError = ""
-                    },
-                    label = { Text("Name") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
+    fun submitForm() {
+        when {
+            name.trim().length < 2 -> formError = "Patient name must be at least 2 characters."
+            !Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() -> formError = "Enter a valid email."
+            !mobile.trim().matches(Regex("\\d{10}")) -> formError = "Enter a valid 10-digit mobile."
+            else -> {
+                onSave(
+                    editingId.ifBlank { null },
+                    JSONObject()
+                        .put("name", name.trim())
+                        .put("email", email.trim())
+                        .put("mobile", mobile.trim())
+                        .put("disease", disease.trim())
+                        .put("notes", notes.trim()),
                 )
-                OutlinedTextField(
-                    value = email,
-                    onValueChange = {
-                        email = it
-                        formError = ""
-                    },
-                    label = { Text("Email") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                )
-                OutlinedTextField(
-                    value = mobile,
-                    onValueChange = {
-                        mobile = it.filter { char -> char.isDigit() }.take(10)
-                        formError = ""
-                    },
-                    label = { Text("Mobile") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                )
-                OutlinedTextField(
-                    value = disease,
-                    onValueChange = { disease = it },
-                    label = { Text("Disease") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                )
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    label = { Text("Notes") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 2,
-                )
-                Button(
-                    onClick = {
-                        when {
-                            name.trim().length < 2 -> formError = "Patient name must be at least 2 characters."
-                            !Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() -> formError = "Enter a valid email."
-                            !mobile.trim().matches(Regex("\\d{10}")) -> formError = "Enter a valid 10-digit mobile."
-                            else -> {
-                                onSave(
-                                    editingId.ifBlank { null },
-                                    JSONObject()
-                                        .put("name", name.trim())
-                                        .put("email", email.trim())
-                                        .put("mobile", mobile.trim())
-                                        .put("disease", disease.trim())
-                                        .put("notes", notes.trim()),
-                                )
-                                resetForm()
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(if (editingId.isBlank()) "Create Patient" else "Update Patient")
-                }
+                showPatientDialog = false
+                resetForm()
             }
         }
+    }
 
+    if (showPatientDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showPatientDialog = false
+                resetForm()
+            },
+            title = {
+                SectionTitle(if (editingId.isBlank()) "Add Patient" else "Edit Patient")
+            },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    if (formError.isNotBlank()) {
+                        StatusBanner(message = formError, tone = BannerTone.Error)
+                    }
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = {
+                            name = it
+                            formError = ""
+                        },
+                        label = { Text("Name") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = {
+                            email = it
+                            formError = ""
+                        },
+                        label = { Text("Email") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    )
+                    OutlinedTextField(
+                        value = mobile,
+                        onValueChange = {
+                            mobile = it.filter { char -> char.isDigit() }.take(10)
+                            formError = ""
+                        },
+                        label = { Text("Mobile") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    )
+                    OutlinedTextField(
+                        value = disease,
+                        onValueChange = { disease = it },
+                        label = { Text("Disease") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = notes,
+                        onValueChange = { notes = it },
+                        label = { Text("Notes") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2,
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = ::submitForm) {
+                    Text(if (editingId.isBlank()) "Create" else "Update")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showPatientDialog = false
+                        resetForm()
+                    },
+                ) {
+                    Text("Cancel")
+                }
+            },
+            containerColor = OpwCard,
+            shape = RoundedCornerShape(28.dp),
+        )
+    }
+
+    if (showArchiveDialog) {
+        ArchivedPatientsDialog(
+            archivedPatients = archivedPatients,
+            onDismiss = { showArchiveDialog = false },
+            onRestore = onRestore,
+            onPermanentDelete = onPermanentDelete,
+        )
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         JsonListTab(
             title = "Patients",
             emptyTitle = "No patients found",
             emptyMessage = "Patient records from the live admin API will appear here.",
             items = patients,
             searchableFields = listOf("name", "email", "mobile", "disease"),
+            headerAction = {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ArchiveCircleButton(
+                        count = archivedPatients.size,
+                        onClick = { showArchiveDialog = true },
+                    )
+                    AddCircleButton(
+                        onClick = {
+                            resetForm()
+                            showPatientDialog = true
+                        },
+                    )
+                }
+            },
         ) { patient ->
             RecordCard(
                 title = patient.text("name", fallback = "Patient"),
@@ -2228,6 +2454,7 @@ private fun PatientsTab(
                                 disease = patient.text("disease")
                                 notes = patient.text("notes")
                                 formError = ""
+                                showPatientDialog = true
                             },
                         ) {
                             Text("Edit")
@@ -2240,6 +2467,103 @@ private fun PatientsTab(
             )
         }
     }
+}
+
+@Composable
+private fun ArchivedPatientsDialog(
+    archivedPatients: List<JSONObject>,
+    onDismiss: () -> Unit,
+    onRestore: (JSONObject) -> Unit,
+    onPermanentDelete: (JSONObject) -> Unit,
+) {
+    var permanentDeleteId by rememberSaveable { mutableStateOf("") }
+    val deleteCandidate = archivedPatients.firstOrNull { it.text("id") == permanentDeleteId }
+
+    if (deleteCandidate != null) {
+        AlertDialog(
+            onDismissRequest = { permanentDeleteId = "" },
+            title = { SectionTitle("Permanent Delete") },
+            text = {
+                Text(
+                    text = "This will permanently remove ${deleteCandidate.text("name", fallback = "this patient")} and related records.",
+                    color = Color(0xFF475569),
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onPermanentDelete(deleteCandidate)
+                        permanentDeleteId = ""
+                    },
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { permanentDeleteId = "" }) {
+                    Text("Cancel")
+                }
+            },
+            containerColor = OpwCard,
+            shape = RoundedCornerShape(28.dp),
+        )
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { SectionTitle("Archived Patients") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (archivedPatients.isEmpty()) {
+                    EmptyStateCard(
+                        title = "No archived patients",
+                        message = "Archived patient records from the web admin panel will appear here.",
+                    )
+                } else {
+                    archivedPatients.forEach { patient ->
+                        RecordCard(
+                            title = patient.text("name", fallback = "Patient"),
+                            subtitle = patient.text("email", fallback = "No email"),
+                            status = "Archived",
+                            statusColor = Color(0xFF64748B),
+                            rows = listOf(
+                                "Mobile" to patient.text("mobile", fallback = "Not provided"),
+                                "Disease" to patient.text("disease", fallback = "Not set"),
+                                "Archived" to formatTimestamp(patient.text("archivedAt")),
+                                "Created" to formatTimestamp(patient.text("createdAt")),
+                            ),
+                            actions = {
+                                Row(
+                                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    OutlinedButton(onClick = { onRestore(patient) }) {
+                                        Text("Restore")
+                                    }
+                                    OutlinedButton(onClick = { permanentDeleteId = patient.text("id") }) {
+                                        Text("Delete Permanently")
+                                    }
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        },
+        containerColor = OpwCard,
+        shape = RoundedCornerShape(28.dp),
+    )
 }
 
 @Composable
@@ -3545,6 +3869,7 @@ private fun JsonListTab(
     emptyMessage: String,
     items: List<JSONObject>,
     searchableFields: List<String>,
+    headerAction: @Composable (() -> Unit)? = null,
     itemContent: @Composable (JSONObject) -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -3567,6 +3892,7 @@ private fun JsonListTab(
             subtitle = emptyMessage,
             countLabel = "${filteredItems.size}/${items.size}",
             accent = OpwBlue,
+            action = headerAction,
         )
         ModernFieldShell {
             OutlinedTextField(
@@ -4070,7 +4396,7 @@ private fun moduleCount(tab: AdminTab, state: DashboardUiState): Int =
 private fun moduleErrorsForTab(tab: AdminTab, state: DashboardUiState): List<String> {
     val keys = when (tab) {
         AdminTab.Overview -> state.moduleErrors.keys.toList()
-        AdminTab.Patients -> listOf("patients")
+        AdminTab.Patients -> listOf("patients", "archived patients")
         AdminTab.Appointments -> listOf("appointments")
         AdminTab.Treatment -> listOf("treatment tracker")
         AdminTab.Mailbox -> listOf("mailbox", "applications")

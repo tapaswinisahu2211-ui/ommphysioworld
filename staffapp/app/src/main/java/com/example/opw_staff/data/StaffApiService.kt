@@ -61,6 +61,9 @@ class StaffApiService(
     suspend fun getPatients(token: String): List<JSONObject> =
         getJsonArray(token, "/patients")
 
+    suspend fun getArchivedPatients(token: String): List<JSONObject> =
+        getJsonArray(token, "/patients/archive")
+
     suspend fun savePatient(token: String, id: String?, payload: JSONObject): JSONObject =
         withContext(Dispatchers.IO) {
             if (id.isNullOrBlank()) {
@@ -70,9 +73,19 @@ class StaffApiService(
             }
         }
 
-    suspend fun archivePatient(token: String, id: String) {
+    suspend fun archivePatient(token: String, id: String): JSONObject =
         withContext(Dispatchers.IO) {
-            request("DELETE", "/patients/$id", token = token)
+            JSONObject(request("DELETE", "/patients/$id", token = token))
+        }
+
+    suspend fun restorePatient(token: String, id: String): JSONObject =
+        withContext(Dispatchers.IO) {
+            JSONObject(request("PATCH", "/patients/$id/restore", token = token))
+        }
+
+    suspend fun permanentlyDeletePatient(token: String, id: String) {
+        withContext(Dispatchers.IO) {
+            request("DELETE", "/patients/$id/permanent", token = token)
         }
     }
 

@@ -104,6 +104,11 @@ const getStatusBadgeClass = (status) => {
 const formatServiceLocation = (value) =>
   String(value || "").toLowerCase() === "home" ? "At home" : "At clinic";
 
+const isOpenAppointmentStatus = (status) =>
+  !["cancelled", "completed", "done"].includes(
+    String(status || "pending").toLowerCase()
+  );
+
 const appointmentLocationNote =
   "Home service is available after OPW confirms suitability. First-time patients and every post-session review must visit the clinic.";
 
@@ -263,6 +268,14 @@ export default function PatientDashboardPage() {
       !bookedAppointmentRequestIds.has(request.id) &&
       !["cancelled", "completed"].includes(request.status || "")
   );
+  const activeAppointmentRequests = visibleAppointmentRequests.filter((request) =>
+    isOpenAppointmentStatus(request.status)
+  );
+  const activeAppointments = appointments.filter((appointment) =>
+    isOpenAppointmentStatus(appointment.status || "approved")
+  );
+  const hasOpenAppointmentFlow =
+    activeAppointmentRequests.length > 0 || activeAppointments.length > 0;
   const hasPendingAppointmentRequest = visibleAppointmentRequests.some(
     (request) => (request.status || "pending") === "pending"
   );
@@ -295,8 +308,8 @@ export default function PatientDashboardPage() {
         value: appointments.length + visibleAppointmentRequests.length,
         icon: CalendarDays,
         tabKey: "appointments",
-        detail: hasPendingAppointmentRequest
-          ? "One request is waiting for OPW review"
+        detail: hasOpenAppointmentFlow
+          ? "Current appointment/request is active"
           : "Track requests and booked visits",
         tone: "bg-violet-50 text-violet-700",
       },
@@ -327,7 +340,7 @@ export default function PatientDashboardPage() {
     ],
     [
       appointments.length,
-      hasPendingAppointmentRequest,
+      hasOpenAppointmentFlow,
       payments.length,
       shopOrders.length,
       therapyItemCount,
@@ -393,7 +406,7 @@ export default function PatientDashboardPage() {
     {
       key: "appointments",
       label: "Book Appointment",
-      helper: hasPendingAppointmentRequest ? "Request pending review" : "Start a new request",
+      helper: hasOpenAppointmentFlow ? "Current request is active" : "Start a new request",
       icon: CalendarClock,
     },
     {
@@ -450,8 +463,8 @@ export default function PatientDashboardPage() {
     event.preventDefault();
 
     const validationError = firstValidationError([
-      hasPendingAppointmentRequest
-        ? "Your previous appointment request is still pending."
+      hasOpenAppointmentFlow
+        ? "You already have an active appointment request. You can send another after it is done or cancelled."
         : "",
       !appointmentForm.service.trim() ? "Please add service." : "",
       !appointmentForm.date ? "Please add preferred date." : "",
@@ -1164,11 +1177,47 @@ export default function PatientDashboardPage() {
                         </p>
                       </div>
                     </div>
-                    {hasPendingAppointmentRequest ? (
-                      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                        Your previous appointment request is still pending. You can send a new request after OPW reviews it.
+                    {hasOpenAppointmentFlow ? (
+                      <div className="grid gap-3">
+                        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium leading-6 text-amber-800">
+                          You already have an active appointment request or booked appointment. A new request can be created after OPW marks this one done or cancelled.
+                        </div>
+                        {activeAppointmentRequests.map((request) => (
+                          <RecordCard
+                            key={`active-request-${request.id}`}
+                            title={request.service || "Appointment"}
+                            subtitle={`Requested: ${formatDate(request.requestedDate)}${request.requestedTime ? ` at ${request.requestedTime}` : ""} | ${formatServiceLocation(request.serviceLocation)}`}
+                          >
+                            <span className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(request.status)}`}>
+                              {formatStatusLabel(request.status || "pending")}
+                            </span>
+                            {request.decisionNote ? (
+                              <p className="mt-2 text-sm text-slate-500">
+                                OPW note: {request.decisionNote}
+                              </p>
+                            ) : null}
+                          </RecordCard>
+                        ))}
+                        {activeAppointments.map((appointment) => (
+                          <RecordCard
+                            key={`active-appointment-${appointment.id || appointment._id}`}
+                            title={appointment.service || "Appointment"}
+                            subtitle={`${formatDate(appointment.date)}${appointment.time ? ` at ${appointment.time}` : ""} | ${formatServiceLocation(appointment.serviceLocation)}`}
+                          >
+                            <span className={`mt-2 inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(appointment.status)}`}>
+                              {appointment.status === "completed"
+                                ? "Done"
+                                : formatStatusLabel(appointment.status || "approved")}
+                            </span>
+                            {appointment.remark ? (
+                              <p className="mt-2 text-sm text-slate-500">
+                                OPW note: {appointment.remark}
+                              </p>
+                            ) : null}
+                          </RecordCard>
+                        ))}
                       </div>
-                    ) : null}
+                    ) : (
                     <form onSubmit={handleAppointmentSubmit} className="grid gap-4">
                       <select
                         className="input rounded-2xl border-slate-200 bg-slate-50"
@@ -1283,6 +1332,7 @@ export default function PatientDashboardPage() {
                         {sendingAppointment ? "Sending..." : "Request Appointment"}
                       </button>
                     </form>
+                    )}
                   </Panel>
                   <div className="grid gap-5">
                     <Panel title="Appointment Request Updates" subtitle="Pending requests stay here; approved ones move to booked appointments.">

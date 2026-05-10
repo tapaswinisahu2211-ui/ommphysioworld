@@ -1929,6 +1929,9 @@ private fun AppointmentsTab(
     }
     val appointments = patient.listOfMaps("appointments")
     val requests = visibleAppointmentRequests(patient, snapshot.appointmentRequests)
+    val activeAppointments = appointments.filter { isOpenAppointmentStatus(it.stringOrNull("status")) }
+    val activeRequests = requests.filter { isOpenAppointmentStatus(it.stringOrNull("status")) }
+    val hasOpenAppointmentFlow = activeAppointments.isNotEmpty() || activeRequests.isNotEmpty()
     val hasPending = requests.any { it.string("status").lowercase().ifBlank { "pending" } == "pending" }
     val pendingCount = requests.count { it.string("status").lowercase().ifBlank { "pending" } == "pending" }
     val nextVisit = remember(appointments) {
@@ -2010,6 +2013,44 @@ private fun AppointmentsTab(
                 title = "Request Appointment",
                 subtitle = "",
             ) {
+                if (hasOpenAppointmentFlow) {
+                    Surface(
+                        color = Color(0xFFFFF7ED),
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = "You already have an active appointment request or booked appointment. A new request can be created after OPW marks this one done or cancelled.",
+                            modifier = Modifier.padding(16.dp),
+                            color = Color(0xFF9A3412),
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    activeRequests.forEach { request ->
+                        RecordTile(
+                            title = "${request.stringOrNull("service") ?: "Appointment"} - ${request.stringOrNull("status") ?: "pending"}",
+                            subtitle = buildString {
+                                append("Requested: ${request.stringOrNull("requestedDate") ?: "Date not added"}")
+                                request.stringOrNull("requestedTime")?.takeIf { it.isNotBlank() }?.let { append(" at $it") }
+                                append("\nLocation: ${formatServiceLocation(request.stringOrNull("serviceLocation"))}")
+                                request.stringOrNull("decisionNote")?.takeIf { it.isNotBlank() }?.let { append("\nOPW note: $it") }
+                            },
+                        )
+                    }
+                    activeAppointments.forEach { appointment ->
+                        RecordTile(
+                            title = appointment.stringOrNull("service") ?: "Appointment",
+                            subtitle = listOfNotNull(
+                                "Date: ${appointment.stringOrNull("date") ?: "Not added"}",
+                                appointment.stringOrNull("time")?.takeIf { it.isNotBlank() }?.let { "Time: $it" },
+                                "Location: ${formatServiceLocation(appointment.stringOrNull("serviceLocation"))}",
+                                appointment.stringOrNull("status")?.let { "Status: $it" },
+                                appointment.stringOrNull("remark")?.takeIf { it.isNotBlank() }?.let { "OPW note: $it" },
+                            ).joinToString("\n"),
+                        )
+                    }
+                } else {
                 ExposedDropdownMenuBox(
                     expanded = showServiceMenu,
                     onExpandedChange = {
@@ -2134,8 +2175,8 @@ private fun AppointmentsTab(
                 Spacer(modifier = Modifier.height(14.dp))
                 Button(
                     onClick = {
-                        if (hasPending) {
-                            showMessage("Your previous appointment request is still pending. Please wait for OPW to review it first.")
+                        if (hasOpenAppointmentFlow || hasPending) {
+                            showMessage("You already have an active appointment request. You can send another after it is done or cancelled.")
                             return@Button
                         }
                         if (selectedService.isBlank() || selectedDate == null) {
@@ -2184,6 +2225,7 @@ private fun AppointmentsTab(
                     } else {
                         Text("Submit Request")
                     }
+                }
                 }
             }
         }
@@ -6082,6 +6124,11 @@ private fun normalizeServiceLocation(value: String?): String {
 
 private fun formatServiceLocation(value: String?): String {
     return if (normalizeServiceLocation(value) == "home") "At home" else "At clinic"
+}
+
+private fun isOpenAppointmentStatus(value: String?): Boolean {
+    val status = value?.trim()?.lowercase(Locale.ENGLISH).orEmpty().ifBlank { "pending" }
+    return status !in setOf("cancelled", "completed", "done")
 }
 
 private fun formatNotificationTime(value: Instant?): String {

@@ -1,5 +1,5 @@
 import { CalendarDays, CheckCircle2, ShieldCheck } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Seo from "../components/Seo";
 import PublicLayout from "../layout/PublicLayout";
@@ -44,6 +44,36 @@ const copy = {
   submit: "Submit Request",
 };
 
+const formatDate = (value) => {
+  if (!value) {
+    return "Date not added";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const formatStatusLabel = (value) =>
+  String(value || "pending")
+    .replace(/_/g, " ")
+    .replace(/^\w/, (letter) => letter.toUpperCase());
+
+const formatServiceLocation = (value) =>
+  String(value || "").toLowerCase() === "home" ? "At home" : "At clinic";
+
+const isOpenAppointmentStatus = (status) =>
+  !["cancelled", "completed", "done"].includes(
+    String(status || "pending").toLowerCase()
+  );
+
 export default function BookAppointmentPage() {
   const navigate = useNavigate();
   const t = copy;
@@ -63,6 +93,9 @@ export default function BookAppointmentPage() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [services, setServices] = useState([]);
+  const [patientRecord, setPatientRecord] = useState(null);
+  const [appointmentRequests, setAppointmentRequests] = useState([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(true);
 
   useEffect(() => {
     if (!patientUser) {
@@ -83,11 +116,55 @@ export default function BookAppointmentPage() {
     loadServices();
   }, []);
 
+  const loadAppointmentState = useCallback(async () => {
+    const patientId = patientUser?.patientId;
+
+    if (!patientId) {
+      setLoadingAppointments(false);
+      return;
+    }
+
+    try {
+      setLoadingAppointments(true);
+      const [patientResponse, requestResponse] = await Promise.all([
+        API.get(`/patients/${patientId}`),
+        API.get(`/patients/${patientId}/appointment-requests`),
+      ]);
+      setPatientRecord(patientResponse.data || null);
+      setAppointmentRequests(requestResponse.data || []);
+    } catch (_) {
+      setPatientRecord(null);
+      setAppointmentRequests([]);
+    } finally {
+      setLoadingAppointments(false);
+    }
+  }, [patientUser?.patientId]);
+
+  useEffect(() => {
+    loadAppointmentState();
+  }, [loadAppointmentState]);
+
   const handleLogout = () => {
     clearPatientUser();
     setPatientUser(null);
     navigate("/patient-login?redirect=/book-appointment", { replace: true });
   };
+
+  const bookedRequestIds = new Set(
+    (patientRecord?.appointments || [])
+      .map((appointment) => appointment.requestId)
+      .filter(Boolean)
+  );
+  const activeAppointmentRequests = appointmentRequests.filter(
+    (request) =>
+      !bookedRequestIds.has(request.id) &&
+      isOpenAppointmentStatus(request.status)
+  );
+  const activeAppointments = (patientRecord?.appointments || []).filter((appointment) =>
+    isOpenAppointmentStatus(appointment.status || "approved")
+  );
+  const hasOpenAppointmentFlow =
+    activeAppointmentRequests.length > 0 || activeAppointments.length > 0;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -97,6 +174,9 @@ export default function BookAppointmentPage() {
     setSuccessMessage("");
 
     const validationError = firstValidationError([
+      hasOpenAppointmentFlow
+        ? "You already have an active appointment request. You can send another after it is done or cancelled."
+        : "",
       !form.name.trim() ? "Full name is required." : "",
       validateEmailField(form.email),
       validatePhoneField(form.phone),
@@ -135,6 +215,7 @@ export default function BookAppointmentPage() {
 
       setSubmitted(true);
       setSuccessMessage(response.data?.message || t.submitted);
+      await loadAppointmentState();
       setForm({
         name: patientUser?.name || form.name,
         email: patientUser?.email || form.email,
@@ -260,6 +341,75 @@ export default function BookAppointmentPage() {
               </div>
             )}
 
+            {loadingAppointments ? (
+              <div className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm font-medium text-slate-500">
+                Checking your active appointment status...
+              </div>
+            ) : hasOpenAppointmentFlow ? (
+              <div className="mt-8 grid gap-4">
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium leading-6 text-amber-800">
+                  You already have an active appointment request or booked appointment. A new request can be created after OPW marks this one done or cancelled.
+                </div>
+                {activeAppointmentRequests.map((request) => (
+                  <div
+                    key={`request-${request.id}`}
+                    className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-950">
+                          {request.service || "Appointment"}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          Requested: {formatDate(request.requestedDate)}
+                          {request.requestedTime ? ` at ${request.requestedTime}` : ""}
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-sky-700">
+                          Service location: {formatServiceLocation(request.serviceLocation)}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-amber-700">
+                        {formatStatusLabel(request.status || "pending")}
+                      </span>
+                    </div>
+                    {request.decisionNote ? (
+                      <p className="mt-3 rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                        OPW note: {request.decisionNote}
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
+                {activeAppointments.map((appointment) => (
+                  <div
+                    key={`appointment-${appointment.id || appointment._id}`}
+                    className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-950">
+                          {appointment.service || "Appointment"}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {formatDate(appointment.date)}
+                          {appointment.time ? ` at ${appointment.time}` : ""}
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-sky-700">
+                          Service location: {formatServiceLocation(appointment.serviceLocation)}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-sky-700">
+                        {formatStatusLabel(appointment.status || "approved")}
+                      </span>
+                    </div>
+                    {appointment.remark ? (
+                      <p className="mt-3 rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                        OPW note: {appointment.remark}
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
             <form onSubmit={handleSubmit} className="mt-8 grid gap-4 md:grid-cols-2">
               <input
                 className="input rounded-2xl border-slate-200 bg-slate-50"
@@ -363,6 +513,7 @@ export default function BookAppointmentPage() {
                 {submitting ? t.submitting : t.submit}
               </button>
             </form>
+            )}
           </div>
         </div>
       </section>

@@ -101,6 +101,12 @@ const getStatusBadgeClass = (status) => {
   }
 };
 
+const formatServiceLocation = (value) =>
+  String(value || "").toLowerCase() === "home" ? "At home" : "At clinic";
+
+const appointmentLocationNote =
+  "Home service is available after OPW confirms suitability. First-time patients and every post-session review must visit the clinic.";
+
 export default function PatientDashboardPage() {
   const navigate = useNavigate();
   const [patientUser, setPatientUser] = useState(() => getPatientUser());
@@ -114,6 +120,7 @@ export default function PatientDashboardPage() {
   const [therapyCardPreviewUrls, setTherapyCardPreviewUrls] = useState({});
   const [appointmentForm, setAppointmentForm] = useState({
     service: "",
+    serviceLocation: "clinic",
     date: "",
     time: "",
     message: "",
@@ -466,6 +473,7 @@ export default function PatientDashboardPage() {
       payload.append("phone", patientUser.mobile || "");
       payload.append("patientId", patientId);
       payload.append("service", appointmentForm.service.trim());
+      payload.append("serviceLocation", appointmentForm.serviceLocation || "clinic");
       payload.append("date", appointmentForm.date);
       payload.append("time", appointmentForm.time);
       payload.append("message", appointmentForm.message.trim());
@@ -475,7 +483,14 @@ export default function PatientDashboardPage() {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      setAppointmentForm({ service: "", date: "", time: "", message: "", files: [] });
+      setAppointmentForm({
+        service: "",
+        serviceLocation: "clinic",
+        date: "",
+        time: "",
+        message: "",
+        files: [],
+      });
       setStatus({
         type: "success",
         message: response.data?.message || "Appointment request submitted.",
@@ -669,21 +684,17 @@ export default function PatientDashboardPage() {
                 </div>
               </div>
               <div className="max-h-[68vh] space-y-3 overflow-auto p-5">
-                {notifications.length === 0 ? (
+                {unreadNotifications.length === 0 ? (
                   <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
-                    Appointment, treatment, therapy, payment, and custom OPW updates will appear here.
+                    No new notifications. Appointment, treatment, therapy, payment, and custom OPW updates will appear here.
                   </p>
                 ) : (
-                  notifications.map((item) => (
+                  unreadNotifications.map((item) => (
                     <button
                       key={item.id}
                       type="button"
-                      onClick={() => !item.readAt && markNotificationRead(item.id)}
-                      className={`w-full rounded-2xl border p-4 text-left transition ${
-                        item.readAt
-                          ? "border-slate-100 bg-white"
-                          : "border-sky-200 bg-sky-50"
-                      }`}
+                      onClick={() => markNotificationRead(item.id)}
+                      className="w-full rounded-2xl border border-sky-200 bg-sky-50 p-4 text-left transition hover:border-sky-300"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
@@ -692,11 +703,9 @@ export default function PatientDashboardPage() {
                             {formatDate(item.scheduledFor || item.createdAt)} | {item.category || "update"}
                           </p>
                         </div>
-                        {!item.readAt ? (
-                          <span className="rounded-full bg-sky-600 px-2.5 py-1 text-xs font-bold text-white">
-                            New
-                          </span>
-                        ) : null}
+                        <span className="rounded-full bg-sky-600 px-2.5 py-1 text-xs font-bold text-white">
+                          New
+                        </span>
                       </div>
                       <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600">
                         {item.body}
@@ -1175,6 +1184,39 @@ export default function PatientDashboardPage() {
                           </option>
                         ))}
                       </select>
+                      <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                        <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-400">
+                          Service location
+                        </p>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {[
+                            ["clinic", "At clinic"],
+                            ["home", "At home"],
+                          ].map(([value, label]) => (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() =>
+                                setAppointmentForm((current) => ({
+                                  ...current,
+                                  serviceLocation: value,
+                                }))
+                              }
+                              disabled={hasPendingAppointmentRequest}
+                              className={`rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition ${
+                                appointmentForm.serviceLocation === value
+                                  ? "border-sky-300 bg-sky-50 text-sky-800"
+                                  : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-white"
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="mt-3 rounded-2xl bg-sky-50 px-3 py-2 text-xs font-semibold leading-5 text-sky-800">
+                          {appointmentLocationNote}
+                        </p>
+                      </div>
                       <input
                         type="date"
                         className="input rounded-2xl border-slate-200 bg-slate-50"
@@ -1249,7 +1291,7 @@ export default function PatientDashboardPage() {
                           <RecordCard
                             key={request.id}
                             title={request.service || "Appointment"}
-                            subtitle={`Requested: ${formatDate(request.requestedDate)}${request.requestedTime ? ` at ${request.requestedTime}` : ""}`}
+                            subtitle={`Requested: ${formatDate(request.requestedDate)}${request.requestedTime ? ` at ${request.requestedTime}` : ""} | ${formatServiceLocation(request.serviceLocation)}`}
                           >
                             <div className="mt-2">
                               <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(request.status)}`}>
@@ -1278,7 +1320,7 @@ export default function PatientDashboardPage() {
                           <RecordCard
                             key={appointment.id || appointment._id}
                             title={appointment.service || "Appointment"}
-                            subtitle={`${formatDate(appointment.date)}${appointment.time ? ` at ${appointment.time}` : ""}`}
+                            subtitle={`${formatDate(appointment.date)}${appointment.time ? ` at ${appointment.time}` : ""} | ${formatServiceLocation(appointment.serviceLocation)}`}
                           >
                             <div className="mt-2">
                               <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(appointment.status)}`}>

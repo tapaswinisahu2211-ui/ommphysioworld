@@ -39,7 +39,12 @@ const slides = [
 
 const pageCopy = {
   badge: "Modern physiotherapy care for everyday movement",
-  quickFacts: ["Dr. Tapaswini Sahu, BPT, MPT (Ortho)", "Baripada, Odisha", "Same-week appointments"],
+  quickFacts: [
+    "Dr. Tapaswini Sahu, BPT, MPT (Ortho)",
+    "Baripada, Odisha",
+    "Same-week appointments",
+    "Home service available on approval",
+  ],
   slides: [
     {
       eyebrow: "Advanced Physiotherapy Care",
@@ -117,7 +122,7 @@ const pageCopy = {
   quickBooking: "Quick Booking",
   quickBookingTitle: "Need an appointment this week?",
   quickBookingText:
-    "Share your details and preferred visit time. We will help you find the right therapy session quickly.",
+    "Share your details, preferred visit time, and whether you need clinic or home service. First visits and post-session reviews happen at the clinic; home service is available after OPW confirms suitability.",
   startBooking: "Start booking",
   heroAlt: "Physiotherapy consultation",
   therapyAlt: "Patient receiving guided physiotherapy treatment",

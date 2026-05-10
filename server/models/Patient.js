@@ -5,6 +5,11 @@ const appointmentEntrySchema = new mongoose.Schema(
     date: { type: String, required: true },
     time: { type: String, default: "" },
     service: { type: String, required: true },
+    serviceLocation: {
+      type: String,
+      enum: ["clinic", "home"],
+      default: "clinic",
+    },
     status: { type: String, default: "approved" },
     remark: { type: String, default: "", trim: true },
     requestId: { type: mongoose.Schema.Types.ObjectId, ref: "Appointment", default: null },

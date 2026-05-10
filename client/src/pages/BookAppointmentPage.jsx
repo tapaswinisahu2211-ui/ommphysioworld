@@ -32,6 +32,11 @@ const copy = {
   email: "Email Address",
   phone: "Phone Number",
   service: "Service Needed",
+  serviceLocation: "Service Location",
+  locationClinic: "At clinic",
+  locationHome: "At home",
+  locationHelp:
+    "Home service is available after OPW confirms suitability. First-time patients and every post-session review must visit the clinic.",
   uploadLabel: "Upload Image or PDF",
   uploadHelp: "You can choose a prescription, report, scan, or related image. The selected file will be sent with the appointment email.",
   message: "Tell us about your pain, injury, or concern",
@@ -48,6 +53,7 @@ export default function BookAppointmentPage() {
     email: patientUser?.email || "",
     phone: patientUser?.mobile || "",
     service: "",
+    serviceLocation: "clinic",
     date: "",
     message: "",
     file: null,
@@ -113,6 +119,7 @@ export default function BookAppointmentPage() {
       payload.append("email", cleanEmail(form.email));
       payload.append("phone", cleanPhone(form.phone));
       payload.append("service", form.service.trim());
+      payload.append("serviceLocation", form.serviceLocation || "clinic");
       payload.append("date", form.date);
       payload.append("message", form.message);
 
@@ -133,6 +140,7 @@ export default function BookAppointmentPage() {
         email: patientUser?.email || form.email,
         phone: patientUser?.mobile || form.phone,
         service: "",
+        serviceLocation: "clinic",
         date: "",
         message: "",
         file: null,
@@ -288,6 +296,33 @@ export default function BookAppointmentPage() {
                   </option>
                 ))}
               </select>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 md:col-span-2">
+                <p className="mb-3 text-sm font-semibold text-slate-700">
+                  {t.serviceLocation}
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {[
+                    ["clinic", t.locationClinic],
+                    ["home", t.locationHome],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setForm({ ...form, serviceLocation: value })}
+                      className={`rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition ${
+                        form.serviceLocation === value
+                          ? "border-sky-300 bg-sky-50 text-sky-800"
+                          : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-white"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-3 rounded-2xl bg-sky-50 px-4 py-3 text-xs font-semibold leading-5 text-sky-800">
+                  {t.locationHelp}
+                </p>
+              </div>
               <input
                 type="date"
                 className="input rounded-2xl border-slate-200 bg-slate-50"

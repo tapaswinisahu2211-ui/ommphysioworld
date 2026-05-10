@@ -32,6 +32,9 @@ const formatDate = (value) => {
   });
 };
 
+const formatServiceLocation = (value) =>
+  String(value || "").toLowerCase() === "home" ? "At home" : "At clinic";
+
 function PatientCard({ patient, type, onOpen }) {
   const latestSessionText =
     type === "active" && patient.activeTreatmentPlan
@@ -148,6 +151,7 @@ function AppointmentRequestCard({
     request.confirmedDate || request.confirmedTime
       ? `${formatDate(request.confirmedDate)}${request.confirmedTime ? ` at ${request.confirmedTime}` : ""}`
       : "Not confirmed yet";
+  const serviceLocation = request.serviceLocationLabel || formatServiceLocation(request.serviceLocation);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -168,6 +172,9 @@ function AppointmentRequestCard({
           <p className="mt-1 truncate text-sm font-medium text-slate-600">
             {request.service || "Appointment"} | {formatDate(request.requestedDate)}
             {request.requestedTime ? ` at ${request.requestedTime}` : ""}
+          </p>
+          <p className="mt-0.5 text-xs font-semibold text-sky-700">
+            Service location: {serviceLocation}
           </p>
           <p className="mt-0.5 truncate text-xs text-slate-400">
             {request.phone || request.email || "No contact"}
@@ -274,6 +281,8 @@ function TodayAppointmentCard({
   const confirmedText = `${formatDate(appointment.confirmedDate)}${
     appointment.confirmedTime ? ` at ${appointment.confirmedTime}` : ""
   }`;
+  const serviceLocation =
+    appointment.serviceLocationLabel || formatServiceLocation(appointment.serviceLocation);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -293,6 +302,9 @@ function TodayAppointmentCard({
           </div>
           <p className="mt-1 truncate text-sm font-medium text-slate-600">
             {appointment.service || "Appointment"} | {confirmedText}
+          </p>
+          <p className="mt-0.5 text-xs font-semibold text-sky-700">
+            Service location: {serviceLocation}
           </p>
           <p className="mt-0.5 truncate text-xs text-slate-400">
             {appointment.phone || appointment.email || "No contact"}

@@ -59,6 +59,12 @@ const getAppointmentStatusLabel = (status) => {
   return "Scheduled";
 };
 
+const formatServiceLocation = (value) =>
+  String(value || "").toLowerCase() === "home" ? "At home" : "At clinic";
+
+const appointmentLocationNote =
+  "Home service is available after OPW confirms suitability. First-time patients and every post-session review must visit the clinic.";
+
 const getTodayKey = () => {
   const now = new Date();
   const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
@@ -79,7 +85,12 @@ export default function PatientProfile() {
   const [showTherapyModal, setShowTherapyModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showTreatmentModal, setShowTreatmentModal] = useState(false);
-  const [appointmentForm, setAppointmentForm] = useState({ date: "", time: "", service: "" });
+  const [appointmentForm, setAppointmentForm] = useState({
+    date: "",
+    time: "",
+    service: "",
+    serviceLocation: "clinic",
+  });
   const [services, setServices] = useState([]);
   const [therapyResources, setTherapyResources] = useState([]);
   const [appointmentActionForms, setAppointmentActionForms] = useState({});
@@ -486,7 +497,7 @@ export default function PatientProfile() {
     try {
       const response = await API.post(`/patients/${id}/appointments`, appointmentForm);
       setPatient(response.data);
-      setAppointmentForm({ date: "", time: "", service: "" });
+      setAppointmentForm({ date: "", time: "", service: "", serviceLocation: "clinic" });
       setShowAppointmentModal(false);
       setError("");
     } catch (saveError) {
@@ -558,6 +569,7 @@ export default function PatientProfile() {
         date,
         time,
         remark,
+        serviceLocation: appointment.serviceLocation || "clinic",
       });
       setPatient(response.data);
       setError("");
@@ -1300,6 +1312,9 @@ export default function PatientProfile() {
                                 Requested: {request.requestedDate || "Date not added"}
                                 {request.requestedTime ? ` at ${request.requestedTime}` : ""}
                               </p>
+                              <p className="mt-1 text-xs font-semibold text-sky-700">
+                                Service location: {request.serviceLocationLabel || formatServiceLocation(request.serviceLocation)}
+                              </p>
                               <p className="mt-1 text-xs text-slate-400">
                                 {request.phone || request.email || "No contact"}
                               </p>
@@ -1396,6 +1411,9 @@ export default function PatientProfile() {
                             <p className="mt-1 text-sm text-slate-500">
                               {appointment.date}
                               {appointment.time ? ` at ${appointment.time}` : ""}
+                            </p>
+                            <p className="mt-1 text-xs font-semibold text-sky-700">
+                              Service location: {appointment.serviceLocationLabel || formatServiceLocation(appointment.serviceLocation)}
                             </p>
                             {appointment.remark ? (
                               <p className="mt-1 text-xs text-slate-500">
@@ -1509,6 +1527,9 @@ export default function PatientProfile() {
                             <p className="mt-1 text-sm text-slate-500">
                               {appointment.date}
                               {appointment.time ? ` at ${appointment.time}` : ""}
+                            </p>
+                            <p className="mt-1 text-xs font-semibold text-sky-700">
+                              Service location: {appointment.serviceLocationLabel || formatServiceLocation(appointment.serviceLocation)}
                             </p>
                           </div>
                           {appointment.remark ? (
@@ -1971,6 +1992,38 @@ export default function PatientProfile() {
                     </option>
                   ))}
                 </select>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="mb-3 text-sm font-semibold text-slate-700">
+                    Service location
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {[
+                      ["clinic", "At clinic"],
+                      ["home", "At home"],
+                    ].map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() =>
+                          setAppointmentForm({
+                            ...appointmentForm,
+                            serviceLocation: value,
+                          })
+                        }
+                        className={`rounded-xl border px-3 py-2 text-left text-sm font-semibold ${
+                          appointmentForm.serviceLocation === value
+                            ? "border-sky-300 bg-sky-50 text-sky-800"
+                            : "border-slate-200 bg-white text-slate-600"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-3 rounded-xl bg-sky-50 px-3 py-2 text-xs font-semibold leading-5 text-sky-800">
+                    {appointmentLocationNote}
+                  </p>
+                </div>
                 <button className="w-full rounded-xl bg-blue-600 px-4 py-3 font-medium text-white hover:bg-blue-700">
                   Save Appointment
                 </button>

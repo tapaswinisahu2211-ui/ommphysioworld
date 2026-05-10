@@ -181,6 +181,7 @@ import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -1032,23 +1033,19 @@ private fun DashboardScreen(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    if (notifications.isEmpty()) {
+                    if (activeNotifications.isEmpty()) {
                         Text(
-                            text = "OPW updates for therapy, appointments, sessions, payments, and orders will appear here.",
+                            text = "No new notifications. OPW updates for therapy, appointments, sessions, payments, and orders will appear here.",
                             color = OpwSlate,
                         )
                     } else {
-                        notifications.forEach { item ->
+                        activeNotifications.forEach { item ->
                             NoticeCard(
                                 title = item.title,
                                 body = item.body,
                                 stamp = formatNotificationTime(item.timestamp),
-                                unread = item.readAt == null,
-                                onClick = {
-                                    if (item.readAt == null) {
-                                        markNotificationRead(item.id)
-                                    }
-                                },
+                                unread = true,
+                                onClick = { markNotificationRead(item.id) },
                             )
                         }
                     }
@@ -1328,7 +1325,10 @@ private fun DashboardScreen(
                     .padding(innerPadding),
             ) {
                 when (activeTab) {
-                    DashboardTab.Overview -> OverviewTab(snapshot = snapshot, user = user)
+                    DashboardTab.Overview -> OverviewTab(
+                        snapshot = snapshot,
+                        onOpenTab = { activeTab = it },
+                    )
                     DashboardTab.Appointments -> AppointmentsTab(
                         snapshot = snapshot,
                         user = user,
@@ -1659,7 +1659,10 @@ private fun PublicTab(
 }
 
 @Composable
-private fun OverviewTab(snapshot: DashboardSnapshot, user: JsonMap) {
+private fun OverviewTab(
+    snapshot: DashboardSnapshot,
+    onOpenTab: (DashboardTab) -> Unit,
+) {
     val patient = snapshot.patient
     val appointments = patient.listOfMaps("appointments")
     val visibleRequests = visibleAppointmentRequests(patient, snapshot.appointmentRequests)
@@ -1777,39 +1780,6 @@ private fun OverviewTab(snapshot: DashboardSnapshot, user: JsonMap) {
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
-            HeroCard(
-                eyebrow = "WELCOME BACK",
-                title = user.stringOrNull("name") ?: "Patient",
-                subtitle = user.stringOrNull("email") ?: "Track your OPW care updates in one place.",
-                showSubtitle = false,
-                shape = RoundedCornerShape(28.dp),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    AssistChip(
-                        onClick = {},
-                        label = {
-                            Text(
-                                patient.stringOrNull("disease")
-                                    ?.takeIf { it.isNotBlank() }
-                                    ?: "Recovery in progress",
-                            )
-                        },
-                    )
-                    AssistChip(
-                        onClick = {},
-                        label = {
-                            Text(
-                                "Joined ${formatDisplayDate(parseLocalDate(patient.stringOrNull("createdAt")))}",
-                            )
-                        },
-                    )
-                }
-            }
-        }
-        item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1826,6 +1796,7 @@ private fun OverviewTab(snapshot: DashboardSnapshot, user: JsonMap) {
                     icon = { CalendarGlyph(OpwBlue) },
                     accent = OpwBlue,
                     modifier = Modifier.weight(1f),
+                    onClick = { onOpenTab(DashboardTab.Appointments) },
                 )
                 AppointmentSummaryCard(
                     label = "Sessions",
@@ -1834,6 +1805,7 @@ private fun OverviewTab(snapshot: DashboardSnapshot, user: JsonMap) {
                     icon = { SessionsGlyph(Color(0xFF14B8A6)) },
                     accent = Color(0xFF14B8A6),
                     modifier = Modifier.weight(1f),
+                    onClick = { onOpenTab(DashboardTab.Sessions) },
                 )
                 AppointmentSummaryCard(
                     label = "Pending",
@@ -1842,6 +1814,7 @@ private fun OverviewTab(snapshot: DashboardSnapshot, user: JsonMap) {
                     icon = { NotificationGlyph(OpwWarning) },
                     accent = OpwWarning,
                     modifier = Modifier.weight(1f),
+                    onClick = { onOpenTab(DashboardTab.Appointments) },
                 )
             }
         }
@@ -1853,6 +1826,12 @@ private fun OverviewTab(snapshot: DashboardSnapshot, user: JsonMap) {
                     "Services" to therapyRecommendations.size.toString(),
                     "Notes" to notes.size.toString(),
                 ),
+                onMetricClick = { label ->
+                    when (label) {
+                        "Appointments" -> onOpenTab(DashboardTab.Appointments)
+                        "Treatment Plans", "Notes", "Services" -> onOpenTab(DashboardTab.Therapy)
+                    }
+                },
             )
         }
         item {
@@ -1871,6 +1850,7 @@ private fun OverviewTab(snapshot: DashboardSnapshot, user: JsonMap) {
                                 append(note.stringOrNull("title") ?: "Doctor note")
                                 note.stringOrNull("note")?.takeIf { it.isNotBlank() }?.let { append("\n$it") }
                             },
+                            onClick = { onOpenTab(DashboardTab.Therapy) },
                         )
                     }
                     activePlan?.let { plan ->
@@ -1882,6 +1862,7 @@ private fun OverviewTab(snapshot: DashboardSnapshot, user: JsonMap) {
                                 val balance = formatMoney(plan["balanceAmount"])
                                 append("\nBalance: $balance")
                             },
+                            onClick = { onOpenTab(DashboardTab.Therapy) },
                         )
                     }
                     latestTherapy?.let { recommendation ->
@@ -1896,6 +1877,7 @@ private fun OverviewTab(snapshot: DashboardSnapshot, user: JsonMap) {
                                 recommendation.stringOrNull("note")?.takeIf { it.isNotBlank() }?.let { append("\n$it") }
                                 append("\nItems shared: ${recommendation.listOfMaps("items").size}")
                             },
+                            onClick = { onOpenTab(DashboardTab.Therapy) },
                         )
                     }
                 }
@@ -1964,6 +1946,7 @@ private fun AppointmentsTab(
     }
 
     var selectedService by rememberSaveable { mutableStateOf("") }
+    var serviceLocation by rememberSaveable { mutableStateOf("clinic") }
     var showServiceMenu by remember { mutableStateOf(false) }
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
     var selectedTime by remember { mutableStateOf<LocalTime?>(null) }
@@ -2075,6 +2058,40 @@ private fun AppointmentsTab(
                     }
                 }
                 Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Where do you need service?",
+                    color = OpwInk,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    listOf("clinic" to "At clinic", "home" to "At home").forEach { (value, label) ->
+                        FilterChip(
+                            selected = serviceLocation == value,
+                            onClick = { serviceLocation = value },
+                            label = { Text(label) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+                Surface(
+                    color = Color(0xFFEFF8FF),
+                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp),
+                ) {
+                    Text(
+                        text = "Home service is available after OPW confirms suitability. First-time patients and every post-session review must visit the clinic.",
+                        modifier = Modifier.padding(14.dp),
+                        color = Color(0xFF075985),
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(18.dp),
@@ -2138,6 +2155,7 @@ private fun AppointmentsTab(
                                     phone = user.string("mobile"),
                                     patientId = user.string("patientId"),
                                     service = selectedService.trim(),
+                                    serviceLocation = serviceLocation,
                                     date = selectedDate!!.format(DateTimeFormatter.ISO_LOCAL_DATE),
                                     time = selectedTime?.format(DateTimeFormatter.ofPattern("HH:mm")).orEmpty(),
                                     message = message.trim(),
@@ -2145,6 +2163,7 @@ private fun AppointmentsTab(
                                 )
                                 showMessage(response["message"]?.toString() ?: "Appointment request submitted.")
                                 selectedService = ""
+                                serviceLocation = "clinic"
                                 selectedDate = null
                                 selectedTime = null
                                 message = ""
@@ -2183,6 +2202,7 @@ private fun AppointmentsTab(
                             subtitle = listOfNotNull(
                                 "Date: ${appointment.stringOrNull("date") ?: "Not added"}",
                                 appointment.stringOrNull("time")?.takeIf { it.isNotBlank() }?.let { "Time: $it" },
+                                "Location: ${formatServiceLocation(appointment.stringOrNull("serviceLocation"))}",
                                 appointment.stringOrNull("status")?.let { "Status: $it" },
                             ).joinToString("\n"),
                         )
@@ -2205,6 +2225,7 @@ private fun AppointmentsTab(
                             subtitle = buildString {
                                 append("Requested: ${request.stringOrNull("requestedDate") ?: "Date not added"}")
                                 request.stringOrNull("requestedTime")?.takeIf { it.isNotBlank() }?.let { append(" at $it") }
+                                append("\nLocation: ${formatServiceLocation(request.stringOrNull("serviceLocation"))}")
                                 request.stringOrNull("confirmedDate")?.takeIf { it.isNotBlank() }?.let {
                                     append("\nConfirmed: $it")
                                     request.stringOrNull("confirmedTime")?.takeIf { value -> value.isNotBlank() }?.let { time ->
@@ -4775,6 +4796,7 @@ private fun AppointmentSummaryCard(
     icon: @Composable () -> Unit,
     accent: Color,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     val motion = rememberFloatingCardMotion(delayMillis = 90)
     Surface(
@@ -4786,7 +4808,8 @@ private fun AppointmentSummaryCard(
                 shape = RoundedCornerShape(24.dp),
                 ambientColor = accent.copy(alpha = 0.14f),
                 spotColor = accent.copy(alpha = 0.18f),
-            ),
+            )
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
         color = Color.White.copy(alpha = 0.97f),
         shape = RoundedCornerShape(24.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.14f)),
@@ -4830,7 +4853,10 @@ private fun AppointmentSummaryCard(
 }
 
 @Composable
-private fun MetricGrid(metrics: List<Pair<String, String>>) {
+private fun MetricGrid(
+    metrics: List<Pair<String, String>>,
+    onMetricClick: (String) -> Unit = {},
+) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         metrics.chunked(2).forEachIndexed { rowIndex, row ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
@@ -4848,7 +4874,8 @@ private fun MetricGrid(metrics: List<Pair<String, String>>) {
                                 shape = RoundedCornerShape(24.dp),
                                 ambientColor = accent.copy(alpha = 0.16f),
                                 spotColor = accent.copy(alpha = 0.22f),
-                            ),
+                            )
+                            .clickable { onMetricClick(label) },
                         shape = RoundedCornerShape(24.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.16f)),
                         elevation = CardDefaults.cardElevation(defaultElevation = motion.elevation),
@@ -5428,7 +5455,11 @@ private fun SessionDataRow(session: JsonMap) {
 }
 
 @Composable
-private fun RecordTile(title: String, subtitle: String) {
+private fun RecordTile(
+    title: String,
+    subtitle: String,
+    onClick: (() -> Unit)? = null,
+) {
     val motion = rememberFloatingCardMotion(delayMillis = 120)
     Surface(
         modifier = Modifier
@@ -5440,7 +5471,8 @@ private fun RecordTile(title: String, subtitle: String) {
                 shape = RoundedCornerShape(20.dp),
                 ambientColor = OpwBlue.copy(alpha = 0.14f),
                 spotColor = OpwBlue.copy(alpha = 0.18f),
-            ),
+            )
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
         color = Color(0xFFF8FBFF),
         shape = RoundedCornerShape(20.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD7E6F5)),
@@ -6042,6 +6074,14 @@ private fun formatDisplayDate(date: LocalDate?): String {
 
 private fun formatDisplayTime(time: LocalTime): String {
     return time.format(DateTimeFormatter.ofPattern("hh:mm a"))
+}
+
+private fun normalizeServiceLocation(value: String?): String {
+    return if (value?.trim()?.lowercase(Locale.ENGLISH) == "home") "home" else "clinic"
+}
+
+private fun formatServiceLocation(value: String?): String {
+    return if (normalizeServiceLocation(value) == "home") "At home" else "At clinic"
 }
 
 private fun formatNotificationTime(value: Instant?): String {

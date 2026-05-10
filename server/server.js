@@ -132,6 +132,17 @@ const isUserOnlineForChat = (user) => {
   );
 };
 
+const APPOINTMENT_LOCATION_NOTE =
+  "First-time patients and every post-session review must visit the clinic. Home service is available only after OPW confirms it is suitable.";
+
+const normalizeServiceLocation = (value) => {
+  const normalized = cleanText(value).toLowerCase();
+  return normalized === "home" ? "home" : "clinic";
+};
+
+const formatServiceLocation = (value) =>
+  normalizeServiceLocation(value) === "home" ? "At home" : "At clinic";
+
 const serializePatientAppointments = (appointments = []) => {
   const seenRequestIds = new Set();
 
@@ -155,6 +166,8 @@ const serializePatientAppointments = (appointments = []) => {
       date: appointment.date,
       time: appointment.time || "",
       service: appointment.service,
+      serviceLocation: normalizeServiceLocation(appointment.serviceLocation),
+      serviceLocationLabel: formatServiceLocation(appointment.serviceLocation),
       status: appointment.status || "approved",
       remark: appointment.remark || "",
       requestId: appointment.requestId ? appointment.requestId.toString() : "",
@@ -692,6 +705,8 @@ const createNotificationForAppointment = async (appointment, statusLabel = "") =
 
   const status = String(appointment.status || "").toLowerCase();
   const service = appointment.service || "Appointment";
+  const serviceLocation = normalizeServiceLocation(appointment.serviceLocation);
+  const serviceLocationLabel = formatServiceLocation(serviceLocation);
   const confirmedDate =
     status === "rescheduled"
       ? appointment.rescheduledDate || appointment.approvedDate || appointment.date
@@ -710,22 +725,23 @@ const createNotificationForAppointment = async (appointment, statusLabel = "") =
     }[status] ||
     "updated";
   const scheduleLine = confirmedDate
-    ? `Schedule: ${confirmedDate}${confirmedTime ? ` at ${confirmedTime}` : ""}`
+    ? `Schedule: ${confirmedDate}${confirmedTime ? ` at ${confirmedTime}` : ""}\nService location: ${serviceLocationLabel}`
     : "Please check your appointment details inside the app.";
   const noteLine = appointment.decisionNote
     ? `\nOPW note: ${appointment.decisionNote}`
     : "";
+  const careLine = `\nNote: ${APPOINTMENT_LOCATION_NOTE}`;
 
   await createPatientNotification({
     patient,
     category: "appointment",
     title: `Your ${service} appointment is ${label}`,
-    body: `${scheduleLine}${noteLine}`,
+    body: `${scheduleLine}${noteLine}${careLine}`,
     uniqueKey: `appointment:${appointment._id.toString()}:${status}:${appointment.decisionAt?.getTime?.() || Date.now()}`,
     entityType: "appointment",
     entityId: appointment._id.toString(),
     actionUrl: "appointments",
-    metadata: { status, service, confirmedDate, confirmedTime },
+    metadata: { status, service, serviceLocation, confirmedDate, confirmedTime },
   });
 
   if (["approved", "rescheduled"].includes(status)) {
@@ -756,24 +772,26 @@ const scheduleAppointmentReminders = async (appointment, patient) => {
   }
 
   const service = appointment.service || "appointment";
+  const serviceLocation = normalizeServiceLocation(appointment.serviceLocation);
+  const serviceLocationLabel = formatServiceLocation(serviceLocation);
   const reminders = [
     {
       key: "one-day",
       scheduledFor: new Date(appointmentAt.getTime() - 24 * 60 * 60 * 1000),
       title: "Appointment reminder for tomorrow",
-      body: `Your ${service} appointment is tomorrow${time ? ` at ${time}` : ""}.`,
+      body: `Your ${service} appointment is tomorrow${time ? ` at ${time}` : ""}. Service location: ${serviceLocationLabel}.`,
     },
     {
       key: "same-day",
       scheduledFor: clinicDateTime(date, "08:00") || appointmentAt,
       title: "Appointment reminder for today",
-      body: `Your ${service} appointment is today${time ? ` at ${time}` : ""}.`,
+      body: `Your ${service} appointment is today${time ? ` at ${time}` : ""}. Service location: ${serviceLocationLabel}.`,
     },
     {
       key: "before-hours",
       scheduledFor: new Date(appointmentAt.getTime() - 2 * 60 * 60 * 1000),
       title: "Appointment coming up soon",
-      body: `Your ${service} appointment is coming up${time ? ` at ${time}` : ""}.`,
+      body: `Your ${service} appointment is coming up${time ? ` at ${time}` : ""}. Service location: ${serviceLocationLabel}.`,
     },
   ];
   const now = new Date();
@@ -792,7 +810,7 @@ const scheduleAppointmentReminders = async (appointment, patient) => {
           entityId: appointment._id.toString(),
           actionUrl: "appointments",
           scheduledFor: reminder.scheduledFor,
-          metadata: { service, date, time, reminder: reminder.key },
+          metadata: { service, serviceLocation, date, time, reminder: reminder.key },
         })
       )
   );
@@ -1015,6 +1033,12 @@ const serializeMailboxItem = (type, entry) => {
       ? entry.message || `Experience: ${entry.experience || "Not provided"}`
       : entry.message || "Website contact form message",
     service: entry.service || "",
+    serviceLocation: entry.serviceLocation
+      ? normalizeServiceLocation(entry.serviceLocation)
+      : "",
+    serviceLocationLabel: entry.serviceLocation
+      ? formatServiceLocation(entry.serviceLocation)
+      : "",
     preferredDate: entry.date || "",
     role: entry.role || "",
     experience: entry.experience || "",
@@ -1051,6 +1075,8 @@ const serializeAppointmentRequest = (appointment) => {
     email: appointment.email || "",
     phone: appointment.phone || "",
     service: appointment.service || "",
+    serviceLocation: normalizeServiceLocation(appointment.serviceLocation),
+    serviceLocationLabel: formatServiceLocation(appointment.serviceLocation),
     requestedDate: appointment.date || "",
     requestedTime: appointment.time || "",
     message: appointment.message || "",
@@ -1128,6 +1154,8 @@ const upsertPatientAppointmentFromRequest = async (appointment) => {
     existingAppointment.date = date;
     existingAppointment.time = time;
     existingAppointment.service = appointment.service || existingAppointment.service;
+    existingAppointment.serviceLocation =
+      appointment.serviceLocation || existingAppointment.serviceLocation || "clinic";
     existingAppointment.status = appointment.status;
     existingAppointment.remark = appointment.decisionNote || existingAppointment.remark || "";
     patient.appointments = (patient.appointments || []).filter(
@@ -1141,6 +1169,7 @@ const upsertPatientAppointmentFromRequest = async (appointment) => {
       date,
       time,
       service: appointment.service || "Appointment",
+      serviceLocation: appointment.serviceLocation || "clinic",
       status: appointment.status,
       remark: appointment.decisionNote || "",
       requestId: appointment._id,
@@ -3227,6 +3256,9 @@ app.post("/api/patients/:id/appointments", requireStaffAuth, async (req, res) =>
     const date = cleanText(req.body.date);
     const time = cleanText(req.body.time);
     const service = cleanText(req.body.service);
+    const serviceLocation = normalizeServiceLocation(
+      req.body.serviceLocation || req.body.locationPreference || req.body.appointmentLocation
+    );
 
     if (!date || !service) {
       return res.status(400).json({ message: "Date and service are required." });
@@ -3256,7 +3288,7 @@ app.post("/api/patients/:id/appointments", requireStaffAuth, async (req, res) =>
       });
     }
 
-    patient.appointments.push({ date, time: time || "", service });
+    patient.appointments.push({ date, time: time || "", service, serviceLocation });
     await patient.save();
     const createdAppointment = patient.appointments[patient.appointments.length - 1];
     await createNotificationForAppointment(
@@ -3265,6 +3297,7 @@ app.post("/api/patients/:id/appointments", requireStaffAuth, async (req, res) =>
         patientId: patient._id,
         status: "approved",
         service,
+        serviceLocation,
         date,
         time: time || "",
         approvedDate: date,
@@ -3341,6 +3374,9 @@ app.patch("/api/patients/:id/appointments/:appointmentId", requireStaffAuth, asy
     const date = cleanText(req.body.date);
     const time = cleanText(req.body.time);
     const remark = cleanText(req.body.remark || req.body.note);
+    const serviceLocation = req.body.serviceLocation
+      ? normalizeServiceLocation(req.body.serviceLocation)
+      : normalizeServiceLocation(appointment.serviceLocation);
 
     if (!["rescheduled", "completed", "cancelled"].includes(status)) {
       return res.status(400).json({ message: "Invalid appointment status." });
@@ -3359,6 +3395,7 @@ app.patch("/api/patients/:id/appointments/:appointmentId", requireStaffAuth, asy
       appointment.time = time || appointment.time || "";
     }
 
+    appointment.serviceLocation = serviceLocation;
     appointment.status = status;
     appointment.remark = remark || appointment.remark || "";
 
@@ -3377,6 +3414,7 @@ app.patch("/api/patients/:id/appointments/:appointmentId", requireStaffAuth, asy
           appointmentRequest.rescheduledDate = date;
           appointmentRequest.rescheduledTime = time || "";
         }
+        appointmentRequest.serviceLocation = serviceLocation;
 
         await appointmentRequest.save();
       }
@@ -3392,6 +3430,7 @@ app.patch("/api/patients/:id/appointments/:appointmentId", requireStaffAuth, asy
           status === "rescheduled"
             ? `New schedule: ${appointment.date}${appointment.time ? ` at ${appointment.time}` : ""}`
             : `Status: ${status}`,
+          `Service location: ${formatServiceLocation(appointment.serviceLocation)}`,
           appointment.remark ? `OPW note: ${appointment.remark}` : "",
         ]
           .filter(Boolean)
@@ -3400,7 +3439,12 @@ app.patch("/api/patients/:id/appointments/:appointmentId", requireStaffAuth, asy
         entityType: "appointment",
         entityId: appointment._id.toString(),
         actionUrl: "appointments",
-        metadata: { status, date: appointment.date, time: appointment.time },
+        metadata: {
+          status,
+          date: appointment.date,
+          time: appointment.time,
+          serviceLocation: normalizeServiceLocation(appointment.serviceLocation),
+        },
       });
       if (status === "rescheduled") {
         await scheduleAppointmentReminders(
@@ -3409,6 +3453,7 @@ app.patch("/api/patients/:id/appointments/:appointmentId", requireStaffAuth, asy
             patientId: patient._id,
             status: "rescheduled",
             service: appointment.service,
+            serviceLocation: appointment.serviceLocation,
             date: appointment.date,
             time: appointment.time,
             rescheduledDate: appointment.date,

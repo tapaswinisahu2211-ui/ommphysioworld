@@ -26,6 +26,17 @@ const getAppointmentScheduleKey = (appointment) =>
       ""
   ).slice(0, 10);
 
+const APPOINTMENT_LOCATION_NOTE =
+  "First-time patients and every post-session review must visit the clinic. Home service is available only after OPW confirms it is suitable.";
+
+const normalizeServiceLocation = (value) => {
+  const normalized = cleanText(value).toLowerCase();
+  return normalized === "home" ? "home" : "clinic";
+};
+
+const formatServiceLocation = (value) =>
+  normalizeServiceLocation(value) === "home" ? "At home" : "At clinic";
+
 const findLinkedPatient = async ({ patientId, email, phone }) => {
   if (patientId) {
     const patient = await Patient.findById(patientId);
@@ -115,6 +126,8 @@ const syncPatientAppointmentFromRequest = async (appointment, patient) => {
     existingAppointment.date = date;
     existingAppointment.time = time;
     existingAppointment.service = appointment.service || existingAppointment.service;
+    existingAppointment.serviceLocation =
+      appointment.serviceLocation || existingAppointment.serviceLocation || "clinic";
     existingAppointment.status = appointment.status;
     existingAppointment.remark = appointment.decisionNote || existingAppointment.remark || "";
   } else {
@@ -122,6 +135,7 @@ const syncPatientAppointmentFromRequest = async (appointment, patient) => {
       date,
       time,
       service: appointment.service || "Appointment",
+      serviceLocation: appointment.serviceLocation || "clinic",
       status: appointment.status,
       remark: appointment.decisionNote || "",
       requestId: appointment._id,
@@ -230,6 +244,9 @@ const submitAppointment = async (req, res) => {
     const phone = patientToken ? cleanPhone(req.body.phone) : cleanPhone(req.body.phone);
     const patientId = patientToken?.patientId || requestedPatientId;
     const service = cleanText(req.body.service);
+    const serviceLocation = normalizeServiceLocation(
+      req.body.serviceLocation || req.body.locationPreference || req.body.appointmentLocation
+    );
     const date = cleanText(req.body.date);
     const time = cleanText(req.body.time);
     const message = cleanText(req.body.message);
@@ -305,6 +322,7 @@ const submitAppointment = async (req, res) => {
       phone,
       patientId: linkedPatient?._id || null,
       service,
+      serviceLocation,
       date,
       time: time || "",
       message,
@@ -332,8 +350,10 @@ Name: ${name}
 Email: ${email}
 Phone: ${phone}
 Service: ${service}
+Service Location: ${formatServiceLocation(serviceLocation)}
 Preferred Date: ${date}
 Preferred Time: ${time || "Not provided"}
+Care Note: ${APPOINTMENT_LOCATION_NOTE}
 Attachments: ${
           uploadedFiles.length
             ? uploadedFiles.map((file) => file.originalname).join(", ")

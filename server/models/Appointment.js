@@ -20,6 +20,11 @@ const appointmentSchema = new mongoose.Schema({
     default: null,
   },
   service: String,
+  serviceLocation: {
+    type: String,
+    enum: ["clinic", "home"],
+    default: "clinic",
+  },
   date: String,
   time: { type: String, default: "" },
   message: String,

@@ -147,6 +147,16 @@ class AppApiService(
         return extractList(requestJson("PATCH", "/patients/$patientId/notifications/read-all", emptyMap()))
     }
 
+    suspend fun registerDeviceToken(patientId: String, token: String): JsonMap {
+        return postJson(
+            "/patients/$patientId/device-tokens",
+            mapOf(
+                "token" to token,
+                "platform" to "android",
+            ),
+        )
+    }
+
     suspend fun getMyShopOrders(): List<JsonMap> = extractList(getJson("/shop/orders/my"))
 
     suspend fun placeShopOrder(items: List<JsonMap>, note: String): JsonMap {

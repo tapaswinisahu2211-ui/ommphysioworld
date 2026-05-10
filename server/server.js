@@ -85,6 +85,11 @@ const {
   ensureDefaultAdmin,
 } = require("./utils/userHelpers");
 const {
+  getPushStatus,
+  sendDuePatientPushNotifications,
+  sendPatientPushNotification,
+} = require("./services/pushNotifications");
+const {
   cleanEmail,
   cleanPhone,
   cleanText,
@@ -560,6 +565,8 @@ const serializePatientNotification = (notification, patient = null) => ({
   entityId: notification.entityId || "",
   actionUrl: notification.actionUrl || "",
   scheduledFor: notification.scheduledFor || null,
+  pushedAt: notification.pushedAt || null,
+  pushStatus: notification.pushStatus || "pending",
   readAt: notification.readAt || null,
   createdByLabel: notification.createdByLabel || "OPW",
   metadata: notification.metadata || {},
@@ -598,6 +605,32 @@ const addDaysToClinicDate = (dateKey, days, timeValue = "09:00") => {
   return next;
 };
 
+const pushPatientNotificationIfDue = async (notification) => {
+  if (!notification) {
+    return notification;
+  }
+
+  const scheduledFor = new Date(notification.scheduledFor || Date.now());
+  if (!Number.isNaN(scheduledFor.getTime()) && scheduledFor > new Date()) {
+    return notification;
+  }
+
+  try {
+    const result = await sendPatientPushNotification(notification.patientId, notification);
+    if (result.skipped === "firebase-not-configured") {
+      return notification;
+    }
+
+    notification.pushedAt = new Date();
+    notification.pushStatus = getPushStatus(result);
+    await notification.save();
+  } catch (error) {
+    console.log("Failed to push patient notification:", error.message);
+  }
+
+  return notification;
+};
+
 const createPatientNotification = async ({
   patientId,
   patient,
@@ -619,29 +652,34 @@ const createPatientNotification = async ({
     return null;
   }
 
-  return PatientNotification.findOneAndUpdate(
-    { uniqueKey },
-    {
-      $setOnInsert: {
-        patientId: resolvedPatientId,
-        category,
-        title,
-        body,
-        uniqueKey,
-        entityType,
-        entityId,
-        actionUrl,
-        scheduledFor: scheduledFor || new Date(),
-        createdByUserId,
-        createdByLabel,
-        metadata: {
-          ...metadata,
-          patientName: metadata.patientName || patient?.name || "",
-        },
-      },
+  const payload = {
+    patientId: resolvedPatientId,
+    category,
+    title,
+    body,
+    uniqueKey,
+    entityType,
+    entityId,
+    actionUrl,
+    scheduledFor: scheduledFor || new Date(),
+    createdByUserId,
+    createdByLabel,
+    metadata: {
+      ...metadata,
+      patientName: metadata.patientName || patient?.name || "",
     },
-    { new: true, upsert: true, setDefaultsOnInsert: true }
-  );
+  };
+
+  try {
+    const notification = await PatientNotification.create(payload);
+    return pushPatientNotificationIfDue(notification);
+  } catch (error) {
+    if (error?.code === 11000) {
+      return PatientNotification.findOne({ uniqueKey });
+    }
+
+    throw error;
+  }
 };
 
 const createNotificationForAppointment = async (appointment, statusLabel = "") => {
@@ -1946,6 +1984,58 @@ app.patch("/api/appointments/:id/notification-seen", requirePatientOrStaffAuth, 
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to update appointment notification." });
+  }
+});
+
+app.post("/api/patients/:id/device-tokens", requirePatientRecordAccess, async (req, res) => {
+  try {
+    if (req.auth?.type !== "patient") {
+      return res.status(403).json({ message: "Patient authentication is required." });
+    }
+
+    const patient = await Patient.findById(req.params.id);
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found." });
+    }
+
+    const token = String(req.body.token || "").trim();
+    const platform = cleanText(req.body.platform || "android").toLowerCase() || "android";
+    const deviceId = cleanText(req.body.deviceId || "");
+
+    if (!token || token.length < 20) {
+      return res.status(400).json({ message: "A valid device token is required." });
+    }
+
+    const publicUser = await PublicUser.findById(req.auth.sub);
+    if (!publicUser || String(publicUser.patientId || "") !== patient._id.toString()) {
+      return res.status(403).json({ message: "You do not have access to this patient record." });
+    }
+
+    const now = new Date();
+    const existingToken = (publicUser.fcmTokens || []).find((entry) => entry.token === token);
+    const retainedTokens = (publicUser.fcmTokens || [])
+      .filter((entry) => entry.token !== token)
+      .slice(-9);
+
+    publicUser.fcmTokens = [
+      ...retainedTokens,
+      {
+        token,
+        platform,
+        deviceId,
+        createdAt: existingToken?.createdAt || now,
+        lastSeenAt: now,
+      },
+    ];
+    await publicUser.save();
+
+    res.status(201).json({
+      message: "Device token registered.",
+      registered: true,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to register device token." });
   }
 });
 
@@ -4956,6 +5046,19 @@ const startServer = async () => {
   try {
     await connectDB();
     await ensureDefaultAdmin();
+    sendDuePatientPushNotifications().catch((error) => {
+      console.log("Failed to send due push notifications:", error.message);
+    });
+
+    const pushIntervalMs = Math.max(
+      Number(process.env.NOTIFICATION_PUSH_INTERVAL_MS) || 60 * 1000,
+      15 * 1000
+    );
+    setInterval(() => {
+      sendDuePatientPushNotifications().catch((error) => {
+        console.log("Failed to send due push notifications:", error.message);
+      });
+    }, pushIntervalMs);
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

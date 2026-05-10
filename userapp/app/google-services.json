@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "257980917988",
+    "project_id": "omm-physio-world",
+    "storage_bucket": "omm-physio-world.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:257980917988:android:3e2e800402c6bac9bf24f1",
+        "android_client_info": {
+          "package_name": "com.ommphysioworld.userapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBeFImMR2zCnkSqkSPr6mtpdrso73naSjs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -21,6 +21,8 @@ const patientNotificationSchema = new mongoose.Schema(
     entityId: { type: String, default: "", trim: true },
     actionUrl: { type: String, default: "", trim: true },
     scheduledFor: { type: Date, default: Date.now, index: true },
+    pushedAt: { type: Date, default: null, index: true },
+    pushStatus: { type: String, default: "pending", trim: true },
     readAt: { type: Date, default: null },
     createdByUserId: {
       type: mongoose.Schema.Types.ObjectId,

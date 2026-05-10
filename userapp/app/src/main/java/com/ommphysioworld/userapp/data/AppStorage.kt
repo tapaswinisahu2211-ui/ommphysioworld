@@ -27,6 +27,14 @@ class AppStorage(context: Context) {
         preferences.edit().remove(KEY_PATIENT_USER).apply()
     }
 
+    fun getFcmToken(): String {
+        return preferences.getString(KEY_FCM_TOKEN, "").orEmpty()
+    }
+
+    fun saveFcmToken(token: String) {
+        preferences.edit().putString(KEY_FCM_TOKEN, token.trim()).apply()
+    }
+
     fun getNotificationsSeenAt(patientId: String): Instant? {
         val normalizedId = patientId.trim()
         if (normalizedId.isEmpty()) {
@@ -120,6 +128,7 @@ class AppStorage(context: Context) {
     private companion object {
         const val KEY_ONBOARDING_SEEN = "has_seen_onboarding"
         const val KEY_PATIENT_USER = "patient_user"
+        const val KEY_FCM_TOKEN = "fcm_token"
         const val KEY_NOTIFICATIONS_SEEN_PREFIX = "patient_notifications_seen_at_"
         const val KEY_DISMISSED_NOTIFICATIONS_PREFIX = "patient_dismissed_notifications_"
         const val KEY_SHOWN_SYSTEM_NOTIFICATIONS_PREFIX = "patient_shown_system_notifications_"

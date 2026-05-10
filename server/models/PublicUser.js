@@ -1,5 +1,16 @@
 const mongoose = require("mongoose");
 
+const fcmTokenSchema = new mongoose.Schema(
+  {
+    token: { type: String, required: true, trim: true },
+    platform: { type: String, default: "android", trim: true },
+    deviceId: { type: String, default: "", trim: true },
+    lastSeenAt: { type: Date, default: Date.now },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const publicUserSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   email: {
@@ -21,6 +32,7 @@ const publicUserSchema = new mongoose.Schema({
     ref: "Patient",
     default: null,
   },
+  fcmTokens: { type: [fcmTokenSchema], default: [] },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });

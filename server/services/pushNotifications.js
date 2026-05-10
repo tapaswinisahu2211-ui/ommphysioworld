@@ -3,7 +3,6 @@ const admin = require("firebase-admin");
 const PatientNotification = require("../models/PatientNotification");
 const PublicUser = require("../models/PublicUser");
 
-const PUSH_CHANNEL_ID = "opw_patient_updates";
 const MAX_MULTICAST_TOKENS = 500;
 const INVALID_TOKEN_CODES = new Set([
   "messaging/invalid-argument",
@@ -130,10 +129,6 @@ const buildPushPayload = (tokens, patientId, notification) => {
 
   return {
     tokens,
-    notification: {
-      title,
-      body,
-    },
     data: {
       notificationId,
       patientId: getPatientId(patientId),
@@ -145,10 +140,7 @@ const buildPushPayload = (tokens, patientId, notification) => {
     },
     android: {
       priority: "high",
-      notification: {
-        channelId: PUSH_CHANNEL_ID,
-        notificationCount: 1,
-      },
+      ttl: 24 * 60 * 60 * 1000,
     },
   };
 };

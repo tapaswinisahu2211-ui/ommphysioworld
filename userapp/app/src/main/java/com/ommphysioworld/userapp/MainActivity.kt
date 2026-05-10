@@ -19,7 +19,9 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.OpenableColumns
+import android.provider.Settings
 import android.webkit.MimeTypeMap
 import android.widget.VideoView
 import androidx.activity.ComponentActivity
@@ -222,7 +224,7 @@ private enum class PublicSection(val label: String) {
 }
 
 private val FlatShape = RoundedCornerShape(0.dp)
-private const val PATIENT_NOTIFICATION_CHANNEL_ID = "opw_patient_updates"
+private const val PATIENT_NOTIFICATION_CHANNEL_ID = "opw_patient_alerts"
 
 private data class DashboardSnapshot(
     val patient: JsonMap? = null,
@@ -945,6 +947,7 @@ private fun DashboardScreen(
 
     LaunchedEffect(patientId) {
         ensureOpwPushChannel(context)
+        requestBatteryOptimizationExemptionIfNeeded(context, storage)
         syncFcmTokenWithServer(context, storage, apiService, patientId)
         refreshDashboard()
     }
@@ -5777,12 +5780,36 @@ private fun ensurePatientNotificationChannel(context: Context) {
     val channel = NotificationChannel(
         PATIENT_NOTIFICATION_CHANNEL_ID,
         "OPW patient updates",
-        NotificationManager.IMPORTANCE_DEFAULT,
+        NotificationManager.IMPORTANCE_HIGH,
     ).apply {
         description = "Appointment, treatment, therapy, payment, and OPW custom updates."
         setShowBadge(true)
+        enableVibration(true)
     }
     manager.createNotificationChannel(channel)
+}
+
+private fun requestBatteryOptimizationExemptionIfNeeded(context: Context, storage: AppStorage) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+        return
+    }
+
+    if (storage.hasAskedBatteryOptimizationExemption()) {
+        return
+    }
+
+    val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
+    if (powerManager.isIgnoringBatteryOptimizations(context.packageName)) {
+        storage.markBatteryOptimizationExemptionAsked()
+        return
+    }
+
+    storage.markBatteryOptimizationExemptionAsked()
+    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+        data = Uri.parse("package:${context.packageName}")
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+    }
+    runCatching { context.startActivity(intent) }
 }
 
 @Suppress("MissingPermission")
@@ -5816,13 +5843,15 @@ private fun showSystemNotificationsForUnread(
         intent,
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
+    val largeIcon = BitmapFactory.decodeResource(context.resources, R.drawable.opw_notification_large)
 
     notifications
         .filter { it.id.isNotBlank() && it.id !in shownIds }
         .take(5)
         .forEach { item ->
             val notification = NotificationCompat.Builder(context, PATIENT_NOTIFICATION_CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setSmallIcon(R.drawable.ic_stat_opw)
+                .setLargeIcon(largeIcon)
                 .setContentTitle(item.title)
                 .setContentText(item.body)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(item.body))
@@ -5830,7 +5859,10 @@ private fun showSystemNotificationsForUnread(
                 .setAutoCancel(true)
                 .setNumber(unreadCount)
                 .setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                .setDefaults(NotificationCompat.DEFAULT_ALL)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .build()
 
             manager.notify(item.id.hashCode(), notification)

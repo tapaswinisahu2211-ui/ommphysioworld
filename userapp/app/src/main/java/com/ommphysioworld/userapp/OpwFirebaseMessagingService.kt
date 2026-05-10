@@ -7,7 +7,9 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -21,29 +23,37 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-internal const val OPW_PUSH_CHANNEL_ID = "opw_patient_updates"
+internal const val OPW_PUSH_CHANNEL_ID = "opw_patient_alerts"
+private const val OPW_FCM_LOG_TAG = "OPW_FCM"
 
 class OpwFirebaseMessagingService : FirebaseMessagingService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
+        Log.i(OPW_FCM_LOG_TAG, "New FCM token received.")
         val storage = AppStorage(applicationContext)
         storage.saveFcmToken(token)
         val patientId = storage.getPatientUser().string("patientId")
         if (patientId.isBlank()) {
+            Log.i(OPW_FCM_LOG_TAG, "FCM token saved locally; patient session is not available yet.")
             return
         }
 
         serviceScope.launch {
-            runCatching {
+            val result = runCatching {
                 AppApiService(storage).registerDeviceToken(patientId, token)
             }
+            Log.i(OPW_FCM_LOG_TAG, "FCM token registration result: ${result.isSuccess}.")
         }
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
+        Log.i(
+            OPW_FCM_LOG_TAG,
+            "FCM message received. from=${message.from.orEmpty()} dataKeys=${message.data.keys.joinToString()}",
+        )
         val title = message.notification?.title
             ?: message.data["title"]
             ?: "OPW update"
@@ -53,6 +63,15 @@ class OpwFirebaseMessagingService : FirebaseMessagingService() {
         val notificationId = message.data["notificationId"].orEmpty().ifBlank {
             System.currentTimeMillis().toString()
         }
+        val storage = AppStorage(applicationContext)
+        val patientId = message.data["patientId"].orEmpty().ifBlank {
+            storage.getPatientUser().string("patientId")
+        }
+
+        if (patientId.isNotBlank() && notificationId in storage.getShownSystemNotificationIds(patientId)) {
+            Log.i(OPW_FCM_LOG_TAG, "FCM notification already shown. id=$notificationId")
+            return
+        }
 
         showOpwPushNotification(
             context = applicationContext,
@@ -61,6 +80,12 @@ class OpwFirebaseMessagingService : FirebaseMessagingService() {
             notificationId = notificationId,
             unreadCount = message.data["badge"]?.toIntOrNull() ?: 1,
         )
+        if (patientId.isNotBlank()) {
+            val shownIds = storage.getShownSystemNotificationIds(patientId).toMutableSet()
+            shownIds += notificationId
+            storage.saveShownSystemNotificationIds(patientId, shownIds.toList().takeLast(200).toSet())
+        }
+        Log.i(OPW_FCM_LOG_TAG, "System notification requested for id=$notificationId.")
     }
 }
 
@@ -73,10 +98,11 @@ internal fun ensureOpwPushChannel(context: Context) {
     val channel = NotificationChannel(
         OPW_PUSH_CHANNEL_ID,
         "OPW patient updates",
-        NotificationManager.IMPORTANCE_DEFAULT,
+        NotificationManager.IMPORTANCE_HIGH,
     ).apply {
         description = "Appointment, treatment, therapy, payment, and OPW custom updates."
         setShowBadge(true)
+        enableVibration(true)
     }
     manager.createNotificationChannel(channel)
 }
@@ -106,8 +132,10 @@ internal fun showOpwPushNotification(
         intent,
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
+    val largeIcon = BitmapFactory.decodeResource(context.resources, R.drawable.opw_notification_large)
     val notification = NotificationCompat.Builder(context, OPW_PUSH_CHANNEL_ID)
-        .setSmallIcon(R.drawable.ic_launcher_foreground)
+        .setSmallIcon(R.drawable.ic_stat_opw)
+        .setLargeIcon(largeIcon)
         .setContentTitle(title)
         .setContentText(body)
         .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -115,7 +143,10 @@ internal fun showOpwPushNotification(
         .setAutoCancel(true)
         .setNumber(unreadCount)
         .setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
-        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+        .setCategory(NotificationCompat.CATEGORY_REMINDER)
+        .setDefaults(NotificationCompat.DEFAULT_ALL)
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         .build()
 
     NotificationManagerCompat.from(context).notify(notificationId.hashCode(), notification)

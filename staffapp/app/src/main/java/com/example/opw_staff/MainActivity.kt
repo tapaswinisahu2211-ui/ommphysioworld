@@ -1034,7 +1034,7 @@ private fun StaffAdminApp() {
     fun decidePatientAppointmentRequest(patientId: String, request: JSONObject, action: String, date: String, time: String, note: String) {
         val activeSession = session ?: return
         val requestId = request.text("id")
-        if (patientId.isBlank() || requestId.isBlank()) return
+        if (requestId.isBlank()) return
         scope.launch {
             try {
                 val updatedRequest = if (action == "reschedule") {
@@ -1042,12 +1042,16 @@ private fun StaffAdminApp() {
                 } else {
                     api.approveAppointment(activeSession.token, requestId, date, time, note)
                 }
+                val tracker = api.getTreatmentTracker(activeSession.token)
                 dashboardState = dashboardState.copy(
                     appointments = dashboardState.appointments.map { current ->
                         if (current.text("id") == requestId) updatedRequest else current
                     },
+                    treatmentTracker = tracker,
                 )
-                refreshPatientFromServer(activeSession, patientId)
+                if (patientId.isNotBlank()) {
+                    refreshPatientFromServer(activeSession, patientId)
+                }
                 showMessage(if (action == "reschedule") "Request rescheduled." else "Request approved.")
             } catch (error: ApiException) {
                 if (error.statusCode == 401 || error.statusCode == 403) {
@@ -2184,6 +2188,7 @@ private fun DashboardScreen(
                             } else {
                                 null
                             },
+                            onRefresh = onRefresh,
                             onAdd = if (headerHasAdd) {
                                 { headerAddRequest += 1 }
                             } else {
@@ -2264,7 +2269,7 @@ private fun DashboardScreen(
                     AdminTab.Treatment -> TreatmentTab(
                         tracker = state.treatmentTracker,
                         onSessionDayStatusChange = onSessionDayStatusChange,
-                        onAppointmentApprove = onAppointmentApprove,
+                        onAppointmentRequestDecision = onPatientAppointmentRequestDecision,
                         onAppointmentStatusChange = onAppointmentStatusChange,
                     )
                     AdminTab.Mailbox -> MailboxTab(
@@ -2395,6 +2400,7 @@ private fun ModulePlainHeader(
     onMenu: () -> Unit,
     searchOpen: Boolean,
     onSearchToggle: (() -> Unit)? = null,
+    onRefresh: (() -> Unit)? = null,
     onAdd: (() -> Unit)? = null,
 ) {
     Row(
@@ -2414,6 +2420,9 @@ private fun ModulePlainHeader(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (onRefresh != null) {
+                RefreshCircleButton(onClick = onRefresh)
+            }
             if (onSearchToggle != null) {
                 SearchCircleButton(active = searchOpen, onClick = onSearchToggle)
             }
@@ -2851,6 +2860,26 @@ private fun AddCircleButton(
 }
 
 @Composable
+private fun RefreshCircleButton(
+    onClick: () -> Unit,
+) {
+    Surface(
+        shape = CircleShape,
+        color = Color.White,
+        border = androidx.compose.foundation.BorderStroke(1.dp, OpwBorder),
+        shadowElevation = 3.dp,
+        onClick = onClick,
+    ) {
+        Box(
+            modifier = Modifier.size(44.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            RefreshGlyph(color = OpwBlue)
+        }
+    }
+}
+
+@Composable
 private fun ArchiveCircleButton(
     count: Int,
     onClick: () -> Unit,
@@ -3003,6 +3032,36 @@ private fun SearchGlyph(color: Color) {
             color = color,
             start = Offset(14.5.dp.toPx(), 14.5.dp.toPx()),
             end = Offset(20.dp.toPx(), 20.dp.toPx()),
+            strokeWidth = 2.4.dp.toPx(),
+            cap = StrokeCap.Round,
+        )
+    }
+}
+
+@Composable
+private fun RefreshGlyph(color: Color) {
+    Canvas(modifier = Modifier.size(22.dp)) {
+        val stroke = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round)
+        drawArc(
+            color = color,
+            startAngle = 38f,
+            sweepAngle = 278f,
+            useCenter = false,
+            topLeft = Offset(4.dp.toPx(), 4.dp.toPx()),
+            size = Size(14.dp.toPx(), 14.dp.toPx()),
+            style = stroke,
+        )
+        drawLine(
+            color = color,
+            start = Offset(16.dp.toPx(), 4.5.dp.toPx()),
+            end = Offset(18.dp.toPx(), 9.dp.toPx()),
+            strokeWidth = 2.4.dp.toPx(),
+            cap = StrokeCap.Round,
+        )
+        drawLine(
+            color = color,
+            start = Offset(16.dp.toPx(), 4.5.dp.toPx()),
+            end = Offset(11.5.dp.toPx(), 5.4.dp.toPx()),
             strokeWidth = 2.4.dp.toPx(),
             cap = StrokeCap.Round,
         )
@@ -6525,7 +6584,7 @@ private fun AppointmentsTab(
 private fun TreatmentTab(
     tracker: JSONObject?,
     onSessionDayStatusChange: (String, String, String, String) -> Unit,
-    onAppointmentApprove: (JSONObject) -> Unit,
+    onAppointmentRequestDecision: (String, JSONObject, String, String, String, String) -> Unit,
     onAppointmentStatusChange: (JSONObject, String) -> Unit,
 ) {
     if (tracker == null) {
@@ -6666,31 +6725,10 @@ private fun TreatmentTab(
                 InlineEmpty("No appointment requests found.")
             } else {
                 appointmentRequests.forEach { request ->
-                    RecordCard(
-                        title = request.text("name", fallback = "Patient"),
-                        subtitle = request.text("service", fallback = "Appointment"),
-                        status = request.text("status", fallback = "pending").replaceFirstChar {
-                            if (it.isLowerCase()) it.titlecase() else it.toString()
-                        },
-                        statusColor = OpwWarning,
-                        rows = listOf(
-                            "Phone" to request.text("phone", fallback = "Not provided"),
-                            "Requested" to scheduleLabel(request.text("requestedDate"), request.text("requestedTime")),
-                            "Message" to request.text("message", fallback = "No message"),
-                        ),
-                        actions = {
-                            Row(
-                                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                Button(onClick = { onAppointmentApprove(request) }) {
-                                    Text("Approve")
-                                }
-                                OutlinedButton(onClick = { onAppointmentStatusChange(request, "cancelled") }) {
-                                    Text("Cancel")
-                                }
-                            }
-                        },
+                    TreatmentTrackerAppointmentRequestCard(
+                        request = request,
+                        onDecision = onAppointmentRequestDecision,
+                        onCancel = { onAppointmentStatusChange(request, "cancelled") },
                     )
                 }
             }
@@ -6769,6 +6807,63 @@ private fun TreatmentTab(
             }
         }
     }
+}
+
+@Composable
+private fun TreatmentTrackerAppointmentRequestCard(
+    request: JSONObject,
+    onDecision: (String, JSONObject, String, String, String, String) -> Unit,
+    onCancel: () -> Unit,
+) {
+    val status = request.text("status", fallback = "pending").trim().lowercase()
+    val patientId = request.text("patientId")
+    var decisionAction by rememberSaveable(request.text("id")) { mutableStateOf("") }
+
+    if (decisionAction.isNotBlank()) {
+        AppointmentRequestDecisionDialog(
+            patientId = patientId,
+            request = request,
+            action = decisionAction,
+            onDismiss = { decisionAction = "" },
+            onDecision = { id, item, action, date, time, note ->
+                onDecision(id, item, action, date, time, note)
+                decisionAction = ""
+            },
+        )
+    }
+
+    RecordCard(
+        title = request.text("name", fallback = "Patient"),
+        subtitle = request.text("service", fallback = "Appointment"),
+        status = appointmentStatusLabel(status),
+        statusColor = statusColor(status),
+        rows = listOf(
+            "Phone" to request.text("phone", fallback = "Not provided"),
+            "Requested" to scheduleLabel(request.text("requestedDate"), request.text("requestedTime")),
+            "Location" to formatServiceLocation(request.text("serviceLocation")),
+            "Message" to request.text("message", fallback = "No message"),
+        ),
+        actions = {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (status !in listOf("approved", "completed", "cancelled")) {
+                    Button(onClick = { decisionAction = "approve" }) {
+                        Text("Approve")
+                    }
+                    OutlinedButton(onClick = { decisionAction = "reschedule" }) {
+                        Text("Reschedule")
+                    }
+                }
+                if (status != "cancelled") {
+                    OutlinedButton(onClick = onCancel) {
+                        Text("Cancel")
+                    }
+                }
+            }
+        },
+    )
 }
 
 @Composable
@@ -10023,6 +10118,9 @@ private fun scheduleLabel(date: String, time: String): String {
         else -> "Not set"
     }
 }
+
+private fun formatServiceLocation(value: String): String =
+    if (value.trim().lowercase() == "home") "At home" else "At clinic"
 
 private fun formatMoney(value: Any?): String {
     val amount = when (value) {

@@ -944,6 +944,7 @@ private fun DashboardScreen(
     }
 
     LaunchedEffect(patientId) {
+        ensureOpwPushChannel(context)
         syncFcmTokenWithServer(context, storage, apiService, patientId)
         refreshDashboard()
     }

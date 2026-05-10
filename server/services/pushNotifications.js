@@ -241,6 +241,12 @@ const sendDuePatientPushNotifications = async (limit = 100) => {
   for (const notification of notifications) {
     const result = await sendPatientPushNotification(notification.patientId, notification);
     sent += result.sent;
+    if (["firebase-not-configured", "no-token"].includes(result.skipped)) {
+      notification.pushStatus = result.skipped;
+      await notification.save();
+      continue;
+    }
+
     notification.pushedAt = new Date();
     notification.pushStatus = getPushStatus(result);
     await notification.save();

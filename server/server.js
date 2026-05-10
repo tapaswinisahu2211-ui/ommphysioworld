@@ -617,7 +617,9 @@ const pushPatientNotificationIfDue = async (notification) => {
 
   try {
     const result = await sendPatientPushNotification(notification.patientId, notification);
-    if (result.skipped === "firebase-not-configured") {
+    if (["firebase-not-configured", "no-token"].includes(result.skipped)) {
+      notification.pushStatus = result.skipped;
+      await notification.save();
       return notification;
     }
 

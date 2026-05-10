@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  Bell,
   BriefcaseMedical,
   ClipboardList,
   FolderOpen,
@@ -59,6 +60,7 @@ export default function Sidebar({ collapsed, onNavigate }) {
       : []),
     { name: "Staff", path: "/staff", icon: UserCog, hint: "Team", moduleKey: "staff" },
     { name: "Mailbox", path: "/mailbox", icon: Mail, hint: "Inbox", moduleKey: "mailbox" },
+    { name: "Notifications", path: "/notifications", icon: Bell, hint: "Custom sends", moduleKey: "" },
   ].filter((menu) => canViewModule(menu.moduleKey, currentUser));
 
   return (

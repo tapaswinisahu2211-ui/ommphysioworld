@@ -135,6 +135,18 @@ class AppApiService(
         return extractList(getJson("/patients/$patientId/appointment-requests"))
     }
 
+    suspend fun getPatientNotifications(patientId: String): List<JsonMap> {
+        return extractList(getJson("/patients/$patientId/notifications"))
+    }
+
+    suspend fun markNotificationRead(patientId: String, notificationId: String): JsonMap {
+        return requestJson("PATCH", "/patients/$patientId/notifications/$notificationId/read", emptyMap())
+    }
+
+    suspend fun markAllNotificationsRead(patientId: String): List<JsonMap> {
+        return extractList(requestJson("PATCH", "/patients/$patientId/notifications/read-all", emptyMap()))
+    }
+
     suspend fun getMyShopOrders(): List<JsonMap> = extractList(getJson("/shop/orders/my"))
 
     suspend fun placeShopOrder(items: List<JsonMap>, note: String): JsonMap {

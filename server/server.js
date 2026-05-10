@@ -65,6 +65,7 @@ const ChatConversation = require("./models/ChatConversation");
 const ContactMessage = require("./models/ContactMessage");
 const Feedback = require("./models/Feedback");
 const JobRequirement = require("./models/JobRequirement");
+const PatientNotification = require("./models/PatientNotification");
 const Patient = require("./models/Patient");
 const PublicUser = require("./models/PublicUser");
 const Service = require("./models/Service");
@@ -536,6 +537,303 @@ const getAppointmentScheduleKey = (appointment) =>
       ""
   ).slice(0, 10);
 
+const CLINIC_TIMEZONE_OFFSET = process.env.CLINIC_TIMEZONE_OFFSET || "+05:30";
+
+const serializePatientNotification = (notification, patient = null) => ({
+  id: notification._id.toString(),
+  patientId: patient?._id
+    ? patient._id.toString()
+    : notification.patientId?._id
+    ? notification.patientId._id.toString()
+    : notification.patientId
+    ? notification.patientId.toString()
+    : "",
+  patientName:
+    patient?.name ||
+    notification.patientId?.name ||
+    notification.metadata?.patientName ||
+    "",
+  category: notification.category || "general",
+  title: notification.title || "",
+  body: notification.body || "",
+  entityType: notification.entityType || "",
+  entityId: notification.entityId || "",
+  actionUrl: notification.actionUrl || "",
+  scheduledFor: notification.scheduledFor || null,
+  readAt: notification.readAt || null,
+  createdByLabel: notification.createdByLabel || "OPW",
+  metadata: notification.metadata || {},
+  createdAt: notification.createdAt,
+  updatedAt: notification.updatedAt,
+});
+
+const clinicDateTime = (dateKey, timeValue = "09:00") => {
+  const date = String(dateKey || "").slice(0, 10);
+  if (!date) {
+    return null;
+  }
+
+  const normalizedTime =
+    String(timeValue || "")
+      .trim()
+      .match(/^\d{1,2}:\d{2}/)?.[0] || "09:00";
+  const [hour, minute] = normalizedTime.split(":").map(Number);
+  const safeHour = Number.isFinite(hour) ? Math.min(Math.max(hour, 0), 23) : 9;
+  const safeMinute = Number.isFinite(minute) ? Math.min(Math.max(minute, 0), 59) : 0;
+  const parsed = new Date(
+    `${date}T${String(safeHour).padStart(2, "0")}:${String(safeMinute).padStart(2, "0")}:00${CLINIC_TIMEZONE_OFFSET}`
+  );
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const addDaysToClinicDate = (dateKey, days, timeValue = "09:00") => {
+  const base = clinicDateTime(dateKey, timeValue);
+  if (!base) {
+    return null;
+  }
+
+  const next = new Date(base);
+  next.setDate(next.getDate() + Number(days || 0));
+  return next;
+};
+
+const createPatientNotification = async ({
+  patientId,
+  patient,
+  category,
+  title,
+  body,
+  uniqueKey,
+  entityType = "",
+  entityId = "",
+  actionUrl = "",
+  scheduledFor = new Date(),
+  createdByUserId = null,
+  createdByLabel = "OPW",
+  metadata = {},
+}) => {
+  const resolvedPatientId = patientId || patient?._id;
+
+  if (!resolvedPatientId || !title || !body || !uniqueKey) {
+    return null;
+  }
+
+  return PatientNotification.findOneAndUpdate(
+    { uniqueKey },
+    {
+      $setOnInsert: {
+        patientId: resolvedPatientId,
+        category,
+        title,
+        body,
+        uniqueKey,
+        entityType,
+        entityId,
+        actionUrl,
+        scheduledFor: scheduledFor || new Date(),
+        createdByUserId,
+        createdByLabel,
+        metadata: {
+          ...metadata,
+          patientName: metadata.patientName || patient?.name || "",
+        },
+      },
+    },
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  );
+};
+
+const createNotificationForAppointment = async (appointment, statusLabel = "") => {
+  const patient = await resolveAppointmentPatient(appointment);
+  if (!patient) {
+    return null;
+  }
+
+  const status = String(appointment.status || "").toLowerCase();
+  const service = appointment.service || "Appointment";
+  const confirmedDate =
+    status === "rescheduled"
+      ? appointment.rescheduledDate || appointment.approvedDate || appointment.date
+      : appointment.approvedDate || appointment.rescheduledDate || appointment.date;
+  const confirmedTime =
+    status === "rescheduled"
+      ? appointment.rescheduledTime || appointment.approvedTime || appointment.time
+      : appointment.approvedTime || appointment.rescheduledTime || appointment.time;
+  const label =
+    statusLabel ||
+    {
+      approved: "approved",
+      rescheduled: "rescheduled",
+      completed: "completed",
+      cancelled: "cancelled",
+    }[status] ||
+    "updated";
+  const scheduleLine = confirmedDate
+    ? `Schedule: ${confirmedDate}${confirmedTime ? ` at ${confirmedTime}` : ""}`
+    : "Please check your appointment details inside the app.";
+  const noteLine = appointment.decisionNote
+    ? `\nOPW note: ${appointment.decisionNote}`
+    : "";
+
+  await createPatientNotification({
+    patient,
+    category: "appointment",
+    title: `Your ${service} appointment is ${label}`,
+    body: `${scheduleLine}${noteLine}`,
+    uniqueKey: `appointment:${appointment._id.toString()}:${status}:${appointment.decisionAt?.getTime?.() || Date.now()}`,
+    entityType: "appointment",
+    entityId: appointment._id.toString(),
+    actionUrl: "appointments",
+    metadata: { status, service, confirmedDate, confirmedTime },
+  });
+
+  if (["approved", "rescheduled"].includes(status)) {
+    await scheduleAppointmentReminders(appointment, patient);
+  }
+
+  return patient;
+};
+
+const scheduleAppointmentReminders = async (appointment, patient) => {
+  const status = String(appointment.status || "").toLowerCase();
+  if (!patient || !["approved", "rescheduled"].includes(status)) {
+    return;
+  }
+
+  const date =
+    status === "rescheduled"
+      ? appointment.rescheduledDate || appointment.approvedDate || appointment.date
+      : appointment.approvedDate || appointment.rescheduledDate || appointment.date;
+  const time =
+    status === "rescheduled"
+      ? appointment.rescheduledTime || appointment.approvedTime || appointment.time
+      : appointment.approvedTime || appointment.rescheduledTime || appointment.time;
+  const appointmentAt = clinicDateTime(date, time || "09:00");
+
+  if (!appointmentAt) {
+    return;
+  }
+
+  const service = appointment.service || "appointment";
+  const reminders = [
+    {
+      key: "one-day",
+      scheduledFor: new Date(appointmentAt.getTime() - 24 * 60 * 60 * 1000),
+      title: "Appointment reminder for tomorrow",
+      body: `Your ${service} appointment is tomorrow${time ? ` at ${time}` : ""}.`,
+    },
+    {
+      key: "same-day",
+      scheduledFor: clinicDateTime(date, "08:00") || appointmentAt,
+      title: "Appointment reminder for today",
+      body: `Your ${service} appointment is today${time ? ` at ${time}` : ""}.`,
+    },
+    {
+      key: "before-hours",
+      scheduledFor: new Date(appointmentAt.getTime() - 2 * 60 * 60 * 1000),
+      title: "Appointment coming up soon",
+      body: `Your ${service} appointment is coming up${time ? ` at ${time}` : ""}.`,
+    },
+  ];
+  const now = new Date();
+
+  await Promise.all(
+    reminders
+      .filter((reminder) => reminder.scheduledFor >= now)
+      .map((reminder) =>
+        createPatientNotification({
+          patient,
+          category: "appointment_reminder",
+          title: reminder.title,
+          body: reminder.body,
+          uniqueKey: `appointment-reminder:${appointment._id.toString()}:${date}:${time || ""}:${reminder.key}`,
+          entityType: "appointment",
+          entityId: appointment._id.toString(),
+          actionUrl: "appointments",
+          scheduledFor: reminder.scheduledFor,
+          metadata: { service, date, time, reminder: reminder.key },
+        })
+      )
+  );
+};
+
+const scheduleTreatmentPlanNotifications = async (patient, plan) => {
+  if (!patient || !plan) {
+    return;
+  }
+
+  const planId = plan._id.toString();
+  const treatmentLabel = (plan.treatmentTypes || []).join(", ") || "Treatment session";
+
+  await createPatientNotification({
+    patient,
+    category: "session",
+    title: "Treatment session started",
+    body: `${treatmentLabel} has been started from ${plan.fromDate || "today"} to ${plan.toDate || "the planned end date"}.`,
+    uniqueKey: `treatment-start:${patient._id.toString()}:${planId}:${plan.createdAt?.getTime?.() || plan.fromDate || Date.now()}`,
+    entityType: "treatment_plan",
+    entityId: planId,
+    actionUrl: "sessions",
+    metadata: { treatmentTypes: plan.treatmentTypes || [], fromDate: plan.fromDate, toDate: plan.toDate },
+  });
+
+  await Promise.all(
+    (plan.sessionDays || []).map((day) =>
+      createPatientNotification({
+        patient,
+        category: "session_reminder",
+        title: "Treatment session today",
+        body: `${treatmentLabel} is scheduled today. Please follow your OPW session plan.`,
+        uniqueKey: `session-reminder:${patient._id.toString()}:${planId}:${day._id.toString()}:${day.date}`,
+        entityType: "treatment_plan",
+        entityId: planId,
+        actionUrl: "sessions",
+        scheduledFor: clinicDateTime(day.date, "08:00") || new Date(),
+        metadata: { treatmentTypes: plan.treatmentTypes || [], date: day.date },
+      })
+    )
+  );
+
+  if (Number(plan.balanceAmount || 0) > 0 && plan.toDate) {
+    await createPatientNotification({
+      patient,
+      category: "payment",
+      title: "Treatment balance reminder",
+      body: `Your pending balance is ₹${Number(plan.balanceAmount || 0).toLocaleString("en-IN")}. Please complete payment after your session.`,
+      uniqueKey: `payment-balance-after-plan:${patient._id.toString()}:${planId}:${plan.toDate}:${Number(plan.balanceAmount || 0)}`,
+      entityType: "treatment_plan",
+      entityId: planId,
+      actionUrl: "payments",
+      scheduledFor: addDaysToClinicDate(plan.toDate, 1, "10:00") || new Date(),
+      metadata: { balanceAmount: Number(plan.balanceAmount || 0), toDate: plan.toDate },
+    });
+  }
+
+  if (plan.toDate) {
+    await Promise.all(
+      [
+        { days: 7, label: "7 days" },
+        { days: 15, label: "15 days" },
+        { days: 30, label: "1 month" },
+      ].map((followUp) =>
+        createPatientNotification({
+          patient,
+          category: "follow_up",
+          title: `OPW follow-up reminder after ${followUp.label}`,
+          body: "It has been a little while since your treatment session ended. Please check in with OPW if you need review or support.",
+          uniqueKey: `follow-up:${patient._id.toString()}:${planId}:${plan.toDate}:${followUp.days}`,
+          entityType: "treatment_plan",
+          entityId: planId,
+          actionUrl: "appointments",
+          scheduledFor: addDaysToClinicDate(plan.toDate, followUp.days, "09:00") || new Date(),
+          metadata: { endedOn: plan.toDate, daysAfterEnd: followUp.days },
+        })
+      )
+    );
+  }
+};
+
 app.get("/", (req, res) => {
   res.send("Omm Physio World API is running.");
 });
@@ -836,6 +1134,7 @@ const autoCompleteOverdueAppointments = async (filter = {}) => {
     appointment.readAt = appointment.readAt || new Date();
     await appointment.save();
     await upsertPatientAppointmentFromRequest(appointment);
+    await createNotificationForAppointment(appointment, "completed");
     updatedCount += 1;
   }
 
@@ -1519,6 +1818,7 @@ app.patch("/api/appointments/:id/approve", requireStaffAuth, async (req, res) =>
     await appointment.save();
 
     await upsertPatientAppointmentFromRequest(appointment);
+    await createNotificationForAppointment(appointment, "approved");
 
     res.json(serializeAppointmentRequest(appointment));
   } catch (error) {
@@ -1553,6 +1853,7 @@ app.patch("/api/appointments/:id/reschedule", requireStaffAuth, async (req, res)
     await appointment.save();
 
     await upsertPatientAppointmentFromRequest(appointment);
+    await createNotificationForAppointment(appointment, "rescheduled");
 
     res.json(serializeAppointmentRequest(appointment));
   } catch (error) {
@@ -1589,6 +1890,7 @@ app.patch("/api/appointments/:id/status", requireStaffAuth, async (req, res) => 
     await appointment.save();
 
     await upsertPatientAppointmentFromRequest(appointment);
+    await createNotificationForAppointment(appointment, status === "completed" ? "completed" : "cancelled");
 
     res.json(serializeAppointmentRequest(appointment));
   } catch (error) {
@@ -1644,6 +1946,167 @@ app.patch("/api/appointments/:id/notification-seen", requirePatientOrStaffAuth, 
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to update appointment notification." });
+  }
+});
+
+app.get("/api/patients/:id/notifications", requirePatientRecordAccess, async (req, res) => {
+  try {
+    const patient = await Patient.findById(req.params.id);
+
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found." });
+    }
+
+    const notifications = await PatientNotification.find({
+      patientId: patient._id,
+      scheduledFor: { $lte: new Date() },
+    })
+      .sort({ scheduledFor: -1, createdAt: -1 })
+      .limit(200);
+
+    res.json(notifications.map((notification) => serializePatientNotification(notification, patient)));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to load notifications." });
+  }
+});
+
+app.patch("/api/patients/:id/notifications/:notificationId/read", requirePatientRecordAccess, async (req, res) => {
+  try {
+    const notification = await PatientNotification.findOne({
+      _id: req.params.notificationId,
+      patientId: req.params.id,
+    });
+
+    if (!notification) {
+      return res.status(404).json({ message: "Notification not found." });
+    }
+
+    notification.readAt = notification.readAt || new Date();
+    await notification.save();
+
+    res.json(serializePatientNotification(notification));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to mark notification as read." });
+  }
+});
+
+app.patch("/api/patients/:id/notifications/read-all", requirePatientRecordAccess, async (req, res) => {
+  try {
+    const patient = await Patient.findById(req.params.id);
+
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found." });
+    }
+
+    await PatientNotification.updateMany(
+      {
+        patientId: patient._id,
+        scheduledFor: { $lte: new Date() },
+        readAt: null,
+      },
+      { $set: { readAt: new Date() } }
+    );
+
+    const notifications = await PatientNotification.find({
+      patientId: patient._id,
+      scheduledFor: { $lte: new Date() },
+    })
+      .sort({ scheduledFor: -1, createdAt: -1 })
+      .limit(200);
+
+    res.json(notifications.map((notification) => serializePatientNotification(notification, patient)));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to mark notifications as read." });
+  }
+});
+
+app.get("/api/notifications/admin", requireStaffAuth, async (req, res) => {
+  try {
+    const notifications = await PatientNotification.find()
+      .populate("patientId", "name email mobile")
+      .sort({ scheduledFor: -1, createdAt: -1 })
+      .limit(300);
+
+    res.json(
+      notifications.map((notification) =>
+        serializePatientNotification(notification, notification.patientId)
+      )
+    );
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to load notification history." });
+  }
+});
+
+app.post("/api/notifications/custom", requireStaffAuth, async (req, res) => {
+  try {
+    const title = cleanText(req.body.title);
+    const body = cleanText(req.body.body || req.body.message);
+    const audience = cleanText(req.body.audience || "selected").toLowerCase();
+    const patientIds = Array.isArray(req.body.patientIds)
+      ? req.body.patientIds.map((id) => cleanText(id)).filter(Boolean)
+      : [];
+    const scheduledFor = req.body.scheduledFor
+      ? new Date(req.body.scheduledFor)
+      : new Date();
+
+    if (!title || !body) {
+      return res.status(400).json({ message: "Title and message are required." });
+    }
+
+    if (Number.isNaN(scheduledFor.getTime())) {
+      return res.status(400).json({ message: "Please select a valid schedule date." });
+    }
+
+    const patientFilter =
+      audience === "all"
+        ? {}
+        : patientIds.length
+        ? { _id: { $in: patientIds } }
+        : null;
+
+    if (!patientFilter) {
+      return res.status(400).json({ message: "Please choose at least one patient." });
+    }
+
+    const patients = await Patient.find(patientFilter).sort({ name: 1 }).limit(1000);
+
+    if (!patients.length) {
+      return res.status(404).json({ message: "No patients found for this notification." });
+    }
+
+    const sender = req.auth?.sub ? await User.findById(req.auth.sub) : null;
+    const batchId = `custom:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+    const created = await Promise.all(
+      patients.map((patient) =>
+        createPatientNotification({
+          patient,
+          category: "custom",
+          title,
+          body,
+          uniqueKey: `${batchId}:${patient._id.toString()}`,
+          entityType: "custom_notification",
+          entityId: batchId,
+          actionUrl: "notifications",
+          scheduledFor,
+          createdByUserId: sender?._id || null,
+          createdByLabel: sender?.name || "OPW",
+          metadata: { batchId, audience },
+        })
+      )
+    );
+
+    res.status(201).json({
+      message: `Notification sent to ${created.filter(Boolean).length} patient(s).`,
+      count: created.filter(Boolean).length,
+      batchId,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to send custom notification." });
   }
 });
 
@@ -2101,6 +2564,7 @@ app.post("/api/patients/:id/treatment-plans", requireStaffAuth, async (req, res)
     });
 
     await patient.save();
+    await scheduleTreatmentPlanNotifications(patient, patient.treatmentPlans[0]);
     res.status(201).json(serializePatient(patient));
   } catch (error) {
     console.log(error);
@@ -2129,6 +2593,20 @@ app.patch("/api/patients/:id/treatment-plans/:planId/status", requireStaffAuth, 
 
     plan.status = nextStatus;
     await patient.save();
+    if (nextStatus === "completed") {
+      await createPatientNotification({
+        patient,
+        category: "feedback",
+        title: "How was your treatment session?",
+        body: "Your treatment session has ended. Please share feedback so OPW can keep improving your care experience.",
+        uniqueKey: `treatment-feedback:${patient._id.toString()}:${plan._id.toString()}:${Date.now()}`,
+        entityType: "treatment_plan",
+        entityId: plan._id.toString(),
+        actionUrl: "feedback",
+        metadata: { treatmentTypes: plan.treatmentTypes || [], status: nextStatus },
+      });
+      await scheduleTreatmentPlanNotifications(patient, plan);
+    }
     res.json(serializePatient(patient));
   } catch (error) {
     console.log(error);
@@ -2193,6 +2671,7 @@ app.put("/api/patients/:id/treatment-plans/:planId", requireStaffAuth, async (re
     plan.sessionDays = buildSessionDays(plan.fromDate, plan.toDate, plan.sessionDays || []);
 
     await patient.save();
+    await scheduleTreatmentPlanNotifications(patient, plan);
     res.json(serializePatient(patient));
   } catch (error) {
     console.log(error);
@@ -2232,6 +2711,32 @@ app.patch("/api/patients/:id/treatment-plans/:planId/session-days/:dayId", requi
     sessionDay.status = nextStatus;
     sessionDay.updatedAt = new Date();
     await patient.save();
+    if (nextStatus === "done") {
+      await createPatientNotification({
+        patient,
+        category: "session",
+        title: "Treatment session marked done",
+        body: `${(plan.treatmentTypes || []).join(", ") || "Your session"} for ${sessionDay.date} has been marked done by OPW.`,
+        uniqueKey: `session-done:${patient._id.toString()}:${plan._id.toString()}:${sessionDay._id.toString()}:${sessionDay.updatedAt.getTime()}`,
+        entityType: "treatment_plan",
+        entityId: plan._id.toString(),
+        actionUrl: "sessions",
+        metadata: { date: sessionDay.date, status: nextStatus },
+      });
+      if (Number(plan.balanceAmount || 0) > 0) {
+        await createPatientNotification({
+          patient,
+          category: "payment",
+          title: "Pending treatment balance",
+          body: `Your current treatment balance is Rs. ${Number(plan.balanceAmount || 0).toLocaleString("en-IN")}. Please complete payment when convenient.`,
+          uniqueKey: `session-balance:${patient._id.toString()}:${plan._id.toString()}:${sessionDay._id.toString()}:${Number(plan.balanceAmount || 0)}`,
+          entityType: "treatment_plan",
+          entityId: plan._id.toString(),
+          actionUrl: "payments",
+          metadata: { balanceAmount: Number(plan.balanceAmount || 0), date: sessionDay.date },
+        });
+      }
+    }
 
     res.json(serializePatient(patient));
   } catch (error) {
@@ -2281,6 +2786,32 @@ app.post("/api/patients/:id/treatment-plans/:planId/payments", requireStaffAuth,
     }
 
     await patient.save();
+    const latestPayment = plan.payments[plan.payments.length - 1];
+    if (Number(plan.balanceAmount || 0) > 0) {
+      await createPatientNotification({
+        patient,
+        category: "payment",
+        title: "Payment received, balance pending",
+        body: `OPW received Rs. ${Number(amount || 0).toLocaleString("en-IN")}. Remaining balance: Rs. ${Number(plan.balanceAmount || 0).toLocaleString("en-IN")}.`,
+        uniqueKey: `treatment-payment-balance:${patient._id.toString()}:${plan._id.toString()}:${latestPayment?._id?.toString() || Date.now()}`,
+        entityType: "treatment_plan",
+        entityId: plan._id.toString(),
+        actionUrl: "payments",
+        metadata: { amount, balanceAmount: Number(plan.balanceAmount || 0) },
+      });
+    } else {
+      await createPatientNotification({
+        patient,
+        category: "payment",
+        title: "Treatment payment completed",
+        body: `OPW received Rs. ${Number(amount || 0).toLocaleString("en-IN")}. Your treatment balance is now clear.`,
+        uniqueKey: `treatment-payment-clear:${patient._id.toString()}:${plan._id.toString()}:${latestPayment?._id?.toString() || Date.now()}`,
+        entityType: "treatment_plan",
+        entityId: plan._id.toString(),
+        actionUrl: "payments",
+        metadata: { amount, balanceAmount: Number(plan.balanceAmount || 0) },
+      });
+    }
     res.status(201).json(serializePatient(patient));
   } catch (error) {
     console.log(error);
@@ -2338,6 +2869,20 @@ app.post("/api/patients/:id/clinical-notes", requirePatientRecordAccess, upload.
     });
 
     await patient.save();
+    if (addedByType === "opw") {
+      const createdNote = patient.clinicalNotes[0];
+      await createPatientNotification({
+        patient,
+        category: "clinical_note",
+        title: title || "New clinical note from OPW",
+        body: note || "OPW added a clinical note to your recovery record.",
+        uniqueKey: `clinical-note:${patient._id.toString()}:${createdNote?._id?.toString() || Date.now()}`,
+        entityType: "clinical_note",
+        entityId: createdNote?._id?.toString() || "",
+        actionUrl: "therapy",
+        metadata: { documentCount: (req.files || []).length },
+      });
+    }
     res.status(201).json(serializePatient(patient));
   } catch (error) {
     console.log(error);
@@ -2435,6 +2980,20 @@ app.post("/api/patients/:id/therapy-recommendations", requireStaffAuth, async (r
     }
 
     await patient.save();
+    const recommendation = (patient.therapyRecommendations || []).find(
+      (entry) => entry.serviceId?.toString() === service._id.toString()
+    );
+    await createPatientNotification({
+      patient,
+      category: "therapy",
+      title: `${service.name} therapy added`,
+      body: note || `${items.length} therapy file(s) have been shared by OPW.`,
+      uniqueKey: `therapy-recommendation:${patient._id.toString()}:${recommendation?._id?.toString() || service._id.toString()}:${recommendation?.updatedAt?.getTime?.() || Date.now()}`,
+      entityType: "therapy_recommendation",
+      entityId: recommendation?._id?.toString() || "",
+      actionUrl: "therapy",
+      metadata: { serviceName: service.name, itemCount: items.length },
+    });
     res.status(201).json(serializePatient(patient));
   } catch (error) {
     console.log(error);
@@ -2607,6 +3166,21 @@ app.post("/api/patients/:id/appointments", requireStaffAuth, async (req, res) =>
 
     patient.appointments.push({ date, time: time || "", service });
     await patient.save();
+    const createdAppointment = patient.appointments[patient.appointments.length - 1];
+    await createNotificationForAppointment(
+      {
+        _id: createdAppointment._id,
+        patientId: patient._id,
+        status: "approved",
+        service,
+        date,
+        time: time || "",
+        approvedDate: date,
+        approvedTime: time || "",
+        decisionAt: new Date(),
+      },
+      "scheduled"
+    );
 
     res.status(201).json(serializePatient(patient));
   } catch (error) {
@@ -2640,6 +3214,7 @@ app.delete("/api/patients/:id/appointments/:appointmentId", requireStaffAuth, as
         appointmentRequest.isRead = true;
         appointmentRequest.readAt = appointmentRequest.readAt || new Date();
         await appointmentRequest.save();
+        await createNotificationForAppointment(appointmentRequest, "cancelled");
       }
     }
 
@@ -2716,6 +3291,41 @@ app.patch("/api/patients/:id/appointments/:appointmentId", requireStaffAuth, asy
     }
 
     await patient.save();
+    if (!appointment.requestId) {
+      await createPatientNotification({
+        patient,
+        category: "appointment",
+        title: `Your ${appointment.service || "appointment"} appointment is ${status}`,
+        body: [
+          status === "rescheduled"
+            ? `New schedule: ${appointment.date}${appointment.time ? ` at ${appointment.time}` : ""}`
+            : `Status: ${status}`,
+          appointment.remark ? `OPW note: ${appointment.remark}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        uniqueKey: `patient-appointment:${patient._id.toString()}:${appointment._id.toString()}:${status}:${Date.now()}`,
+        entityType: "appointment",
+        entityId: appointment._id.toString(),
+        actionUrl: "appointments",
+        metadata: { status, date: appointment.date, time: appointment.time },
+      });
+      if (status === "rescheduled") {
+        await scheduleAppointmentReminders(
+          {
+            _id: appointment._id,
+            patientId: patient._id,
+            status: "rescheduled",
+            service: appointment.service,
+            date: appointment.date,
+            time: appointment.time,
+            rescheduledDate: appointment.date,
+            rescheduledTime: appointment.time,
+          },
+          patient
+        );
+      }
+    }
     res.json(serializePatient(patient));
   } catch (error) {
     console.log(error);
@@ -2744,6 +3354,18 @@ app.post("/api/patients/:id/payments", requireStaffAuth, async (req, res) => {
 
     patient.payments.push({ amount, method: method || "" });
     await patient.save();
+    const latestPayment = patient.payments[patient.payments.length - 1];
+    await createPatientNotification({
+      patient,
+      category: "payment",
+      title: "Payment update added",
+      body: `OPW recorded Rs. ${Number(amount || 0).toLocaleString("en-IN")} for your account.`,
+      uniqueKey: `direct-payment:${patient._id.toString()}:${latestPayment?._id?.toString() || Date.now()}`,
+      entityType: "payment",
+      entityId: latestPayment?._id?.toString() || "",
+      actionUrl: "payments",
+      metadata: { amount, method },
+    });
 
     res.status(201).json(serializePatient(patient));
   } catch (error) {

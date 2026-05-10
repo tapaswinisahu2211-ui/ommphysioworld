@@ -5,13 +5,19 @@
 
 package com.ommphysioworld.userapp
 
+import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
@@ -132,6 +138,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
 import com.ommphysioworld.userapp.data.ApiException
 import com.ommphysioworld.userapp.data.AppApiService
@@ -214,10 +222,12 @@ private enum class PublicSection(val label: String) {
 }
 
 private val FlatShape = RoundedCornerShape(0.dp)
+private const val PATIENT_NOTIFICATION_CHANNEL_ID = "opw_patient_updates"
 
 private data class DashboardSnapshot(
     val patient: JsonMap? = null,
     val appointmentRequests: List<JsonMap> = emptyList(),
+    val notifications: List<JsonMap> = emptyList(),
     val services: List<JsonMap> = emptyList(),
     val shopOrders: List<JsonMap> = emptyList(),
     val loading: Boolean = true,
@@ -227,7 +237,9 @@ private data class NotificationItem(
     val id: String,
     val title: String,
     val body: String,
+    val category: String = "general",
     val timestamp: Instant? = null,
+    val readAt: Instant? = null,
 )
 
 private data class OnboardingPage(
@@ -913,9 +925,11 @@ private fun DashboardScreen(
     var activeTab by rememberSaveable { mutableStateOf(DashboardTab.Overview) }
     var publicSection by rememberSaveable { mutableStateOf(PublicSection.About) }
     var snapshot by remember(patientId) { mutableStateOf(DashboardSnapshot()) }
-    var dismissedNotificationIds by remember(patientId) { mutableStateOf(storage.getDismissedNotificationIds(patientId)) }
     var showNotifications by remember { mutableStateOf(false) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {}
 
     fun refreshDashboard() {
         scope.launch {
@@ -933,16 +947,58 @@ private fun DashboardScreen(
         refreshDashboard()
     }
 
-    val notifications = remember(snapshot) {
-        buildNotifications(snapshot.patient, snapshot.appointmentRequests)
+    val notifications = remember(snapshot.notifications) {
+        snapshot.notifications.map(::serverNotificationItem)
     }
-    val activeNotifications = notifications.filterNot { it.id in dismissedNotificationIds }
+    val activeNotifications = notifications.filter { it.readAt == null }
     val unreadCount = activeNotifications.size
     val drawerProfileUrl = snapshot.patient
         .stringOrNull("profileImageUrl")
         ?.takeIf { it.isNotBlank() }
         ?.let(apiService::resolveResourceUrl)
         .orEmpty()
+
+    fun markNotificationRead(notificationId: String) {
+        scope.launch {
+            try {
+                apiService.markNotificationRead(patientId, notificationId)
+                snapshot = snapshot.copy(
+                    notifications = snapshot.notifications.map { item ->
+                        if (item.string("id") == notificationId) {
+                            item + ("readAt" to Instant.now().toString())
+                        } else {
+                            item
+                        }
+                    },
+                )
+            } catch (error: ApiException) {
+                onAuthError(error)
+            }
+        }
+    }
+
+    fun markAllNotificationsRead() {
+        scope.launch {
+            try {
+                snapshot = snapshot.copy(notifications = apiService.markAllNotificationsRead(patientId))
+            } catch (error: ApiException) {
+                onAuthError(error)
+            }
+        }
+    }
+
+    LaunchedEffect(patientId) {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    LaunchedEffect(patientId, activeNotifications) {
+        showSystemNotificationsForUnread(context, storage, patientId, activeNotifications, unreadCount)
+    }
 
     if (showNotifications) {
         AlertDialog(
@@ -951,6 +1007,13 @@ private fun DashboardScreen(
             confirmButton = {
                 TextButton(onClick = { showNotifications = false }) {
                     Text("Close")
+                }
+            },
+            dismissButton = {
+                if (activeNotifications.isNotEmpty()) {
+                    TextButton(onClick = ::markAllNotificationsRead) {
+                        Text("Mark all read")
+                    }
                 }
             },
             title = {
@@ -964,22 +1027,22 @@ private fun DashboardScreen(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    if (activeNotifications.isEmpty()) {
+                    if (notifications.isEmpty()) {
                         Text(
                             text = "OPW updates for therapy, appointments, sessions, payments, and orders will appear here.",
                             color = OpwSlate,
                         )
                     } else {
-                        activeNotifications.forEach { item ->
+                        notifications.forEach { item ->
                             NoticeCard(
                                 title = item.title,
                                 body = item.body,
                                 stamp = formatNotificationTime(item.timestamp),
-                                unread = true,
+                                unread = item.readAt == null,
                                 onClick = {
-                                    val nextDismissed = dismissedNotificationIds + item.id
-                                    dismissedNotificationIds = nextDismissed
-                                    storage.saveDismissedNotificationIds(patientId, nextDismissed)
+                                    if (item.readAt == null) {
+                                        markNotificationRead(item.id)
+                                    }
                                 },
                             )
                         }
@@ -5676,11 +5739,13 @@ private suspend fun loadDashboardSnapshot(apiService: AppApiService, patientId: 
         coroutineScope {
             val patient = apiService.getPatient(patientId)
             val appointmentRequests = apiService.getPatientAppointmentRequests(patientId)
+            val notifications = apiService.getPatientNotifications(patientId)
             val services = apiService.getServices()
             val shopOrders = apiService.getMyShopOrders()
             DashboardSnapshot(
                 patient = patient,
                 appointmentRequests = appointmentRequests,
+                notifications = notifications,
                 services = services,
                 shopOrders = shopOrders,
                 loading = false,
@@ -5689,6 +5754,88 @@ private suspend fun loadDashboardSnapshot(apiService: AppApiService, patientId: 
     } catch (error: ApiException) {
         throw error
     }
+}
+
+private fun serverNotificationItem(item: JsonMap): NotificationItem =
+    NotificationItem(
+        id = item.string("id"),
+        title = item.stringOrNull("title") ?: "OPW update",
+        body = item.stringOrNull("body") ?: "You have a new update from OPW.",
+        category = item.stringOrNull("category") ?: "general",
+        timestamp = firstValidInstant(item["scheduledFor"], item["createdAt"]),
+        readAt = firstValidInstant(item["readAt"]),
+    )
+
+private fun ensurePatientNotificationChannel(context: Context) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+        return
+    }
+
+    val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+    val channel = NotificationChannel(
+        PATIENT_NOTIFICATION_CHANNEL_ID,
+        "OPW patient updates",
+        NotificationManager.IMPORTANCE_DEFAULT,
+    ).apply {
+        description = "Appointment, treatment, therapy, payment, and OPW custom updates."
+        setShowBadge(true)
+    }
+    manager.createNotificationChannel(channel)
+}
+
+@Suppress("MissingPermission")
+private fun showSystemNotificationsForUnread(
+    context: Context,
+    storage: AppStorage,
+    patientId: String,
+    notifications: List<NotificationItem>,
+    unreadCount: Int,
+) {
+    if (patientId.isBlank() || notifications.isEmpty()) {
+        return
+    }
+
+    if (
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+    ) {
+        return
+    }
+
+    ensurePatientNotificationChannel(context)
+    val shownIds = storage.getShownSystemNotificationIds(patientId).toMutableSet()
+    val manager = NotificationManagerCompat.from(context)
+    val intent = Intent(context, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+    }
+    val pendingIntent = PendingIntent.getActivity(
+        context,
+        1001,
+        intent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    notifications
+        .filter { it.id.isNotBlank() && it.id !in shownIds }
+        .take(5)
+        .forEach { item ->
+            val notification = NotificationCompat.Builder(context, PATIENT_NOTIFICATION_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setContentTitle(item.title)
+                .setContentText(item.body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(item.body))
+                .setContentIntent(pendingIntent)
+                .setAutoCancel(true)
+                .setNumber(unreadCount)
+                .setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .build()
+
+            manager.notify(item.id.hashCode(), notification)
+            shownIds += item.id
+        }
+
+    storage.saveShownSystemNotificationIds(patientId, shownIds.toList().takeLast(200).toSet())
 }
 
 private fun buildNotifications(patient: JsonMap?, appointmentRequests: List<JsonMap>): List<NotificationItem> {

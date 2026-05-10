@@ -70,6 +70,28 @@ class AppStorage(context: Context) {
             .apply()
     }
 
+    fun getShownSystemNotificationIds(patientId: String): Set<String> {
+        val normalizedId = patientId.trim()
+        if (normalizedId.isEmpty()) {
+            return emptySet()
+        }
+
+        return preferences.getStringSet("$KEY_SHOWN_SYSTEM_NOTIFICATIONS_PREFIX$normalizedId", emptySet())
+            ?.toSet()
+            .orEmpty()
+    }
+
+    fun saveShownSystemNotificationIds(patientId: String, ids: Set<String>) {
+        val normalizedId = patientId.trim()
+        if (normalizedId.isEmpty()) {
+            return
+        }
+
+        preferences.edit()
+            .putStringSet("$KEY_SHOWN_SYSTEM_NOTIFICATIONS_PREFIX$normalizedId", ids)
+            .apply()
+    }
+
     fun getCartItems(): List<JsonMap> {
         val raw = preferences.getString(KEY_CART_ITEMS, "").orEmpty().trim()
         return runCatching { JsonUtils.parseValue(raw).asJsonMapList() }.getOrDefault(emptyList())
@@ -100,6 +122,7 @@ class AppStorage(context: Context) {
         const val KEY_PATIENT_USER = "patient_user"
         const val KEY_NOTIFICATIONS_SEEN_PREFIX = "patient_notifications_seen_at_"
         const val KEY_DISMISSED_NOTIFICATIONS_PREFIX = "patient_dismissed_notifications_"
+        const val KEY_SHOWN_SYSTEM_NOTIFICATIONS_PREFIX = "patient_shown_system_notifications_"
         const val KEY_CART_ITEMS = "shop_cart_items"
         const val KEY_CONVERSATION_ID = "public_chat_conversation_id"
     }

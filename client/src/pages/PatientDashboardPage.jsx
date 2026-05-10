@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  Bell,
   CalendarDays,
   CalendarClock,
   CircleX,
@@ -119,6 +120,8 @@ export default function PatientDashboardPage() {
     files: [],
   });
   const [appointmentRequests, setAppointmentRequests] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [shopOrders, setShopOrders] = useState([]);
   const [services, setServices] = useState([]);
 
@@ -140,14 +143,16 @@ export default function PatientDashboardPage() {
 
     try {
       setLoading(true);
-      const [patientResponse, requestResponse, ordersResponse] = await Promise.all([
+      const [patientResponse, requestResponse, ordersResponse, notificationsResponse] = await Promise.all([
         API.get(`/patients/${patientId}`),
         API.get(`/patients/${patientId}/appointment-requests`),
         API.get("/shop/orders/my"),
+        API.get(`/patients/${patientId}/notifications`),
       ]);
       setPatient(patientResponse.data);
       setAppointmentRequests(requestResponse.data || []);
       setShopOrders(ordersResponse.data || []);
+      setNotifications(notificationsResponse.data || []);
       setStatus({ type: "", message: "" });
     } catch (error) {
       setStatus({
@@ -410,6 +415,30 @@ export default function PatientDashboardPage() {
     navigate("/patient-login?redirect=/patient-dashboard", { replace: true });
   };
 
+  const unreadNotifications = notifications.filter((item) => !item.readAt);
+
+  const markNotificationRead = async (notificationId) => {
+    try {
+      await API.patch(`/patients/${patientId}/notifications/${notificationId}/read`);
+      setNotifications((current) =>
+        current.map((item) =>
+          item.id === notificationId ? { ...item, readAt: new Date().toISOString() } : item
+        )
+      );
+    } catch (_) {
+      setStatus({ type: "error", message: "Failed to update notification." });
+    }
+  };
+
+  const markAllNotificationsRead = async () => {
+    try {
+      const response = await API.patch(`/patients/${patientId}/notifications/read-all`);
+      setNotifications(response.data || []);
+    } catch (_) {
+      setStatus({ type: "error", message: "Failed to update notifications." });
+    }
+  };
+
   const handleAppointmentSubmit = async (event) => {
     event.preventDefault();
 
@@ -581,6 +610,19 @@ export default function PatientDashboardPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowNotifications(true)}
+                className="relative inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white hover:bg-white/15"
+              >
+                <Bell size={16} />
+                Notifications
+                {unreadNotifications.length ? (
+                  <span className="absolute -right-1 -top-1 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-black text-white">
+                    {unreadNotifications.length}
+                  </span>
+                ) : null}
+              </button>
               <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-2 text-sm text-white/90">
                 <UserCircle2 size={18} />
                 {patientUser.email}
@@ -596,6 +638,76 @@ export default function PatientDashboardPage() {
             </div>
           </div>
         </div>
+
+        {showNotifications ? (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 px-4 py-5 sm:items-center">
+            <div className="max-h-[86vh] w-full max-w-2xl overflow-hidden rounded-[28px] bg-white shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">
+                    OPW Updates
+                  </p>
+                  <h2 className="text-xl font-black text-slate-950">Notifications</h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  {unreadNotifications.length ? (
+                    <button
+                      type="button"
+                      onClick={markAllNotificationsRead}
+                      className="rounded-full bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700"
+                    >
+                      Mark all read
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setShowNotifications(false)}
+                    className="rounded-full bg-slate-950 px-3 py-2 text-xs font-bold text-white"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+              <div className="max-h-[68vh] space-y-3 overflow-auto p-5">
+                {notifications.length === 0 ? (
+                  <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
+                    Appointment, treatment, therapy, payment, and custom OPW updates will appear here.
+                  </p>
+                ) : (
+                  notifications.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => !item.readAt && markNotificationRead(item.id)}
+                      className={`w-full rounded-2xl border p-4 text-left transition ${
+                        item.readAt
+                          ? "border-slate-100 bg-white"
+                          : "border-sky-200 bg-sky-50"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-black text-slate-950">{item.title}</p>
+                          <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                            {formatDate(item.scheduledFor || item.createdAt)} | {item.category || "update"}
+                          </p>
+                        </div>
+                        {!item.readAt ? (
+                          <span className="rounded-full bg-sky-600 px-2.5 py-1 text-xs font-bold text-white">
+                            New
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600">
+                        {item.body}
+                      </p>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {status.message ? (
           <div

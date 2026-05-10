@@ -19,6 +19,7 @@ data class StaffUser(
     val role: String,
     val status: String,
     val chatEnabled: Boolean,
+    val profileImageUrl: String,
     val workType: String,
     val joiningDate: String,
     val joiningNotes: String,
@@ -64,6 +65,7 @@ data class AdminDashboardSnapshot(
     val archivedPatients: List<JSONObject> = emptyList(),
     val appointments: List<JSONObject> = emptyList(),
     val mailboxItems: List<JSONObject> = emptyList(),
+    val notificationItems: List<JSONObject> = emptyList(),
     val services: List<JSONObject> = emptyList(),
     val therapyResources: List<JSONObject> = emptyList(),
     val shopProducts: List<JSONObject> = emptyList(),
@@ -137,6 +139,7 @@ fun JSONObject.toStaffUser(): StaffUser {
         role = stringValue("role"),
         status = stringValue("status").ifBlank { "Active" },
         chatEnabled = optBoolean("chatEnabled"),
+        profileImageUrl = stringValue("profileImageUrl"),
         workType = stringValue("workType"),
         joiningDate = stringValue("joiningDate"),
         joiningNotes = stringValue("joiningNotes"),
@@ -182,6 +185,7 @@ fun StaffUser.toJson(): JSONObject {
         .put("role", role)
         .put("status", status)
         .put("chatEnabled", chatEnabled)
+        .put("profileImageUrl", profileImageUrl)
         .put("workType", workType)
         .put("joiningDate", joiningDate)
         .put("joiningNotes", joiningNotes)

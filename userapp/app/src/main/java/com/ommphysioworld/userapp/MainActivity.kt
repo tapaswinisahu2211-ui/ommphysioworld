@@ -605,6 +605,10 @@ private fun LoginScreen(
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var passwordHidden by rememberSaveable { mutableStateOf(true) }
+    var whatsappMobile by rememberSaveable { mutableStateOf("") }
+    var whatsappOtp by rememberSaveable { mutableStateOf("") }
+    var whatsappOtpSent by rememberSaveable { mutableStateOf(false) }
+    var whatsappSubmitting by remember { mutableStateOf(false) }
     var submitting by remember { mutableStateOf(false) }
 
     SoftAuthBackground {
@@ -686,10 +690,107 @@ private fun LoginScreen(
                 ModernOrDivider()
                 Spacer(modifier = Modifier.height(24.dp))
                 SocialSignButton(
-                    symbol = "G",
-                    label = "Sign in with Google",
-                    onClick = { showMessage("Google sign-in can be added next.") },
+                    symbol = "W",
+                    label = "Login with WhatsApp OTP",
+                    onClick = {
+                        if (whatsappOtpSent) {
+                            whatsappOtpSent = false
+                            whatsappOtp = ""
+                        } else {
+                            whatsappOtpSent = true
+                        }
+                    },
                 )
+                if (whatsappOtpSent) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    SectionCard(
+                        title = "WhatsApp Login",
+                        subtitle = "Use your registered WhatsApp number to receive a secure OTP.",
+                        showSubtitle = true,
+                    ) {
+                        ModernRoundedField(
+                            value = whatsappMobile,
+                            onValueChange = {
+                                whatsappMobile = it
+                                whatsappOtp = ""
+                            },
+                            placeholder = "WhatsApp mobile number",
+                            keyboardType = KeyboardType.Phone,
+                            imeAction = ImeAction.Next,
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        ModernPrimaryButton(
+                            onClick = {
+                                val phoneError = FormValidators.phone(whatsappMobile)
+                                if (phoneError != null) {
+                                    showMessage(phoneError)
+                                    return@ModernPrimaryButton
+                                }
+                                scope.launch {
+                                    whatsappSubmitting = true
+                                    try {
+                                        val response = apiService.requestWhatsAppLoginOtp(
+                                            FormValidators.cleanPhone(whatsappMobile),
+                                        )
+                                        showMessage(response["message"]?.toString() ?: "WhatsApp OTP sent.")
+                                    } catch (error: ApiException) {
+                                        showMessage(error.message.orEmpty())
+                                    } finally {
+                                        whatsappSubmitting = false
+                                    }
+                                }
+                            },
+                            enabled = !whatsappSubmitting,
+                            label = "Send WhatsApp OTP",
+                            loading = whatsappSubmitting,
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        ModernRoundedField(
+                            value = whatsappOtp,
+                            onValueChange = { whatsappOtp = it.filter { char -> char.isDigit() }.take(6) },
+                            placeholder = "Enter 6-digit OTP",
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done,
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        ModernPrimaryButton(
+                            onClick = {
+                                val phoneError = FormValidators.phone(whatsappMobile)
+                                if (phoneError != null) {
+                                    showMessage(phoneError)
+                                    return@ModernPrimaryButton
+                                }
+                                if (whatsappOtp.length != 6) {
+                                    showMessage("Please enter the 6-digit WhatsApp OTP.")
+                                    return@ModernPrimaryButton
+                                }
+                                scope.launch {
+                                    whatsappSubmitting = true
+                                    try {
+                                        val response = apiService.verifyWhatsAppLoginOtp(
+                                            FormValidators.cleanPhone(whatsappMobile),
+                                            whatsappOtp,
+                                        )
+                                        val user = response["user"].asJsonMap()
+                                        if (user != null) {
+                                            showMessage(response["message"]?.toString() ?: "WhatsApp login successful.")
+                                            onLoggedIn(user + mapOf("token" to response["token"]))
+                                        } else {
+                                            showMessage("Login completed, but patient details were missing.")
+                                        }
+                                    } catch (error: ApiException) {
+                                        showMessage(error.message.orEmpty())
+                                    } finally {
+                                        whatsappSubmitting = false
+                                    }
+                                }
+                            },
+                            enabled = !whatsappSubmitting,
+                            label = "Verify & Login",
+                            loading = whatsappSubmitting,
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(24.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),

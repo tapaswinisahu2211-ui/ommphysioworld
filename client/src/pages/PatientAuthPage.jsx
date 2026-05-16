@@ -1,4 +1,4 @@
-import { LockKeyhole, LogIn, Mail, UserPlus } from "lucide-react";
+import { LockKeyhole, LogIn, Mail, MessageCircle, UserPlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import PublicLayout from "../layout/PublicLayout";
@@ -26,6 +26,10 @@ export default function PatientAuthPage({ mode = "login" }) {
     password: "",
   });
   const [submitting, setSubmitting] = useState(false);
+  const [whatsappSubmitting, setWhatsappSubmitting] = useState(false);
+  const [whatsappMobile, setWhatsappMobile] = useState("");
+  const [whatsappOtp, setWhatsappOtp] = useState("");
+  const [whatsappOtpSent, setWhatsappOtpSent] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -158,6 +162,69 @@ export default function PatientAuthPage({ mode = "login" }) {
       );
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const requestWhatsAppOtp = async () => {
+    setError("");
+    setNotice("");
+
+    const phoneError = validatePhoneField(whatsappMobile);
+    if (phoneError) {
+      setError(phoneError);
+      return;
+    }
+
+    setWhatsappSubmitting(true);
+    try {
+      const response = await API.post("/auth/whatsapp/request-otp", {
+        mobile: cleanPhone(whatsappMobile),
+      });
+      setWhatsappOtpSent(true);
+      setNotice(response.data?.message || "WhatsApp OTP sent.");
+    } catch (submitError) {
+      setError(
+        submitError.response?.data?.message ||
+          "Unable to send WhatsApp OTP. Please use email login."
+      );
+    } finally {
+      setWhatsappSubmitting(false);
+    }
+  };
+
+  const verifyWhatsAppOtp = async () => {
+    setError("");
+    setNotice("");
+
+    const phoneError = validatePhoneField(whatsappMobile);
+    if (phoneError) {
+      setError(phoneError);
+      return;
+    }
+
+    if (!/^\d{6}$/.test(whatsappOtp.trim())) {
+      setError("Please enter the 6-digit WhatsApp OTP.");
+      return;
+    }
+
+    setWhatsappSubmitting(true);
+    try {
+      const response = await API.post("/auth/whatsapp/verify", {
+        mobile: cleanPhone(whatsappMobile),
+        otp: whatsappOtp.trim(),
+      });
+      savePatientUser({
+        ...response.data.user,
+        token: response.data.token,
+      });
+      navigate(redirectTo, { replace: true });
+    } catch (submitError) {
+      setError(
+        submitError.response?.data?.message ||
+          "Unable to verify WhatsApp OTP. Please try again."
+      );
+    } finally {
+      setWhatsappSubmitting(false);
     }
   };
 
@@ -300,6 +367,66 @@ export default function PatientAuthPage({ mode = "login" }) {
                   Forgot password?
                 </Link>
               </p>
+            ) : null}
+
+            {!isRegister && !isForgot ? (
+              <div className="mt-8 rounded-3xl border border-emerald-100 bg-emerald-50 p-4">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white">
+                    <MessageCircle size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-950">Login with WhatsApp</h3>
+                    <p className="mt-1 text-sm leading-6 text-emerald-900">
+                      Enter your registered WhatsApp mobile number. We will send a 6-digit OTP.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3">
+                  <input
+                    className="input rounded-2xl border-emerald-200 bg-white"
+                    placeholder="WhatsApp mobile number"
+                    value={whatsappMobile}
+                    onChange={(event) => {
+                      setWhatsappMobile(event.target.value);
+                      setWhatsappOtpSent(false);
+                      setWhatsappOtp("");
+                    }}
+                  />
+                  {whatsappOtpSent ? (
+                    <input
+                      className="input rounded-2xl border-emerald-200 bg-white"
+                      placeholder="Enter 6-digit OTP"
+                      value={whatsappOtp}
+                      maxLength={6}
+                      onChange={(event) =>
+                        setWhatsappOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
+                      }
+                    />
+                  ) : null}
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      disabled={whatsappSubmitting}
+                      onClick={requestWhatsAppOtp}
+                      className="inline-flex items-center justify-center gap-2 rounded-full border border-emerald-200 bg-white px-5 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <MessageCircle size={17} />
+                      {whatsappOtpSent ? "Resend OTP" : "Send OTP"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!whatsappOtpSent || whatsappSubmitting}
+                      onClick={verifyWhatsAppOtp}
+                      className="inline-flex items-center justify-center gap-2 rounded-full bg-emerald-600 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <LogIn size={17} />
+                      Verify & Login
+                    </button>
+                  </div>
+                </div>
+              </div>
             ) : null}
 
             <p className="mt-6 text-center text-sm text-slate-500">

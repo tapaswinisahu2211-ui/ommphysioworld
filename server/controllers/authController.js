@@ -1,8 +1,10 @@
 const User = require("../models/User");
 const PublicUser = require("../models/PublicUser");
 const Patient = require("../models/Patient");
+const WhatsAppLoginOtp = require("../models/WhatsAppLoginOtp");
 const { DEFAULT_ADMIN } = require("../config/defaults");
 const { hasMailConfig, sendMail } = require("../services/mailer");
+const { sendWhatsAppOtp } = require("../services/whatsapp");
 const { ensureDefaultAdmin, serializeUser } = require("../utils/userHelpers");
 const { hashPassword, verifyPassword } = require("../utils/password");
 const { createSessionToken } = require("../utils/sessionToken");
@@ -61,6 +63,35 @@ const generateTemporaryPassword = () =>
   `OPW${Math.random().toString(36).slice(-4).toUpperCase()}${Date.now()
     .toString()
     .slice(-4)}`;
+
+const generateWhatsAppOtp = () =>
+  String(Math.floor(100000 + Math.random() * 900000));
+
+const getWhatsAppOtpExpiry = () => {
+  const expiresAt = new Date();
+  expiresAt.setMinutes(expiresAt.getMinutes() + 10);
+  return expiresAt;
+};
+
+const findPublicUserByMobile = async (mobile) => {
+  const users = await PublicUser.find({ mobile }).limit(2);
+
+  if (users.length > 1) {
+    const error = new Error("Multiple patient login accounts use this mobile number. Please login with email and password.");
+    error.statusCode = 409;
+    throw error;
+  }
+
+  return users[0] || null;
+};
+
+const resolveLoginPatient = async (user) => {
+  if (!user?.patientId) {
+    return null;
+  }
+
+  return Patient.findById(user.patientId);
+};
 
 const verifyUserPassword = (user, password) => {
   if (!user) {
@@ -295,6 +326,138 @@ const loginPublicUser = async (req, res) => {
   }
 };
 
+const requestWhatsAppLoginOtp = async (req, res) => {
+  try {
+    const mobile = cleanPhone(req.body.mobile);
+
+    if (!mobile) {
+      return res.status(400).json({ message: "WhatsApp mobile number is required." });
+    }
+
+    if (!isValidPhone(mobile)) {
+      return res.status(400).json({ message: "Please enter a valid 10-digit WhatsApp number." });
+    }
+
+    const user = await findPublicUserByMobile(mobile);
+
+    if (!user) {
+      return res.status(404).json({
+        message: "No patient login account found for this WhatsApp number. Please register first.",
+      });
+    }
+
+    const linkedPatient = await resolveLoginPatient(user);
+
+    if (!linkedPatient) {
+      return res.status(404).json({
+        message: "This patient account is no longer available. Please contact OPW support.",
+      });
+    }
+
+    const otp = generateWhatsAppOtp();
+    await WhatsAppLoginOtp.deleteMany({ mobile, usedAt: null });
+    await WhatsAppLoginOtp.create({
+      mobile,
+      otpHash: hashPassword(otp),
+      expiresAt: getWhatsAppOtpExpiry(),
+    });
+
+    try {
+      await sendWhatsAppOtp({ mobile, otp });
+    } catch (whatsAppError) {
+      await WhatsAppLoginOtp.deleteMany({ mobile, usedAt: null });
+      console.log("WhatsApp login OTP failed:", whatsAppError.message);
+
+      if (whatsAppError.code === "WHATSAPP_NOT_CONFIGURED") {
+        return res.status(503).json({
+          message: "WhatsApp login is not configured on the server yet.",
+        });
+      }
+
+      return res.status(502).json({
+        message: "Unable to send WhatsApp OTP right now. Please try email login.",
+      });
+    }
+
+    return res.json({
+      message: "WhatsApp OTP sent. Please check your WhatsApp messages.",
+      expiresInMinutes: 10,
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(error.statusCode || 500).json({
+      message: error.statusCode ? error.message : "Failed to request WhatsApp OTP.",
+    });
+  }
+};
+
+const verifyWhatsAppLoginOtp = async (req, res) => {
+  try {
+    const mobile = cleanPhone(req.body.mobile);
+    const otp = cleanText(req.body.otp).replace(/\D/g, "");
+
+    if (!mobile || !otp) {
+      return res.status(400).json({ message: "Mobile number and OTP are required." });
+    }
+
+    if (!isValidPhone(mobile)) {
+      return res.status(400).json({ message: "Please enter a valid 10-digit WhatsApp number." });
+    }
+
+    if (!/^\d{6}$/.test(otp)) {
+      return res.status(400).json({ message: "Please enter the 6-digit WhatsApp OTP." });
+    }
+
+    const otpRecord = await WhatsAppLoginOtp.findOne({
+      mobile,
+      usedAt: null,
+      expiresAt: { $gt: new Date() },
+    }).sort({ createdAt: -1 });
+
+    if (!otpRecord) {
+      return res.status(400).json({ message: "OTP expired. Please request a new WhatsApp OTP." });
+    }
+
+    if (otpRecord.attempts >= 5) {
+      await otpRecord.deleteOne();
+      return res.status(429).json({ message: "Too many OTP attempts. Please request a new OTP." });
+    }
+
+    if (!verifyPassword(otp, otpRecord.otpHash)) {
+      otpRecord.attempts += 1;
+      await otpRecord.save();
+      return res.status(401).json({ message: "Invalid WhatsApp OTP." });
+    }
+
+    const user = await findPublicUserByMobile(mobile);
+    const linkedPatient = await resolveLoginPatient(user);
+
+    if (!user || !linkedPatient) {
+      return res.status(404).json({
+        message: "This patient account is no longer available. Please contact OPW support.",
+      });
+    }
+
+    otpRecord.usedAt = new Date();
+    await otpRecord.save();
+
+    return res.json({
+      message: "WhatsApp login successful.",
+      token: createPatientAuthToken(req, {
+        sub: user._id.toString(),
+        type: "patient",
+        patientId: linkedPatient._id.toString(),
+      }),
+      user: serializePublicUser(user),
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(error.statusCode || 500).json({
+      message: error.statusCode ? error.message : "Failed to verify WhatsApp OTP.",
+    });
+  }
+};
+
 const requestPasswordReset = async (req, res) => {
   try {
     const email = cleanEmail(req.body.email);
@@ -496,6 +659,8 @@ module.exports = {
   adminLogin,
   registerPublicUser,
   loginPublicUser,
+  requestWhatsAppLoginOtp,
+  verifyWhatsAppLoginOtp,
   requestPasswordReset,
   changePublicUserPassword,
   pingSession,

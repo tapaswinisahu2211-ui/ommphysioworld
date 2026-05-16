@@ -95,6 +95,7 @@ val staffModuleTemplates = listOf(
     ModuleTemplate("services", "Services", view = false, add = false, edit = false),
     ModuleTemplate("therapy", "Therapy", view = false, add = false, edit = false),
     ModuleTemplate("shop", "Shop", view = false, add = false, edit = false),
+    ModuleTemplate("marketing", "Marketing", view = false, add = false, edit = false),
     ModuleTemplate("staff", "Staff", view = false, add = false, edit = false),
     ModuleTemplate("mailbox", "Mailbox", view = false, add = false, edit = false),
     ModuleTemplate("treatment_tracker", "Tracker", view = false, add = false, edit = false),

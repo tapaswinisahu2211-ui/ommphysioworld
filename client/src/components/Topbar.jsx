@@ -43,6 +43,10 @@ const pageMeta = {
     title: "Shop",
     subtitle: "Manage products, stock, and incoming website purchases.",
   },
+  "/marketing": {
+    title: "Marketing",
+    subtitle: "Track partner visits, doctor contacts, follow-ups, and daily patient referrals.",
+  },
   "/feedback": {
     title: "Feedback",
     subtitle: "Approve patient reviews before publishing them on the website.",

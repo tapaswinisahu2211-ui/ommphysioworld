@@ -66,6 +66,7 @@ const ChatConversation = require("./models/ChatConversation");
 const ContactMessage = require("./models/ContactMessage");
 const Feedback = require("./models/Feedback");
 const JobRequirement = require("./models/JobRequirement");
+const MarketingSource = require("./models/MarketingSource");
 const PatientNotification = require("./models/PatientNotification");
 const Patient = require("./models/Patient");
 const PublicUser = require("./models/PublicUser");
@@ -274,6 +275,56 @@ const findArchivedPatientById = (id) =>
   });
 
 const DEFAULT_ADMIN_CREATED_PATIENT_PASSWORD = "123456";
+
+const getPatientIdentityConflict = async ({ email, mobile, excludePatientId = null }) => {
+  const identityFilters = [];
+
+  if (email) {
+    identityFilters.push({ email });
+  }
+
+  if (mobile) {
+    identityFilters.push({ mobile });
+  }
+
+  if (!identityFilters.length) {
+    return null;
+  }
+
+  const patientFilter = { $or: identityFilters };
+  if (excludePatientId) {
+    patientFilter._id = { $ne: excludePatientId };
+  }
+
+  const existingPatient = await Patient.findOne(patientFilter).setOptions({
+    includeArchived: true,
+  });
+
+  if (existingPatient) {
+    const field = existingPatient.mobile === mobile ? "mobile number" : "email address";
+    return {
+      field,
+      message: `A patient with this ${field} already exists.`,
+    };
+  }
+
+  const portalUserFilter = { $or: identityFilters };
+  if (excludePatientId) {
+    portalUserFilter.patientId = { $ne: excludePatientId };
+  }
+
+  const existingPortalUser = await PublicUser.findOne(portalUserFilter);
+
+  if (existingPortalUser) {
+    const field = existingPortalUser.mobile === mobile ? "mobile number" : "email address";
+    return {
+      field,
+      message: `A patient login account with this ${field} already exists.`,
+    };
+  }
+
+  return null;
+};
 
 const syncAdminCreatedPatientPortalAccount = async (patient) => {
   const existingUser = await PublicUser.findOne({ email: patient.email });
@@ -939,6 +990,227 @@ app.get("/api/health", (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+const MARKETING_SOURCE_TYPES = [
+  "medical_shop",
+  "clinic",
+  "institute",
+  "hospital",
+  "doctor",
+  "other",
+];
+
+const MARKETING_SOURCE_TYPE_LABELS = {
+  medical_shop: "Medical Shop",
+  clinic: "Clinic",
+  institute: "Institute",
+  hospital: "Hospital",
+  doctor: "Doctor",
+  other: "Other",
+};
+
+const MARKETING_PITCH_STATUSES = [
+  "new",
+  "visited",
+  "interested",
+  "follow_up",
+  "converted",
+  "not_interested",
+];
+
+const MARKETING_PITCH_STATUS_LABELS = {
+  new: "New Lead",
+  visited: "Visited",
+  interested: "Interested",
+  follow_up: "Follow-up",
+  converted: "Converted",
+  not_interested: "Not Interested",
+};
+
+const normalizeMarketingSourceType = (value) => {
+  const normalized = cleanText(value).toLowerCase();
+  return MARKETING_SOURCE_TYPES.includes(normalized) ? normalized : "medical_shop";
+};
+
+const normalizeMarketingPitchStatus = (value) => {
+  const normalized = cleanText(value).toLowerCase();
+  return MARKETING_PITCH_STATUSES.includes(normalized) ? normalized : "new";
+};
+
+const parseMarketingNumber = (value, fallback = 0) => {
+  if (value === undefined || value === null || value === "") {
+    return fallback;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const validateOptionalMarketingDate = (value, label) => {
+  const date = cleanText(value);
+  if (date && !isValidDateValue(date)) {
+    return `${label} must be a valid date.`;
+  }
+
+  return "";
+};
+
+const parseMarketingSourcePayload = (body = {}) => {
+  const mobile = cleanPhone(body.mobile);
+  const alternateMobile = cleanPhone(body.alternateMobile);
+  const email = cleanEmail(body.email);
+  const visitDate = cleanText(body.visitDate);
+  const nextFollowUpDate = cleanText(body.nextFollowUpDate);
+
+  return {
+    sourceType: normalizeMarketingSourceType(body.sourceType),
+    name: cleanText(body.name),
+    contactPerson: cleanText(body.contactPerson),
+    doctorName: cleanText(body.doctorName),
+    mobile,
+    alternateMobile,
+    email,
+    area: cleanText(body.area),
+    city: cleanText(body.city),
+    address: cleanText(body.address),
+    visitDate,
+    nextFollowUpDate,
+    assignedTo: cleanText(body.assignedTo || body.marketingPerson),
+    pitchStatus: normalizeMarketingPitchStatus(body.pitchStatus || body.status),
+    expectedDailyPatients: Math.max(
+      0,
+      parseMarketingNumber(body.expectedDailyPatients || body.dailyPatientGoal, 0)
+    ),
+    notes: cleanText(body.notes),
+  };
+};
+
+const validateMarketingSourcePayload = (payload) => {
+  if (!payload.name || payload.name.length < 2) {
+    return "Place or source name must be at least 2 characters.";
+  }
+
+  if (payload.mobile && !isValidPhone(payload.mobile)) {
+    return "Please enter a valid 10-digit primary mobile number.";
+  }
+
+  if (payload.alternateMobile && !isValidPhone(payload.alternateMobile)) {
+    return "Please enter a valid 10-digit alternate mobile number.";
+  }
+
+  if (payload.email && !isValidEmail(payload.email)) {
+    return "Please enter a valid email address.";
+  }
+
+  return (
+    validateOptionalMarketingDate(payload.visitDate, "Visit date") ||
+    validateOptionalMarketingDate(payload.nextFollowUpDate, "Next follow-up date")
+  );
+};
+
+const parseMarketingPhotoRemovalIds = (value) => {
+  if (!value) {
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(cleanText).filter(Boolean);
+  }
+
+  const rawValue = cleanText(value);
+
+  if (!rawValue) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue);
+    if (Array.isArray(parsed)) {
+      return parsed.map(cleanText).filter(Boolean);
+    }
+  } catch (_) {
+    // Fall back to comma-separated ids from simple forms.
+  }
+
+  return rawValue.split(",").map(cleanText).filter(Boolean);
+};
+
+const mapMarketingPhotos = (files = []) => {
+  const invalidFile = (files || []).find(
+    (file) => !String(file?.mimetype || "").startsWith("image/")
+  );
+
+  if (invalidFile) {
+    const error = new Error("Only image files can be uploaded for marketing photos.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return (files || []).map((file) => ({
+    name: file.originalname || "marketing-photo",
+    mimeType: file.mimetype || "image/jpeg",
+    data: file.buffer,
+    uploadedAt: new Date(),
+  }));
+};
+
+const serializeMarketingReferral = (referral) => ({
+  id: referral._id.toString(),
+  date: referral.date || "",
+  patientCount: Number(referral.patientCount || 0),
+  patientNames: Array.isArray(referral.patientNames) ? referral.patientNames : [],
+  notes: referral.notes || "",
+  createdAt: referral.createdAt,
+});
+
+const serializeMarketingSource = (source) => {
+  const referrals = (source.referrals || []).map(serializeMarketingReferral);
+  const totalGeneratedPatients = referrals.reduce(
+    (sum, referral) => sum + Number(referral.patientCount || 0),
+    0
+  );
+  const latestReferral = [...referrals]
+    .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt))[0];
+
+  return {
+    id: source._id.toString(),
+    sourceType: source.sourceType || "medical_shop",
+    sourceTypeLabel:
+      MARKETING_SOURCE_TYPE_LABELS[source.sourceType] || MARKETING_SOURCE_TYPE_LABELS.medical_shop,
+    name: source.name || "",
+    contactPerson: source.contactPerson || "",
+    doctorName: source.doctorName || "",
+    mobile: source.mobile || "",
+    alternateMobile: source.alternateMobile || "",
+    email: source.email || "",
+    area: source.area || "",
+    city: source.city || "",
+    address: source.address || "",
+    visitDate: source.visitDate || "",
+    nextFollowUpDate: source.nextFollowUpDate || "",
+    assignedTo: source.assignedTo || "",
+    marketingPerson: source.assignedTo || "",
+    pitchStatus: source.pitchStatus || "new",
+    status: source.pitchStatus || "new",
+    pitchStatusLabel:
+      MARKETING_PITCH_STATUS_LABELS[source.pitchStatus] || MARKETING_PITCH_STATUS_LABELS.new,
+    expectedDailyPatients: Number(source.expectedDailyPatients || 0),
+    dailyPatientGoal: Number(source.expectedDailyPatients || 0),
+    notes: source.notes || "",
+    photos: (source.photos || []).map((photo) => ({
+      id: photo._id.toString(),
+      name: photo.name || "",
+      mimeType: photo.mimeType || "image/jpeg",
+      uploadedAt: photo.uploadedAt,
+      url: `/marketing/sources/${source._id.toString()}/photos/${photo._id.toString()}`,
+    })),
+    referrals,
+    totalGeneratedPatients,
+    latestReferralAt: latestReferral?.date || latestReferral?.createdAt || null,
+    createdAt: source.createdAt,
+    updatedAt: source.updatedAt,
+  };
+};
 
 const serializeService = (service) => ({
   id: service._id.toString(),
@@ -2492,13 +2764,11 @@ app.post("/api/patients", requireStaffAuth, async (req, res) => {
       return res.status(400).json({ message: "Please enter a valid 10-digit mobile number." });
     }
 
-    const existingPatient = await Patient.findOne({
-      $or: [{ email }, { mobile }],
-    }).setOptions({ includeArchived: true });
+    const existingPatient = await getPatientIdentityConflict({ email, mobile });
 
     if (existingPatient) {
       return res.status(409).json({
-        message: "A patient with this email or mobile number already exists.",
+        message: existingPatient.message,
       });
     }
 
@@ -2550,16 +2820,15 @@ app.put("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
       return res.status(400).json({ message: "Please enter a valid 10-digit mobile number." });
     }
 
-    if (req.auth?.type === "staff" && email !== undefined && email !== patient.email) {
-      const conflictingPortalUser = await PublicUser.findOne({
-        email,
-        patientId: { $ne: patient._id },
+    if (req.auth?.type === "staff") {
+      const identityConflict = await getPatientIdentityConflict({
+        email: email ?? patient.email,
+        mobile: mobile ?? patient.mobile,
+        excludePatientId: patient._id,
       });
 
-      if (conflictingPortalUser) {
-        return res.status(409).json({
-          message: "A patient login account with this email already exists.",
-        });
+      if (identityConflict) {
+        return res.status(409).json({ message: identityConflict.message });
       }
     }
 
@@ -3639,6 +3908,205 @@ app.delete("/api/patients/:id/payments/:paymentId", requireStaffAuth, async (req
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to delete payment." });
+  }
+});
+
+app.get("/api/marketing/sources", requireStaffAuth, async (_req, res) => {
+  try {
+    const sources = await MarketingSource.find().sort({ updatedAt: -1, createdAt: -1 });
+    res.json(sources.map(serializeMarketingSource));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to load marketing sources." });
+  }
+});
+
+app.get("/api/marketing/sources/:id", requireStaffAuth, async (req, res) => {
+  try {
+    const source = await MarketingSource.findById(req.params.id);
+
+    if (!source) {
+      return res.status(404).json({ message: "Marketing source not found." });
+    }
+
+    res.json(serializeMarketingSource(source));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to load marketing source." });
+  }
+});
+
+app.get("/api/marketing/sources/:id/photos/:photoId", requireStaffAuth, async (req, res) => {
+  try {
+    const source = await MarketingSource.findById(req.params.id);
+    const photo = source?.photos?.id(req.params.photoId);
+
+    if (!source || !photo) {
+      return res.status(404).json({ message: "Marketing photo not found." });
+    }
+
+    res.setHeader("Content-Type", photo.mimeType || "image/jpeg");
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    res.send(photo.data);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to load marketing photo." });
+  }
+});
+
+app.post(
+  "/api/marketing/sources",
+  requireStaffAuth,
+  upload.array("photos", 6),
+  async (req, res) => {
+    try {
+      const payload = parseMarketingSourcePayload(req.body);
+      const validationError = validateMarketingSourcePayload(payload);
+
+      if (validationError) {
+        return res.status(400).json({ message: validationError });
+      }
+
+      const source = await MarketingSource.create({
+        ...payload,
+        photos: mapMarketingPhotos(req.files || []),
+        createdByUserId: mongoose.isValidObjectId(req.auth?.sub) ? req.auth.sub : null,
+        updatedByUserId: mongoose.isValidObjectId(req.auth?.sub) ? req.auth.sub : null,
+      });
+
+      res.status(201).json(serializeMarketingSource(source));
+    } catch (error) {
+      console.log(error);
+      res.status(error.statusCode || 500).json({
+        message: error.statusCode
+          ? error.message
+          : "Failed to create marketing source.",
+      });
+    }
+  }
+);
+
+app.put(
+  "/api/marketing/sources/:id",
+  requireStaffAuth,
+  upload.array("photos", 6),
+  async (req, res) => {
+    try {
+      const source = await MarketingSource.findById(req.params.id);
+
+      if (!source) {
+        return res.status(404).json({ message: "Marketing source not found." });
+      }
+
+      const payload = parseMarketingSourcePayload(req.body);
+      const validationError = validateMarketingSourcePayload(payload);
+
+      if (validationError) {
+        return res.status(400).json({ message: validationError });
+      }
+
+      const removePhotoIds = new Set(parseMarketingPhotoRemovalIds(req.body.removePhotoIds));
+      source.set(payload);
+
+      if (removePhotoIds.size) {
+        source.photos = (source.photos || []).filter(
+          (photo) => !removePhotoIds.has(photo._id.toString())
+        );
+      }
+
+      const newPhotos = mapMarketingPhotos(req.files || []);
+      newPhotos.forEach((photo) => source.photos.push(photo));
+      source.updatedByUserId = mongoose.isValidObjectId(req.auth?.sub) ? req.auth.sub : null;
+
+      await source.save();
+      res.json(serializeMarketingSource(source));
+    } catch (error) {
+      console.log(error);
+      res.status(error.statusCode || 500).json({
+        message: error.statusCode
+          ? error.message
+          : "Failed to update marketing source.",
+      });
+    }
+  }
+);
+
+app.post("/api/marketing/sources/:id/referrals", requireStaffAuth, async (req, res) => {
+  try {
+    const source = await MarketingSource.findById(req.params.id);
+
+    if (!source) {
+      return res.status(404).json({ message: "Marketing source not found." });
+    }
+
+    const date = cleanText(req.body.date) || new Date().toISOString().slice(0, 10);
+    const patientCount = parseMarketingNumber(req.body.patientCount, 0);
+    const patientNames = Array.isArray(req.body.patientNames)
+      ? req.body.patientNames.map(cleanText).filter(Boolean)
+      : parseLineList(req.body.patientNames);
+
+    if (!isValidDateValue(date)) {
+      return res.status(400).json({ message: "Referral date must be valid." });
+    }
+
+    if (!Number.isFinite(patientCount) || patientCount < 0) {
+      return res.status(400).json({ message: "Patient count cannot be negative." });
+    }
+
+    source.referrals.push({
+      date,
+      patientCount,
+      patientNames,
+      notes: cleanText(req.body.notes),
+      createdAt: new Date(),
+    });
+    source.updatedByUserId = mongoose.isValidObjectId(req.auth?.sub) ? req.auth.sub : null;
+
+    await source.save();
+    res.status(201).json(serializeMarketingSource(source));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to add daily patient record." });
+  }
+});
+
+app.delete(
+  "/api/marketing/sources/:id/referrals/:referralId",
+  requireStaffAuth,
+  async (req, res) => {
+    try {
+      const source = await MarketingSource.findById(req.params.id);
+
+      if (!source) {
+        return res.status(404).json({ message: "Marketing source not found." });
+      }
+
+      source.referrals = (source.referrals || []).filter(
+        (referral) => referral._id.toString() !== req.params.referralId
+      );
+      source.updatedByUserId = mongoose.isValidObjectId(req.auth?.sub) ? req.auth.sub : null;
+
+      await source.save();
+      res.json(serializeMarketingSource(source));
+    } catch (error) {
+      console.log(error);
+      res.status(500).json({ message: "Failed to delete daily patient record." });
+    }
+  }
+);
+
+app.delete("/api/marketing/sources/:id", requireStaffAuth, async (req, res) => {
+  try {
+    const source = await MarketingSource.findByIdAndDelete(req.params.id);
+
+    if (!source) {
+      return res.status(404).json({ message: "Marketing source not found." });
+    }
+
+    res.json({ message: "Marketing source deleted successfully." });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to delete marketing source." });
   }
 });
 

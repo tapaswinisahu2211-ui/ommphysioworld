@@ -60,6 +60,7 @@ export const getFirstAccessiblePath = (user = getStoredUser()) => {
     { key: "services", path: "/services" },
     { key: "therapy", path: "/therapy" },
     { key: "shop", path: "/shop-admin" },
+    { key: "marketing", path: "/marketing" },
     { key: "mailbox", path: "/mailbox" },
     { key: "treatment_tracker", path: "/treatment-tracker" },
     { key: "staff", path: "/staff" },

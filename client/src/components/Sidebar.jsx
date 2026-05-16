@@ -6,6 +6,7 @@ import {
   FolderOpen,
   LayoutDashboard,
   Mail,
+  Megaphone,
   MessageSquareQuote,
   ShoppingBag,
   Stethoscope,
@@ -47,6 +48,7 @@ export default function Sidebar({ collapsed, onNavigate }) {
     { name: "Services", path: "/services", icon: Stethoscope, hint: "Treatments", moduleKey: "services" },
     { name: "Therapy", path: "/therapy", icon: FolderOpen, hint: "Media", moduleKey: "therapy" },
     { name: "Shop", path: "/shop-admin", icon: ShoppingBag, hint: "Products", moduleKey: "shop" },
+    { name: "Marketing", path: "/marketing", icon: Megaphone, hint: "Sources", moduleKey: "marketing" },
     ...(adminUser
       ? [
           { name: "Feedback", path: "/feedback", icon: MessageSquareQuote, hint: "Reviews", moduleKey: "" },

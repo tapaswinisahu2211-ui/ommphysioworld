@@ -25,6 +25,7 @@ const MODULE_LABELS = {
   services: "Services",
   therapy: "Therapy",
   shop: "Shop",
+  marketing: "Marketing",
   staff: "Staff",
   mailbox: "Mailbox",
   treatment_tracker: "Treatment Tracker",

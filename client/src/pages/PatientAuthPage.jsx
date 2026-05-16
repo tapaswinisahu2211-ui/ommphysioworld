@@ -13,6 +13,8 @@ import {
   validatePhoneField,
 } from "../utils/validation";
 
+const SHOW_WHATSAPP_LOGIN = false;
+
 export default function PatientAuthPage({ mode = "login" }) {
   const isRegister = mode === "register";
   const isForgot = mode === "forgot";
@@ -435,7 +437,7 @@ export default function PatientAuthPage({ mode = "login" }) {
               </p>
             ) : null}
 
-            {!isRegister && !isForgot ? (
+            {SHOW_WHATSAPP_LOGIN && !isRegister && !isForgot ? (
               <div className="mt-8 rounded-3xl border border-emerald-100 bg-emerald-50 p-4">
                 <div className="flex items-start gap-3">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-600 text-white">

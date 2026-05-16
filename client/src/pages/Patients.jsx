@@ -86,18 +86,37 @@ export default function Patients() {
       return;
     }
 
+    const normalizedEmail = cleanEmail(form.email);
+    const normalizedMobile = cleanPhone(form.mobile);
+    const duplicatePatient = patients.find(
+      (patient) =>
+        patient.id !== form.id &&
+        (cleanEmail(patient.email) === normalizedEmail ||
+          cleanPhone(patient.mobile) === normalizedMobile)
+    );
+
+    if (duplicatePatient) {
+      setModalError(
+        cleanPhone(duplicatePatient.mobile) === normalizedMobile
+          ? "A patient with this mobile number already exists."
+          : "A patient with this email address already exists."
+      );
+      setSaving(false);
+      return;
+    }
+
     try {
       if (form.id) {
         await API.put(`/patients/${form.id}`, {
           name: form.name.trim(),
-          email: cleanEmail(form.email),
-          mobile: cleanPhone(form.mobile),
+          email: normalizedEmail,
+          mobile: normalizedMobile,
         });
       } else {
         await API.post("/patients", {
           name: form.name.trim(),
-          email: cleanEmail(form.email),
-          mobile: cleanPhone(form.mobile),
+          email: normalizedEmail,
+          mobile: normalizedMobile,
         });
       }
 

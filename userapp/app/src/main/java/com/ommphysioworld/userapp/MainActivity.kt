@@ -232,6 +232,7 @@ private enum class PublicSection(val label: String) {
 
 private val FlatShape = RoundedCornerShape(0.dp)
 private const val PATIENT_NOTIFICATION_CHANNEL_ID = "opw_patient_alerts"
+private const val WHATSAPP_LOGIN_ENABLED = false
 private const val WHATSAPP_OTP_REQUESTED_ACTION = "com.whatsapp.otp.OTP_REQUESTED"
 private const val WHATSAPP_OTP_RETRIEVED_ACTION = "com.whatsapp.otp.OTP_RETRIEVED"
 private const val WHATSAPP_OTP_ERROR_ACTION = "com.whatsapp.otp.OTP_ERROR"
@@ -868,166 +869,168 @@ private fun LoginScreen(
                     label = "Continue",
                     loading = submitting,
                 )
-                Spacer(modifier = Modifier.height(24.dp))
-                ModernOrDivider()
-                Spacer(modifier = Modifier.height(24.dp))
-                SocialSignButton(
-                    symbol = "W",
-                    label = "Continue with WhatsApp Number",
-                    onClick = {
-                        whatsappOpen = !whatsappOpen
-                        whatsappStep = "mobile"
-                        whatsappOtp = ""
-                        whatsappVerificationToken = ""
-                        whatsappPassword = ""
-                        whatsappConfirmPassword = ""
-                    },
-                )
-                if (whatsappOpen) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    SectionCard(
-                        title = "WhatsApp Login",
-                        subtitle = "Send a WhatsApp OTP. If one-tap or zero-tap is available, the code will fill automatically.",
-                        showSubtitle = true,
-                    ) {
-                        ModernRoundedField(
-                            value = whatsappMobile,
-                            onValueChange = {
-                                whatsappMobile = it
-                                whatsappStep = "mobile"
-                                whatsappOtp = ""
-                                whatsappVerificationToken = ""
-                                whatsappPassword = ""
-                                whatsappConfirmPassword = ""
-                            },
-                            placeholder = "WhatsApp mobile number",
-                            keyboardType = KeyboardType.Phone,
-                            imeAction = ImeAction.Next,
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        if (whatsappStep == "otp") {
+                if (WHATSAPP_LOGIN_ENABLED) {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    ModernOrDivider()
+                    Spacer(modifier = Modifier.height(24.dp))
+                    SocialSignButton(
+                        symbol = "W",
+                        label = "Continue with WhatsApp Number",
+                        onClick = {
+                            whatsappOpen = !whatsappOpen
+                            whatsappStep = "mobile"
+                            whatsappOtp = ""
+                            whatsappVerificationToken = ""
+                            whatsappPassword = ""
+                            whatsappConfirmPassword = ""
+                        },
+                    )
+                    if (whatsappOpen) {
+                        Spacer(modifier = Modifier.height(14.dp))
+                        SectionCard(
+                            title = "WhatsApp Login",
+                            subtitle = "Send a WhatsApp OTP. If one-tap or zero-tap is available, the code will fill automatically.",
+                            showSubtitle = true,
+                        ) {
                             ModernRoundedField(
-                                value = whatsappOtp,
-                                onValueChange = { whatsappOtp = it },
-                                placeholder = "Enter WhatsApp OTP",
-                                keyboardType = KeyboardType.Number,
-                                imeAction = ImeAction.Done,
-                            )
-                            Text(
-                                text = "One-tap/zero-tap will auto-fill this when WhatsApp allows it.",
-                                color = OpwSlate,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                        }
-                        if (whatsappStep == "register") {
-                            ModernRoundedField(
-                                value = whatsappName,
-                                onValueChange = { whatsappName = it },
-                                placeholder = "Full Name",
-                                keyboardType = KeyboardType.Text,
+                                value = whatsappMobile,
+                                onValueChange = {
+                                    whatsappMobile = it
+                                    whatsappStep = "mobile"
+                                    whatsappOtp = ""
+                                    whatsappVerificationToken = ""
+                                    whatsappPassword = ""
+                                    whatsappConfirmPassword = ""
+                                },
+                                placeholder = "WhatsApp mobile number",
+                                keyboardType = KeyboardType.Phone,
                                 imeAction = ImeAction.Next,
                             )
                             Spacer(modifier = Modifier.height(12.dp))
-                            ModernRoundedField(
-                                value = whatsappEmail,
-                                onValueChange = { whatsappEmail = it },
-                                placeholder = "Email Address",
-                                keyboardType = KeyboardType.Email,
-                                imeAction = ImeAction.Next,
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            ModernRoundedField(
-                                value = whatsappPassword,
-                                onValueChange = { whatsappPassword = it },
-                                placeholder = "Password",
-                                keyboardType = KeyboardType.Password,
-                                imeAction = ImeAction.Next,
-                                hidden = true,
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            ModernRoundedField(
-                                value = whatsappConfirmPassword,
-                                onValueChange = { whatsappConfirmPassword = it },
-                                placeholder = "Confirm Password",
-                                keyboardType = KeyboardType.Password,
-                                imeAction = ImeAction.Done,
-                                hidden = true,
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                        }
-                        ModernPrimaryButton(
-                            onClick = {
-                                val phoneError = FormValidators.phone(whatsappMobile)
-                                if (phoneError != null) {
-                                    showMessage(phoneError)
-                                    return@ModernPrimaryButton
-                                }
-                                scope.launch {
-                                    whatsappSubmitting = true
-                                    try {
-                                        if (whatsappStep == "mobile") {
-                                            WhatsAppOtpBridge.clearCode()
-                                            WhatsAppOtpBridge.clearError()
-                                            sendWhatsAppOtpHandshake(context)
-                                            val response = apiService.requestWhatsAppLoginOtp(
-                                                FormValidators.cleanPhone(whatsappMobile),
-                                            )
-                                            whatsappStep = "otp"
-                                            whatsappOtp = response["devOtp"]?.toString().orEmpty()
-                                            showMessage(
-                                                response["devOtp"]?.let { "Development OTP: $it" }
-                                                    ?: response["message"]?.toString()
-                                                    ?: "Verification code sent on WhatsApp.",
-                                            )
-                                        } else if (whatsappStep == "otp") {
-                                            verifyWhatsAppOtp(whatsappOtp)
-                                        } else {
-                                            val emailError = FormValidators.email(whatsappEmail)
-                                            when {
-                                                whatsappVerificationToken.isBlank() ->
-                                                    showMessage("Please verify your WhatsApp number first.")
-                                                whatsappName.trim().length < 2 ->
-                                                    showMessage("Full name must be at least 2 characters.")
-                                                emailError != null ->
-                                                    showMessage(emailError)
-                                                whatsappPassword.length < 6 ->
-                                                    showMessage("Password must be at least 6 characters.")
-                                                whatsappPassword != whatsappConfirmPassword ->
-                                                    showMessage("Password and confirm password must match.")
-                                                else -> {
-                                                    val response = apiService.registerWithWhatsAppOtp(
-                                                        name = whatsappName.trim(),
-                                                        email = whatsappEmail.trim().lowercase(),
-                                                        mobile = FormValidators.cleanPhone(whatsappMobile),
-                                                        password = whatsappPassword,
-                                                        verificationToken = whatsappVerificationToken,
-                                                    )
-                                                    val user = response["user"].asJsonMap()
-                                                    if (user != null) {
-                                                        showMessage(response["message"]?.toString() ?: "Account created successfully.")
-                                                        onLoggedIn(user + mapOf("token" to response["token"]))
-                                                    } else {
-                                                        showMessage("Registration completed, but patient details were missing.")
+                            if (whatsappStep == "otp") {
+                                ModernRoundedField(
+                                    value = whatsappOtp,
+                                    onValueChange = { whatsappOtp = it },
+                                    placeholder = "Enter WhatsApp OTP",
+                                    keyboardType = KeyboardType.Number,
+                                    imeAction = ImeAction.Done,
+                                )
+                                Text(
+                                    text = "One-tap/zero-tap will auto-fill this when WhatsApp allows it.",
+                                    color = OpwSlate,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                            }
+                            if (whatsappStep == "register") {
+                                ModernRoundedField(
+                                    value = whatsappName,
+                                    onValueChange = { whatsappName = it },
+                                    placeholder = "Full Name",
+                                    keyboardType = KeyboardType.Text,
+                                    imeAction = ImeAction.Next,
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                ModernRoundedField(
+                                    value = whatsappEmail,
+                                    onValueChange = { whatsappEmail = it },
+                                    placeholder = "Email Address",
+                                    keyboardType = KeyboardType.Email,
+                                    imeAction = ImeAction.Next,
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                ModernRoundedField(
+                                    value = whatsappPassword,
+                                    onValueChange = { whatsappPassword = it },
+                                    placeholder = "Password",
+                                    keyboardType = KeyboardType.Password,
+                                    imeAction = ImeAction.Next,
+                                    hidden = true,
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                ModernRoundedField(
+                                    value = whatsappConfirmPassword,
+                                    onValueChange = { whatsappConfirmPassword = it },
+                                    placeholder = "Confirm Password",
+                                    keyboardType = KeyboardType.Password,
+                                    imeAction = ImeAction.Done,
+                                    hidden = true,
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                            }
+                            ModernPrimaryButton(
+                                onClick = {
+                                    val phoneError = FormValidators.phone(whatsappMobile)
+                                    if (phoneError != null) {
+                                        showMessage(phoneError)
+                                        return@ModernPrimaryButton
+                                    }
+                                    scope.launch {
+                                        whatsappSubmitting = true
+                                        try {
+                                            if (whatsappStep == "mobile") {
+                                                WhatsAppOtpBridge.clearCode()
+                                                WhatsAppOtpBridge.clearError()
+                                                sendWhatsAppOtpHandshake(context)
+                                                val response = apiService.requestWhatsAppLoginOtp(
+                                                    FormValidators.cleanPhone(whatsappMobile),
+                                                )
+                                                whatsappStep = "otp"
+                                                whatsappOtp = response["devOtp"]?.toString().orEmpty()
+                                                showMessage(
+                                                    response["devOtp"]?.let { "Development OTP: $it" }
+                                                        ?: response["message"]?.toString()
+                                                        ?: "Verification code sent on WhatsApp.",
+                                                )
+                                            } else if (whatsappStep == "otp") {
+                                                verifyWhatsAppOtp(whatsappOtp)
+                                            } else {
+                                                val emailError = FormValidators.email(whatsappEmail)
+                                                when {
+                                                    whatsappVerificationToken.isBlank() ->
+                                                        showMessage("Please verify your WhatsApp number first.")
+                                                    whatsappName.trim().length < 2 ->
+                                                        showMessage("Full name must be at least 2 characters.")
+                                                    emailError != null ->
+                                                        showMessage(emailError)
+                                                    whatsappPassword.length < 6 ->
+                                                        showMessage("Password must be at least 6 characters.")
+                                                    whatsappPassword != whatsappConfirmPassword ->
+                                                        showMessage("Password and confirm password must match.")
+                                                    else -> {
+                                                        val response = apiService.registerWithWhatsAppOtp(
+                                                            name = whatsappName.trim(),
+                                                            email = whatsappEmail.trim().lowercase(),
+                                                            mobile = FormValidators.cleanPhone(whatsappMobile),
+                                                            password = whatsappPassword,
+                                                            verificationToken = whatsappVerificationToken,
+                                                        )
+                                                        val user = response["user"].asJsonMap()
+                                                        if (user != null) {
+                                                            showMessage(response["message"]?.toString() ?: "Account created successfully.")
+                                                            onLoggedIn(user + mapOf("token" to response["token"]))
+                                                        } else {
+                                                            showMessage("Registration completed, but patient details were missing.")
+                                                        }
                                                     }
                                                 }
                                             }
+                                        } catch (error: ApiException) {
+                                            showMessage(error.message.orEmpty())
+                                        } finally {
+                                            whatsappSubmitting = false
                                         }
-                                    } catch (error: ApiException) {
-                                        showMessage(error.message.orEmpty())
-                                    } finally {
-                                        whatsappSubmitting = false
                                     }
-                                }
-                            },
-                            enabled = !whatsappSubmitting,
-                            label = when (whatsappStep) {
-                                "otp" -> "Verify OTP"
-                                "register" -> "Create & Login"
-                                else -> "Send WhatsApp OTP"
-                            },
-                            loading = whatsappSubmitting,
-                        )
+                                },
+                                enabled = !whatsappSubmitting,
+                                label = when (whatsappStep) {
+                                    "otp" -> "Verify OTP"
+                                    "register" -> "Create & Login"
+                                    else -> "Send WhatsApp OTP"
+                                },
+                                loading = whatsappSubmitting,
+                            )
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(24.dp))

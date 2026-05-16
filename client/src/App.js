@@ -29,6 +29,7 @@ import PatientProfile from "./pages/PatientProfile";
 import AdminProfile from "./pages/AdminProfile";
 import ProtectedRoute from "./utils/ProtectedRoute";
 import Mailbox from "./pages/Mailbox";
+import Marketing from "./pages/Marketing";
 import Notifications from "./pages/Notifications";
 import ReportsPage from "./pages/ReportsPage";
 import TreatmentTracker from "./pages/TreatmentTracker";
@@ -119,6 +120,14 @@ function App() {
           element={
             <ProtectedRoute moduleKey="shop">
               <Shop />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/marketing"
+          element={
+            <ProtectedRoute moduleKey="marketing">
+              <Marketing />
             </ProtectedRoute>
           }
         />

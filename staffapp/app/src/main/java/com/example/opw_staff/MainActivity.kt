@@ -4164,6 +4164,7 @@ private fun PatientsTab(
     if (showPatientDialog) {
         PatientFormDialog(
             patient = editingPatient,
+            existingPatients = patients + archivedPatients,
             onDismiss = {
                 showPatientDialog = false
                 editingPatientId = ""
@@ -4618,6 +4619,7 @@ private fun ArchivedPatientsScreen(
 @Composable
 private fun PatientFormDialog(
     patient: JSONObject?,
+    existingPatients: List<JSONObject>,
     onDismiss: () -> Unit,
     onSave: (String?, JSONObject) -> Unit,
 ) {
@@ -4641,16 +4643,28 @@ private fun PatientFormDialog(
     }
 
     fun submit() {
+        val currentPatientId = patient?.text("id").orEmpty()
+        val normalizedEmail = email.trim().lowercase()
+        val normalizedMobile = mobile.trim()
+        val duplicatePatient = existingPatients.firstOrNull { existing ->
+            existing.text("id") != currentPatientId &&
+                (existing.text("email").trim().lowercase() == normalizedEmail ||
+                    existing.text("mobile").trim() == normalizedMobile)
+        }
+
         when {
             name.trim().length < 2 -> error = "Patient name must be at least 2 characters."
             !Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() -> error = "Enter a valid email."
             !mobile.trim().matches(Regex("\\d{10}")) -> error = "Enter a valid 10-digit mobile."
+            duplicatePatient != null && duplicatePatient.text("mobile").trim() == normalizedMobile ->
+                error = "A patient with this mobile number already exists."
+            duplicatePatient != null -> error = "A patient with this email address already exists."
             else -> onSave(
                 patient?.text("id")?.takeIf { it.isNotBlank() },
                 JSONObject()
                     .put("name", name.trim())
-                    .put("email", email.trim())
-                    .put("mobile", mobile.trim()),
+                    .put("email", normalizedEmail)
+                    .put("mobile", normalizedMobile),
             )
         }
     }

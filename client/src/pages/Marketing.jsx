@@ -45,6 +45,25 @@ const PITCH_STATUSES = [
   { value: "not_interested", label: "Not Interested" },
 ];
 
+const SOURCE_FORM_STEPS = [
+  {
+    title: "Source",
+    subtitle: "Type, name, and owner.",
+  },
+  {
+    title: "Contact",
+    subtitle: "Doctor and mobile details.",
+  },
+  {
+    title: "Visit",
+    subtitle: "Location, dates, and target.",
+  },
+  {
+    title: "Photos",
+    subtitle: "Proof and notes.",
+  },
+];
+
 const emptyForm = {
   id: null,
   sourceType: "medical_shop",
@@ -127,6 +146,7 @@ export default function Marketing() {
   const [form, setForm] = useState(emptyForm);
   const [photoFiles, setPhotoFiles] = useState([]);
   const [showSourceModal, setShowSourceModal] = useState(false);
+  const [sourceFormStep, setSourceFormStep] = useState(0);
   const [referralSource, setReferralSource] = useState(null);
   const [referralForm, setReferralForm] = useState({
     date: todayInputValue(),
@@ -161,6 +181,7 @@ export default function Marketing() {
   const resetForm = () => {
     setForm(emptyForm);
     setPhotoFiles([]);
+    setSourceFormStep(0);
   };
 
   const closeSourceModal = () => {
@@ -172,6 +193,7 @@ export default function Marketing() {
   const openAddModal = () => {
     resetForm();
     setError("");
+    setSourceFormStep(0);
     setShowSourceModal(true);
   };
 
@@ -199,6 +221,7 @@ export default function Marketing() {
     });
     setPhotoFiles([]);
     setError("");
+    setSourceFormStep(0);
     setShowSourceModal(true);
   };
 
@@ -232,8 +255,49 @@ export default function Marketing() {
     );
   };
 
+  const validateSourceStep = (step) => {
+    if (step === 0 && cleanText(form.name).length < 2) {
+      return "First add the source type and a name with at least 2 characters.";
+    }
+
+    if (step === 1) {
+      return (
+        validatePhoneField(form.mobile, false) ||
+        validatePhoneField(form.alternateMobile, false) ||
+        validateEmailField(form.email, false)
+      );
+    }
+
+    return "";
+  };
+
+  const goToNextSourceStep = () => {
+    const validationError = validateSourceStep(sourceFormStep);
+
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setError("");
+    setSourceFormStep((current) =>
+      Math.min(current + 1, SOURCE_FORM_STEPS.length - 1)
+    );
+  };
+
+  const goToPreviousSourceStep = () => {
+    setError("");
+    setSourceFormStep((current) => Math.max(current - 1, 0));
+  };
+
   const handleSourceSubmit = async (event) => {
     event.preventDefault();
+
+    if (sourceFormStep < SOURCE_FORM_STEPS.length - 1) {
+      goToNextSourceStep();
+      return;
+    }
+
     setSaving(true);
     setError("");
 
@@ -764,238 +828,345 @@ export default function Marketing() {
               </div>
 
               <form onSubmit={handleSourceSubmit} className="max-h-[calc(92vh-120px)] overflow-y-auto p-6">
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  <label>
-                    <span className="mb-2 block text-sm font-medium text-slate-700">
-                      Source Type
-                    </span>
-                    <select
-                      value={form.sourceType}
-                      onChange={(event) => updateForm("sourceType", event.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
-                    >
-                      {SOURCE_TYPES.map((type) => (
-                        <option key={type.value} value={type.value}>
-                          {type.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                <div className="mb-6 grid gap-3 md:grid-cols-4">
+                  {SOURCE_FORM_STEPS.map((step, index) => {
+                    const active = sourceFormStep === index;
+                    const completed = sourceFormStep > index;
 
-                  <MarketingInput
-                    label="Place / Source Name"
-                    icon={Building2}
-                    value={form.name}
-                    onChange={(event) => updateForm("name", event.target.value)}
-                    placeholder="Example: Sai Medical Store"
-                    required
-                  />
-
-                  <MarketingInput
-                    label="Marketing Person"
-                    icon={UserRound}
-                    value={form.assignedTo}
-                    onChange={(event) => updateForm("assignedTo", event.target.value)}
-                    placeholder="Staff name"
-                  />
-
-                  <MarketingInput
-                    label="Contact Person"
-                    icon={UserRound}
-                    value={form.contactPerson}
-                    onChange={(event) => updateForm("contactPerson", event.target.value)}
-                    placeholder="Owner / manager"
-                  />
-
-                  <MarketingInput
-                    label="Doctor Name"
-                    icon={UserRound}
-                    value={form.doctorName}
-                    onChange={(event) => updateForm("doctorName", event.target.value)}
-                    placeholder="Doctor to convince"
-                  />
-
-                  <MarketingInput
-                    label="Mobile"
-                    icon={Phone}
-                    value={form.mobile}
-                    onChange={(event) => updateForm("mobile", event.target.value)}
-                    placeholder="10-digit mobile"
-                    inputMode="numeric"
-                  />
-
-                  <MarketingInput
-                    label="Alternate Mobile"
-                    icon={Phone}
-                    value={form.alternateMobile}
-                    onChange={(event) => updateForm("alternateMobile", event.target.value)}
-                    placeholder="Optional"
-                    inputMode="numeric"
-                  />
-
-                  <MarketingInput
-                    label="Email"
-                    value={form.email}
-                    onChange={(event) => updateForm("email", event.target.value)}
-                    placeholder="Optional email"
-                    type="email"
-                  />
-
-                  <MarketingInput
-                    label="Area"
-                    icon={MapPin}
-                    value={form.area}
-                    onChange={(event) => updateForm("area", event.target.value)}
-                    placeholder="Local area"
-                  />
-
-                  <MarketingInput
-                    label="City"
-                    icon={MapPin}
-                    value={form.city}
-                    onChange={(event) => updateForm("city", event.target.value)}
-                    placeholder="City"
-                  />
-
-                  <MarketingInput
-                    label="Visit Date"
-                    icon={CalendarDays}
-                    type="date"
-                    value={form.visitDate}
-                    onChange={(event) => updateForm("visitDate", event.target.value)}
-                  />
-
-                  <MarketingInput
-                    label="Next Follow-up"
-                    icon={CalendarDays}
-                    type="date"
-                    value={form.nextFollowUpDate}
-                    onChange={(event) => updateForm("nextFollowUpDate", event.target.value)}
-                  />
-
-                  <label>
-                    <span className="mb-2 block text-sm font-medium text-slate-700">
-                      Pitch Status
-                    </span>
-                    <select
-                      value={form.pitchStatus}
-                      onChange={(event) => updateForm("pitchStatus", event.target.value)}
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
-                    >
-                      {PITCH_STATUSES.map((status) => (
-                        <option key={status.value} value={status.value}>
-                          {status.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <MarketingInput
-                    label="Expected Daily Patients"
-                    icon={Target}
-                    type="number"
-                    min="0"
-                    value={form.expectedDailyPatients}
-                    onChange={(event) =>
-                      updateForm("expectedDailyPatients", event.target.value)
-                    }
-                    placeholder="Example: 3"
-                  />
+                    return (
+                      <button
+                        key={step.title}
+                        type="button"
+                        onClick={() => {
+                          setError("");
+                          setSourceFormStep(index);
+                        }}
+                        className={`rounded-3xl border px-4 py-3 text-left transition ${
+                          active
+                            ? "border-teal-300 bg-teal-50 shadow-sm"
+                            : completed
+                              ? "border-emerald-200 bg-emerald-50"
+                              : "border-slate-200 bg-slate-50 hover:bg-white"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`flex h-8 w-8 items-center justify-center rounded-2xl text-sm font-semibold ${
+                              active
+                                ? "bg-teal-600 text-white"
+                                : completed
+                                  ? "bg-emerald-600 text-white"
+                                  : "bg-white text-slate-500"
+                            }`}
+                          >
+                            {index + 1}
+                          </span>
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">
+                              {step.title}
+                            </p>
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              {step.subtitle}
+                            </p>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
 
-                <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                  <label>
-                    <span className="mb-2 block text-sm font-medium text-slate-700">
-                      Full Address
-                    </span>
-                    <textarea
-                      rows="4"
-                      value={form.address}
-                      onChange={(event) => updateForm("address", event.target.value)}
-                      placeholder="Shop, clinic, institute, or doctor chamber address"
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
-                    />
-                  </label>
-
-                  <label>
-                    <span className="mb-2 block text-sm font-medium text-slate-700">
-                      Marketing Notes
-                    </span>
-                    <textarea
-                      rows="4"
-                      value={form.notes}
-                      onChange={(event) => updateForm("notes", event.target.value)}
-                      placeholder="What was discussed, doctor response, next action..."
-                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
-                    />
-                  </label>
-                </div>
-
-                <div className="mt-5 rounded-3xl border border-dashed border-teal-200 bg-teal-50/60 p-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">
-                        Visit Photos
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Upload shop board, clinic front, institute desk, or meeting photo.
+                {sourceFormStep === 0 ? (
+                  <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="mb-5">
+                      <p className="text-sm font-semibold text-teal-700">Part 1</p>
+                      <h4 className="mt-1 text-xl font-semibold text-slate-900">
+                        Basic Source Details
+                      </h4>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Start with only what identifies the place and the marketing person.
                       </p>
                     </div>
-                    <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800">
-                      <ImagePlus size={16} /> Choose Photos
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        className="hidden"
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label>
+                        <span className="mb-2 block text-sm font-medium text-slate-700">
+                          Source Type
+                        </span>
+                        <select
+                          value={form.sourceType}
+                          onChange={(event) => updateForm("sourceType", event.target.value)}
+                          className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
+                        >
+                          {SOURCE_TYPES.map((type) => (
+                            <option key={type.value} value={type.value}>
+                              {type.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <MarketingInput
+                        label="Place / Source Name"
+                        icon={Building2}
+                        value={form.name}
+                        onChange={(event) => updateForm("name", event.target.value)}
+                        placeholder="Example: Sai Medical Store"
+                        required
+                      />
+
+                      <MarketingInput
+                        label="Marketing Person"
+                        icon={UserRound}
+                        value={form.assignedTo}
+                        onChange={(event) => updateForm("assignedTo", event.target.value)}
+                        placeholder="Staff name"
+                        className="md:col-span-2"
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
+                {sourceFormStep === 1 ? (
+                  <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="mb-5">
+                      <p className="text-sm font-semibold text-teal-700">Part 2</p>
+                      <h4 className="mt-1 text-xl font-semibold text-slate-900">
+                        Contact And Doctor
+                      </h4>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Add owner, doctor, and phone details only if available.
+                      </p>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <MarketingInput
+                        label="Contact Person"
+                        icon={UserRound}
+                        value={form.contactPerson}
+                        onChange={(event) => updateForm("contactPerson", event.target.value)}
+                        placeholder="Owner / manager"
+                      />
+
+                      <MarketingInput
+                        label="Doctor Name"
+                        icon={UserRound}
+                        value={form.doctorName}
+                        onChange={(event) => updateForm("doctorName", event.target.value)}
+                        placeholder="Doctor to convince"
+                      />
+
+                      <MarketingInput
+                        label="Mobile"
+                        icon={Phone}
+                        value={form.mobile}
+                        onChange={(event) => updateForm("mobile", event.target.value)}
+                        placeholder="10-digit mobile"
+                        inputMode="numeric"
+                      />
+
+                      <MarketingInput
+                        label="Alternate Mobile"
+                        icon={Phone}
+                        value={form.alternateMobile}
+                        onChange={(event) => updateForm("alternateMobile", event.target.value)}
+                        placeholder="Optional"
+                        inputMode="numeric"
+                      />
+
+                      <MarketingInput
+                        label="Email"
+                        value={form.email}
+                        onChange={(event) => updateForm("email", event.target.value)}
+                        placeholder="Optional email"
+                        type="email"
+                        className="md:col-span-2"
+                      />
+                    </div>
+                  </div>
+                ) : null}
+
+                {sourceFormStep === 2 ? (
+                  <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="mb-5">
+                      <p className="text-sm font-semibold text-teal-700">Part 3</p>
+                      <h4 className="mt-1 text-xl font-semibold text-slate-900">
+                        Visit Plan
+                      </h4>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Track location, follow-up date, current status, and daily target.
+                      </p>
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                      <MarketingInput
+                        label="Area"
+                        icon={MapPin}
+                        value={form.area}
+                        onChange={(event) => updateForm("area", event.target.value)}
+                        placeholder="Local area"
+                      />
+
+                      <MarketingInput
+                        label="City"
+                        icon={MapPin}
+                        value={form.city}
+                        onChange={(event) => updateForm("city", event.target.value)}
+                        placeholder="City"
+                      />
+
+                      <MarketingInput
+                        label="Visit Date"
+                        icon={CalendarDays}
+                        type="date"
+                        value={form.visitDate}
+                        onChange={(event) => updateForm("visitDate", event.target.value)}
+                      />
+
+                      <MarketingInput
+                        label="Next Follow-up"
+                        icon={CalendarDays}
+                        type="date"
+                        value={form.nextFollowUpDate}
+                        onChange={(event) => updateForm("nextFollowUpDate", event.target.value)}
+                      />
+
+                      <label>
+                        <span className="mb-2 block text-sm font-medium text-slate-700">
+                          Pitch Status
+                        </span>
+                        <select
+                          value={form.pitchStatus}
+                          onChange={(event) => updateForm("pitchStatus", event.target.value)}
+                          className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
+                        >
+                          {PITCH_STATUSES.map((status) => (
+                            <option key={status.value} value={status.value}>
+                              {status.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <MarketingInput
+                        label="Expected Daily Patients"
+                        icon={Target}
+                        type="number"
+                        min="0"
+                        value={form.expectedDailyPatients}
                         onChange={(event) =>
-                          setPhotoFiles(Array.from(event.target.files || []).slice(0, 6))
+                          updateForm("expectedDailyPatients", event.target.value)
                         }
+                        placeholder="Example: 3"
+                      />
+                    </div>
+
+                    <label className="mt-4 block">
+                      <span className="mb-2 block text-sm font-medium text-slate-700">
+                        Full Address
+                      </span>
+                      <textarea
+                        rows="4"
+                        value={form.address}
+                        onChange={(event) => updateForm("address", event.target.value)}
+                        placeholder="Shop, clinic, institute, or doctor chamber address"
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
                       />
                     </label>
                   </div>
+                ) : null}
 
-                  {form.existingPhotos.length || photoFiles.length ? (
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                      {form.existingPhotos.map((photo) => {
-                        const markedForRemoval = form.removePhotoIds.includes(photo.id);
-
-                        return (
-                          <button
-                            key={photo.id}
-                            type="button"
-                            onClick={() => togglePhotoRemoval(photo.id)}
-                            className={`relative overflow-hidden rounded-2xl border text-left ${
-                              markedForRemoval
-                                ? "border-rose-300 opacity-60"
-                                : "border-white"
-                            }`}
-                          >
-                            <MarketingPhoto
-                              photo={photo}
-                              alt={photo.name || "Marketing visit"}
-                              className="h-28 w-full object-cover"
-                            />
-                            <span className="absolute inset-x-2 bottom-2 rounded-xl bg-white/90 px-2 py-1 text-xs font-medium text-slate-700">
-                              {markedForRemoval ? "Will remove" : "Click to remove"}
-                            </span>
-                          </button>
-                        );
-                      })}
-
-                      {photoFiles.map((file) => (
-                        <div
-                          key={`${file.name}-${file.lastModified}`}
-                          className="rounded-2xl border border-white bg-white px-3 py-4 text-sm shadow-sm"
-                        >
-                          <Camera size={18} className="mb-2 text-teal-700" />
-                          <p className="truncate font-medium text-slate-800">{file.name}</p>
-                          <p className="mt-1 text-xs text-slate-500">Ready to upload</p>
-                        </div>
-                      ))}
+                {sourceFormStep === 3 ? (
+                  <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+                    <div className="mb-5">
+                      <p className="text-sm font-semibold text-teal-700">Part 4</p>
+                      <h4 className="mt-1 text-xl font-semibold text-slate-900">
+                        Photos And Notes
+                      </h4>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Finish with visit proof and the conversation summary.
+                      </p>
                     </div>
-                  ) : null}
-                </div>
+
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-medium text-slate-700">
+                        Marketing Notes
+                      </span>
+                      <textarea
+                        rows="4"
+                        value={form.notes}
+                        onChange={(event) => updateForm("notes", event.target.value)}
+                        placeholder="What was discussed, doctor response, next action..."
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-teal-300 focus:bg-white focus:ring-4 focus:ring-teal-100"
+                      />
+                    </label>
+
+                    <div className="mt-5 rounded-3xl border border-dashed border-teal-200 bg-teal-50/60 p-4">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">
+                            Visit Photos
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Upload shop board, clinic front, institute desk, or meeting photo.
+                          </p>
+                        </div>
+                        <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800">
+                          <ImagePlus size={16} /> Choose Photos
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            className="hidden"
+                            onChange={(event) =>
+                              setPhotoFiles(Array.from(event.target.files || []).slice(0, 6))
+                            }
+                          />
+                        </label>
+                      </div>
+
+                      {form.existingPhotos.length || photoFiles.length ? (
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                          {form.existingPhotos.map((photo) => {
+                            const markedForRemoval = form.removePhotoIds.includes(photo.id);
+
+                            return (
+                              <button
+                                key={photo.id}
+                                type="button"
+                                onClick={() => togglePhotoRemoval(photo.id)}
+                                className={`relative overflow-hidden rounded-2xl border text-left ${
+                                  markedForRemoval
+                                    ? "border-rose-300 opacity-60"
+                                    : "border-white"
+                                }`}
+                              >
+                                <MarketingPhoto
+                                  photo={photo}
+                                  alt={photo.name || "Marketing visit"}
+                                  className="h-28 w-full object-cover"
+                                />
+                                <span className="absolute inset-x-2 bottom-2 rounded-xl bg-white/90 px-2 py-1 text-xs font-medium text-slate-700">
+                                  {markedForRemoval ? "Will remove" : "Click to remove"}
+                                </span>
+                              </button>
+                            );
+                          })}
+
+                          {photoFiles.map((file) => (
+                            <div
+                              key={`${file.name}-${file.lastModified}`}
+                              className="rounded-2xl border border-white bg-white px-3 py-4 text-sm shadow-sm"
+                            >
+                              <Camera size={18} className="mb-2 text-teal-700" />
+                              <p className="truncate font-medium text-slate-800">{file.name}</p>
+                              <p className="mt-1 text-xs text-slate-500">Ready to upload</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="mt-6 flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-end">
                   <button
@@ -1005,12 +1176,27 @@ export default function Marketing() {
                   >
                     Cancel
                   </button>
+                  {sourceFormStep > 0 ? (
+                    <button
+                      type="button"
+                      onClick={goToPreviousSourceStep}
+                      className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Previous
+                    </button>
+                  ) : null}
                   <button
                     type="submit"
                     disabled={saving}
                     className="rounded-2xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {saving ? "Saving..." : form.id ? "Update Source" : "Save Source"}
+                    {saving
+                      ? "Saving..."
+                      : sourceFormStep < SOURCE_FORM_STEPS.length - 1
+                        ? "Next"
+                        : form.id
+                          ? "Update Source"
+                          : "Save Source"}
                   </button>
                 </div>
               </form>

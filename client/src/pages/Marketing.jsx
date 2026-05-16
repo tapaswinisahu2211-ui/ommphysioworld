@@ -5,6 +5,7 @@ import {
   Camera,
   ClipboardPlus,
   Edit3,
+  Eye,
   ImagePlus,
   MapPin,
   Phone,
@@ -147,6 +148,7 @@ export default function Marketing() {
   const [photoFiles, setPhotoFiles] = useState([]);
   const [showSourceModal, setShowSourceModal] = useState(false);
   const [sourceFormStep, setSourceFormStep] = useState(0);
+  const [viewSourceId, setViewSourceId] = useState(null);
   const [referralSource, setReferralSource] = useState(null);
   const [referralForm, setReferralForm] = useState({
     date: todayInputValue(),
@@ -411,6 +413,9 @@ export default function Marketing() {
     try {
       await API.delete(`/marketing/sources/${deleteSourceId}`);
       setSources((current) => current.filter((source) => source.id !== deleteSourceId));
+      if (viewSourceId === deleteSourceId) {
+        setViewSourceId(null);
+      }
       setDeleteSourceId(null);
     } catch (deleteError) {
       setError(deleteError.response?.data?.message || "Failed to delete marketing source.");
@@ -419,30 +424,56 @@ export default function Marketing() {
 
   const filteredSources = useMemo(() => {
     const keyword = search.toLowerCase().trim();
+    const statusRank = {
+      converted: 0,
+      interested: 1,
+      follow_up: 2,
+      visited: 3,
+      new: 4,
+      not_interested: 5,
+    };
 
-    return sources.filter((source) => {
-      const matchesType = typeFilter === "all" || source.sourceType === typeFilter;
-      const matchesStatus =
-        statusFilter === "all" ||
-        source.pitchStatus === statusFilter ||
-        source.status === statusFilter;
-      const searchable = [
-        source.name,
-        source.contactPerson,
-        source.doctorName,
-        source.mobile,
-        source.email,
-        source.area,
-        source.city,
-        source.address,
-        source.assignedTo,
-      ]
-        .join(" ")
-        .toLowerCase();
+    return sources
+      .filter((source) => {
+        const matchesType = typeFilter === "all" || source.sourceType === typeFilter;
+        const matchesStatus =
+          statusFilter === "all" ||
+          source.pitchStatus === statusFilter ||
+          source.status === statusFilter;
+        const searchable = [
+          source.name,
+          source.contactPerson,
+          source.doctorName,
+          source.mobile,
+          source.email,
+          source.area,
+          source.city,
+          source.address,
+          source.assignedTo,
+        ]
+          .join(" ")
+          .toLowerCase();
 
-      return matchesType && matchesStatus && (!keyword || searchable.includes(keyword));
-    });
+        return matchesType && matchesStatus && (!keyword || searchable.includes(keyword));
+      })
+      .sort((first, second) => {
+        const firstStatus = first.pitchStatus || first.status || "new";
+        const secondStatus = second.pitchStatus || second.status || "new";
+        const firstRank = statusRank[firstStatus] ?? 10;
+        const secondRank = statusRank[secondStatus] ?? 10;
+
+        if (firstRank !== secondRank) {
+          return firstRank - secondRank;
+        }
+
+        return new Date(second.updatedAt || second.createdAt) - new Date(first.updatedAt || first.createdAt);
+      });
   }, [search, sources, statusFilter, typeFilter]);
+
+  const viewSource = useMemo(
+    () => sources.find((source) => source.id === viewSourceId) || null,
+    [sources, viewSourceId]
+  );
 
   const stats = useMemo(() => {
     const today = todayInputValue();
@@ -626,182 +657,353 @@ export default function Marketing() {
               ) : null}
             </div>
           ) : (
-            <div className="stagger-grid grid gap-4 xl:grid-cols-2">
-              {filteredSources.map((source) => {
-                const recentReferrals = (source.referrals || []).slice(-3).reverse();
-                const activeStatus = source.pitchStatus || source.status || "new";
+            <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white">
+              <div className="hidden grid-cols-[1.4fr_1fr_1fr_0.8fr_150px] gap-4 border-b border-slate-100 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400 lg:grid">
+                <span>Source</span>
+                <span>Contact</span>
+                <span>Follow-up</span>
+                <span>Leads</span>
+                <span className="text-right">Actions</span>
+              </div>
 
-                return (
-                  <article
-                    key={source.id}
-                    className="motion-card rounded-[28px] border border-slate-200 bg-[linear-gradient(180deg,#ffffff,#f8fafc)] p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
-                  >
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="divide-y divide-slate-100">
+                {filteredSources.map((source) => {
+                  const activeStatus = source.pitchStatus || source.status || "new";
+
+                  return (
+                    <article
+                      key={source.id}
+                      className={`grid gap-4 px-5 py-4 transition hover:bg-slate-50 lg:grid-cols-[1.4fr_1fr_1fr_0.8fr_150px] lg:items-center ${
+                        activeStatus === "converted" ? "bg-emerald-50/40" : "bg-white"
+                      }`}
+                    >
                       <div className="min-w-0">
-                        <div className="mb-3 flex flex-wrap items-center gap-2">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
                           <span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">
                             {sourceTypeLabel(source.sourceType)}
                           </span>
-                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                              activeStatus === "converted"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
                             {pitchStatusLabel(activeStatus)}
                           </span>
                         </div>
-                        <h3 className="truncate text-xl font-semibold text-slate-900">
+                        <h3 className="truncate text-base font-semibold text-slate-900">
                           {source.name}
                         </h3>
-                        <p className="mt-2 flex items-start gap-2 text-sm text-slate-500">
-                          <MapPin size={16} className="mt-0.5 shrink-0 text-slate-400" />
-                          {formatSourceAddress(source)}
+                        <p className="mt-1 flex items-center gap-2 truncate text-sm text-slate-500">
+                          <MapPin size={15} className="shrink-0 text-slate-400" />
+                          {source.area || source.city || "Location not added"}
                         </p>
                       </div>
 
-                      {canEditMarketing ? (
-                        <div className="flex shrink-0 items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(source)}
-                            className="rounded-2xl border border-teal-200 bg-teal-50 p-2.5 text-teal-700 transition hover:bg-teal-100"
-                            title="Edit source"
-                          >
-                            <Edit3 size={16} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteSourceId(source.id)}
-                            className="rounded-2xl border border-rose-200 bg-rose-50 p-2.5 text-rose-700 transition hover:bg-rose-100"
-                            title="Delete source"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="mt-5 grid gap-3 md:grid-cols-3">
-                      <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
-                        <p className="text-xs uppercase tracking-[0.16em] text-slate-400">
-                          Contact
-                        </p>
-                        <p className="mt-2 text-sm font-semibold text-slate-800">
-                          {source.contactPerson || source.doctorName || "Not added"}
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">
+                          {source.doctorName || source.contactPerson || "Not added"}
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
                           {source.mobile || source.alternateMobile || "No mobile"}
                         </p>
                       </div>
 
-                      <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
-                        <p className="text-xs uppercase tracking-[0.16em] text-slate-400">
-                          Follow-up
-                        </p>
-                        <p className="mt-2 text-sm font-semibold text-slate-800">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">
                           {formatDate(source.nextFollowUpDate)}
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
-                          Visited {formatDate(source.visitDate)}
+                          Visit {formatDate(source.visitDate)}
                         </p>
                       </div>
 
-                      <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
-                        <p className="text-xs uppercase tracking-[0.16em] text-slate-400">
-                          Patients
-                        </p>
-                        <p className="mt-2 text-sm font-semibold text-slate-800">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">
                           {source.totalGeneratedPatients || 0} generated
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
-                          Goal {source.expectedDailyPatients || 0}/day
+                          {source.expectedDailyPatients || 0}/day target
                         </p>
                       </div>
-                    </div>
 
-                    <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_220px]">
-                      <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-sm font-semibold text-slate-900">
-                            Daily Patient Records
-                          </p>
-                          {canAddMarketing ? (
+                      <div className="flex items-center justify-start gap-2 lg:justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setViewSourceId(source.id)}
+                          className="rounded-2xl border border-sky-200 bg-sky-50 p-2.5 text-sky-700 transition hover:bg-sky-100"
+                          title="View details"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        {canEditMarketing ? (
+                          <>
                             <button
                               type="button"
-                              onClick={() => setReferralSource(source)}
-                              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800"
+                              onClick={() => openEditModal(source)}
+                              className="rounded-2xl border border-teal-200 bg-teal-50 p-2.5 text-teal-700 transition hover:bg-teal-100"
+                              title="Edit source"
                             >
-                              <ClipboardPlus size={14} /> Add
+                              <Edit3 size={16} />
                             </button>
-                          ) : null}
-                        </div>
-
-                        {recentReferrals.length ? (
-                          <div className="mt-3 space-y-2">
-                            {recentReferrals.map((referral) => (
-                              <div
-                                key={referral.id}
-                                className="flex items-center justify-between gap-3 rounded-2xl bg-white px-3 py-2 text-sm shadow-sm"
-                              >
-                                <div>
-                                  <p className="font-semibold text-slate-800">
-                                    {referral.patientCount} patient{referral.patientCount === 1 ? "" : "s"}
-                                  </p>
-                                  <p className="text-xs text-slate-500">
-                                    {formatDate(referral.date)}
-                                    {referral.notes ? ` - ${referral.notes}` : ""}
-                                  </p>
-                                </div>
-                                {canEditMarketing ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteReferral(source.id, referral.id)}
-                                    className="rounded-xl p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
-                                    title="Delete daily record"
-                                  >
-                                    <Trash2 size={15} />
-                                  </button>
-                                ) : null}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="mt-3 text-sm text-slate-500">
-                            No daily patient records yet.
-                          </p>
-                        )}
+                            <button
+                              type="button"
+                              onClick={() => setDeleteSourceId(source.id)}
+                              className="rounded-2xl border border-rose-200 bg-rose-50 p-2.5 text-rose-700 transition hover:bg-rose-100"
+                              title="Delete source"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </>
+                        ) : null}
                       </div>
-
-                      <div className="rounded-2xl border border-slate-100 bg-white p-3 shadow-sm">
-                        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
-                          <Camera size={16} className="text-teal-700" /> Visit Photos
-                        </div>
-                        {source.photos?.length ? (
-                          <div className="grid grid-cols-3 gap-2">
-                            {source.photos.slice(0, 6).map((photo) => (
-                              <MarketingPhoto
-                                key={photo.id}
-                                photo={photo}
-                                alt={photo.name || source.name}
-                                className="h-16 w-full rounded-2xl object-cover"
-                              />
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="flex h-24 items-center justify-center rounded-2xl bg-slate-50 text-xs text-slate-400">
-                            No photos
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {source.notes ? (
-                      <p className="mt-4 rounded-2xl bg-teal-50 px-4 py-3 text-sm leading-6 text-teal-900">
-                        {source.notes}
-                      </p>
-                    ) : null}
-                  </article>
-                );
-              })}
+                    </article>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
+
+        {viewSource ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm">
+            <div className="motion-card max-h-[92vh] w-full max-w-5xl overflow-hidden rounded-[32px] border border-white/60 bg-white shadow-2xl">
+              <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-[linear-gradient(135deg,#ecfeff,#f8fafc)] px-6 py-5">
+                <div className="min-w-0">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-teal-100 px-3 py-1 text-xs font-semibold text-teal-700">
+                      {sourceTypeLabel(viewSource.sourceType)}
+                    </span>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        (viewSource.pitchStatus || viewSource.status) === "converted"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {pitchStatusLabel(viewSource.pitchStatus || viewSource.status)}
+                    </span>
+                  </div>
+                  <h3 className="truncate text-2xl font-semibold text-slate-900">
+                    {viewSource.name}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    View details and generate daily lead/patient data from this source.
+                  </p>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-2">
+                  {canAddMarketing ? (
+                    <button
+                      type="button"
+                      onClick={() => setReferralSource(viewSource)}
+                      className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
+                    >
+                      <ClipboardPlus size={16} /> Generate Lead
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setViewSourceId(null)}
+                    className="rounded-2xl border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="max-h-[calc(92vh-120px)] overflow-y-auto p-6">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                      Contact
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">
+                      {viewSource.contactPerson || "Not added"}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {viewSource.mobile || viewSource.alternateMobile || "No mobile"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                      Doctor
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">
+                      {viewSource.doctorName || "Not added"}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {viewSource.email || "No email"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                      Follow-up
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">
+                      {formatDate(viewSource.nextFollowUpDate)}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Visit {formatDate(viewSource.visitDate)}
+                    </p>
+                  </div>
+
+                  <div className="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                      Leads
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">
+                      {viewSource.totalGeneratedPatients || 0} generated
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Target {viewSource.expectedDailyPatients || 0}/day
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+                  <div className="space-y-5">
+                    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <MapPin size={18} className="text-teal-700" />
+                        <h4 className="text-base font-semibold text-slate-900">
+                          Location Details
+                        </h4>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                        {formatSourceAddress(viewSource)}
+                      </p>
+                      <p className="mt-3 text-sm text-slate-500">
+                        Marketing person:{" "}
+                        <span className="font-semibold text-slate-800">
+                          {viewSource.assignedTo || viewSource.marketingPerson || "Not assigned"}
+                        </span>
+                      </p>
+                    </div>
+
+                    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h4 className="text-base font-semibold text-slate-900">
+                            Lead / Patient Generated Data
+                          </h4>
+                          <p className="mt-1 text-sm text-slate-500">
+                            Add and review daily patient count from this source.
+                          </p>
+                        </div>
+                        {canAddMarketing ? (
+                          <button
+                            type="button"
+                            onClick={() => setReferralSource(viewSource)}
+                            className="inline-flex items-center gap-2 rounded-2xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700"
+                          >
+                            <ClipboardPlus size={16} /> Add Lead
+                          </button>
+                        ) : null}
+                      </div>
+
+                      {viewSource.referrals?.length ? (
+                        <div className="mt-4 space-y-3">
+                          {[...(viewSource.referrals || [])].reverse().map((referral) => (
+                            <div
+                              key={referral.id}
+                              className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                            >
+                              <div>
+                                <p className="font-semibold text-slate-900">
+                                  {referral.patientCount} patient{referral.patientCount === 1 ? "" : "s"}
+                                </p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  {formatDate(referral.date)}
+                                  {referral.notes ? ` - ${referral.notes}` : ""}
+                                </p>
+                                {referral.patientNames?.length ? (
+                                  <p className="mt-1 text-xs text-slate-500">
+                                    {referral.patientNames.join(", ")}
+                                  </p>
+                                ) : null}
+                              </div>
+                              {canEditMarketing ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteReferral(viewSource.id, referral.id)}
+                                  className="self-start rounded-xl p-2 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 sm:self-auto"
+                                  title="Delete lead data"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                          No lead data generated yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-5">
+                    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                      <div className="mb-4 flex items-center gap-2">
+                        <Camera size={18} className="text-teal-700" />
+                        <h4 className="text-base font-semibold text-slate-900">
+                          Visit Photos
+                        </h4>
+                      </div>
+                      {viewSource.photos?.length ? (
+                        <div className="grid grid-cols-2 gap-3">
+                          {viewSource.photos.map((photo) => (
+                            <MarketingPhoto
+                              key={photo.id}
+                              photo={photo}
+                              alt={photo.name || viewSource.name}
+                              className="h-28 w-full rounded-2xl object-cover"
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex h-32 items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-400">
+                          No photos added
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                      <h4 className="text-base font-semibold text-slate-900">Notes</h4>
+                      <p className="mt-3 text-sm leading-6 text-slate-600">
+                        {viewSource.notes || "No marketing notes added yet."}
+                      </p>
+                    </div>
+
+                    {canEditMarketing ? (
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(viewSource)}
+                          className="flex-1 rounded-2xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm font-semibold text-teal-700 hover:bg-teal-100"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteSourceId(viewSource.id)}
+                          className="flex-1 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 hover:bg-rose-100"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {showSourceModal && (canAddMarketing || canEditMarketing) ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4 py-6 backdrop-blur-sm">

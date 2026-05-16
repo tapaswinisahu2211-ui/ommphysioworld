@@ -8,8 +8,9 @@ const {
   adminLogin,
   registerPublicUser,
   loginPublicUser,
-  checkWhatsAppLoginMobile,
-  loginPublicUserWithWhatsAppMobile,
+  requestWhatsAppLoginOtp,
+  verifyWhatsAppLoginOtp,
+  registerPublicUserWithWhatsAppOtp,
   requestPasswordReset,
   changePublicUserPassword,
   pingSession,
@@ -26,8 +27,9 @@ const authRateLimiter = createRateLimiter({
 router.post("/admin/login", authRateLimiter, adminLogin);
 router.post("/auth/register", authRateLimiter, registerPublicUser);
 router.post("/auth/login", authRateLimiter, loginPublicUser);
-router.post("/auth/whatsapp/check", authRateLimiter, checkWhatsAppLoginMobile);
-router.post("/auth/whatsapp/login", authRateLimiter, loginPublicUserWithWhatsAppMobile);
+router.post("/auth/whatsapp/request-otp", authRateLimiter, requestWhatsAppLoginOtp);
+router.post("/auth/whatsapp/verify", authRateLimiter, verifyWhatsAppLoginOtp);
+router.post("/auth/whatsapp/register", authRateLimiter, registerPublicUserWithWhatsAppOtp);
 router.post("/auth/forgot-password", authRateLimiter, requestPasswordReset);
 router.post("/auth/change-password", requirePatientAuth, changePublicUserPassword);
 router.post("/session/ping", requireAuthenticatedSession, pingSession);

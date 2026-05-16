@@ -11,6 +11,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -186,12 +187,19 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WhatsAppOtpBridge.publishFromIntent(intent)
         enableEdgeToEdge()
         setContent {
             OmmPhysioWorldTheme {
                 OmmPhysioWorldApp()
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        WhatsAppOtpBridge.publishFromIntent(intent)
     }
 }
 
@@ -224,6 +232,117 @@ private enum class PublicSection(val label: String) {
 
 private val FlatShape = RoundedCornerShape(0.dp)
 private const val PATIENT_NOTIFICATION_CHANNEL_ID = "opw_patient_alerts"
+private const val WHATSAPP_OTP_REQUESTED_ACTION = "com.whatsapp.otp.OTP_REQUESTED"
+private const val WHATSAPP_OTP_RETRIEVED_ACTION = "com.whatsapp.otp.OTP_RETRIEVED"
+private const val WHATSAPP_OTP_ERROR_ACTION = "com.whatsapp.otp.OTP_ERROR"
+private val TrustedWhatsAppPackages = setOf("com.whatsapp", "com.whatsapp.w4b")
+
+internal object WhatsAppOtpBridge {
+    var code by mutableStateOf("")
+        private set
+    var errorMessage by mutableStateOf("")
+        private set
+
+    fun publishFromIntent(intent: Intent?) {
+        if (intent?.action != WHATSAPP_OTP_RETRIEVED_ACTION) {
+            return
+        }
+
+        if (!isTrustedWhatsAppOtpIntent(intent)) {
+            return
+        }
+
+        val receivedCode = intent.getStringExtra("code") ?: extractOtpFromIntent(intent)
+        if (!receivedCode.isNullOrBlank()) {
+            code = receivedCode
+        }
+    }
+
+    fun publishErrorFromIntent(intent: Intent?) {
+        if (intent?.action != WHATSAPP_OTP_ERROR_ACTION || !isTrustedWhatsAppOtpIntent(intent)) {
+            return
+        }
+
+        val errorKey = intent.getStringExtra("error").orEmpty()
+        val errorText = intent.getStringExtra("error_message").orEmpty()
+        errorMessage = listOf(errorKey, errorText).filter { it.isNotBlank() }.joinToString(": ")
+    }
+
+    fun clearCode() {
+        code = ""
+    }
+
+    fun clearError() {
+        errorMessage = ""
+    }
+}
+
+private fun sendWhatsAppOtpHandshake(context: Context) {
+    val appContext = context.applicationContext
+    val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        PendingIntent.FLAG_IMMUTABLE
+    } else {
+        0
+    }
+
+    TrustedWhatsAppPackages.forEachIndexed { index, packageName ->
+        val pendingIntent = PendingIntent.getActivity(
+            appContext,
+            8100 + index,
+            Intent(appContext, MainActivity::class.java),
+            flags,
+        )
+        val intentToWhatsApp = Intent(WHATSAPP_OTP_REQUESTED_ACTION).apply {
+            setPackage(packageName)
+            putExtra("_ci_", pendingIntent)
+        }
+        appContext.sendBroadcast(intentToWhatsApp)
+    }
+}
+
+private fun isTrustedWhatsAppOtpIntent(intent: Intent): Boolean {
+    val pendingIntent = getPendingIntentExtra(intent, "_ci_") ?: return false
+    return pendingIntent.creatorPackage in TrustedWhatsAppPackages
+}
+
+@Suppress("DEPRECATION")
+private fun getPendingIntentExtra(intent: Intent, key: String): PendingIntent? {
+    return try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(key, PendingIntent::class.java)
+        } else {
+            intent.getParcelableExtra(key) as? PendingIntent
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
+
+private fun extractOtpFromIntent(intent: Intent): String? {
+    val directMatch = Regex("\\b\\d{4,8}\\b").find(intent.dataString.orEmpty())?.value
+    if (!directMatch.isNullOrBlank()) {
+        return directMatch
+    }
+
+    val extras = intent.extras ?: return null
+    return extras.keySet()
+        .asSequence()
+        .mapNotNull { key -> extras.get(key)?.toString() }
+        .mapNotNull { value -> Regex("\\b\\d{4,8}\\b").find(value)?.value }
+        .firstOrNull()
+}
+
+class WhatsAppOtpReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent?) {
+        WhatsAppOtpBridge.publishFromIntent(intent)
+    }
+}
+
+class WhatsAppOtpErrorReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent?) {
+        WhatsAppOtpBridge.publishErrorFromIntent(intent)
+    }
+}
 
 private data class DashboardSnapshot(
     val patient: JsonMap? = null,
@@ -601,6 +720,7 @@ private fun LoginScreen(
     onLoggedIn: (JsonMap) -> Unit,
     showMessage: (String) -> Unit,
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
@@ -608,12 +728,70 @@ private fun LoginScreen(
     var whatsappOpen by rememberSaveable { mutableStateOf(false) }
     var whatsappStep by rememberSaveable { mutableStateOf("mobile") }
     var whatsappMobile by rememberSaveable { mutableStateOf("") }
+    var whatsappOtp by rememberSaveable { mutableStateOf("") }
+    var whatsappVerificationToken by rememberSaveable { mutableStateOf("") }
     var whatsappName by rememberSaveable { mutableStateOf("") }
     var whatsappEmail by rememberSaveable { mutableStateOf("") }
     var whatsappPassword by rememberSaveable { mutableStateOf("") }
     var whatsappConfirmPassword by rememberSaveable { mutableStateOf("") }
     var whatsappSubmitting by remember { mutableStateOf(false) }
     var submitting by remember { mutableStateOf(false) }
+    val incomingWhatsAppOtp = WhatsAppOtpBridge.code
+    val incomingWhatsAppError = WhatsAppOtpBridge.errorMessage
+
+    suspend fun verifyWhatsAppOtp(otpCode: String) {
+        val phoneError = FormValidators.phone(whatsappMobile)
+        if (phoneError != null) {
+            showMessage(phoneError)
+            return
+        }
+        if (!Regex("^\\d{4,8}$").matches(otpCode.trim())) {
+            showMessage("Please enter the WhatsApp verification code.")
+            return
+        }
+
+        whatsappSubmitting = true
+        try {
+            val response = apiService.verifyWhatsAppLoginOtp(
+                FormValidators.cleanPhone(whatsappMobile),
+                otpCode.trim(),
+            )
+
+            if (response["needsRegistration"] == true) {
+                whatsappStep = "register"
+                whatsappVerificationToken = response["verificationToken"]?.toString().orEmpty()
+                showMessage(response["message"]?.toString() ?: "WhatsApp verified. Complete your account.")
+                return
+            }
+
+            val user = response["user"].asJsonMap()
+            if (user != null) {
+                showMessage(response["message"]?.toString() ?: "Login successful.")
+                onLoggedIn(user + mapOf("token" to response["token"]))
+            } else {
+                showMessage("Login completed, but patient details were missing.")
+            }
+        } catch (error: ApiException) {
+            showMessage(error.message.orEmpty())
+        } finally {
+            whatsappSubmitting = false
+        }
+    }
+
+    LaunchedEffect(incomingWhatsAppOtp) {
+        if (incomingWhatsAppOtp.isNotBlank() && whatsappOpen && whatsappStep == "otp") {
+            whatsappOtp = incomingWhatsAppOtp
+            WhatsAppOtpBridge.clearCode()
+            verifyWhatsAppOtp(incomingWhatsAppOtp)
+        }
+    }
+
+    LaunchedEffect(incomingWhatsAppError) {
+        if (incomingWhatsAppError.isNotBlank() && whatsappOpen) {
+            showMessage("WhatsApp autofill fallback: $incomingWhatsAppError")
+            WhatsAppOtpBridge.clearError()
+        }
+    }
 
     SoftAuthBackground {
         Scaffold(
@@ -699,6 +877,8 @@ private fun LoginScreen(
                     onClick = {
                         whatsappOpen = !whatsappOpen
                         whatsappStep = "mobile"
+                        whatsappOtp = ""
+                        whatsappVerificationToken = ""
                         whatsappPassword = ""
                         whatsappConfirmPassword = ""
                     },
@@ -707,7 +887,7 @@ private fun LoginScreen(
                     Spacer(modifier = Modifier.height(14.dp))
                     SectionCard(
                         title = "WhatsApp Login",
-                        subtitle = "Enter WhatsApp number. Existing patients enter password; new patients complete account details.",
+                        subtitle = "Send a WhatsApp OTP. If one-tap or zero-tap is available, the code will fill automatically.",
                         showSubtitle = true,
                     ) {
                         ModernRoundedField(
@@ -715,6 +895,8 @@ private fun LoginScreen(
                             onValueChange = {
                                 whatsappMobile = it
                                 whatsappStep = "mobile"
+                                whatsappOtp = ""
+                                whatsappVerificationToken = ""
                                 whatsappPassword = ""
                                 whatsappConfirmPassword = ""
                             },
@@ -723,14 +905,18 @@ private fun LoginScreen(
                             imeAction = ImeAction.Next,
                         )
                         Spacer(modifier = Modifier.height(12.dp))
-                        if (whatsappStep == "login") {
+                        if (whatsappStep == "otp") {
                             ModernRoundedField(
-                                value = whatsappPassword,
-                                onValueChange = { whatsappPassword = it },
-                                placeholder = "Enter your Password",
-                                keyboardType = KeyboardType.Password,
+                                value = whatsappOtp,
+                                onValueChange = { whatsappOtp = it },
+                                placeholder = "Enter WhatsApp OTP",
+                                keyboardType = KeyboardType.Number,
                                 imeAction = ImeAction.Done,
-                                hidden = true,
+                            )
+                            Text(
+                                text = "One-tap/zero-tap will auto-fill this when WhatsApp allows it.",
+                                color = OpwSlate,
+                                style = MaterialTheme.typography.bodySmall,
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                         }
@@ -781,32 +967,26 @@ private fun LoginScreen(
                                     whatsappSubmitting = true
                                     try {
                                         if (whatsappStep == "mobile") {
-                                            val response = apiService.checkWhatsAppLoginMobile(
+                                            WhatsAppOtpBridge.clearCode()
+                                            WhatsAppOtpBridge.clearError()
+                                            sendWhatsAppOtpHandshake(context)
+                                            val response = apiService.requestWhatsAppLoginOtp(
                                                 FormValidators.cleanPhone(whatsappMobile),
                                             )
-                                            whatsappStep = if (response["registered"] == true) "login" else "register"
-                                            whatsappName = response["name"]?.toString().orEmpty()
-                                            whatsappEmail = response["email"]?.toString().orEmpty()
-                                            showMessage(response["message"]?.toString() ?: "Continue with account details.")
-                                        } else if (whatsappStep == "login") {
-                                            if (whatsappPassword.length < 6) {
-                                                showMessage("Password must be at least 6 characters.")
-                                                return@launch
-                                            }
-                                            val response = apiService.loginWithWhatsAppMobile(
-                                                FormValidators.cleanPhone(whatsappMobile),
-                                                whatsappPassword,
+                                            whatsappStep = "otp"
+                                            whatsappOtp = response["devOtp"]?.toString().orEmpty()
+                                            showMessage(
+                                                response["devOtp"]?.let { "Development OTP: $it" }
+                                                    ?: response["message"]?.toString()
+                                                    ?: "Verification code sent on WhatsApp.",
                                             )
-                                            val user = response["user"].asJsonMap()
-                                            if (user != null) {
-                                                showMessage(response["message"]?.toString() ?: "Login successful.")
-                                                onLoggedIn(user + mapOf("token" to response["token"]))
-                                            } else {
-                                                showMessage("Login completed, but patient details were missing.")
-                                            }
+                                        } else if (whatsappStep == "otp") {
+                                            verifyWhatsAppOtp(whatsappOtp)
                                         } else {
                                             val emailError = FormValidators.email(whatsappEmail)
                                             when {
+                                                whatsappVerificationToken.isBlank() ->
+                                                    showMessage("Please verify your WhatsApp number first.")
                                                 whatsappName.trim().length < 2 ->
                                                     showMessage("Full name must be at least 2 characters.")
                                                 emailError != null ->
@@ -816,11 +996,12 @@ private fun LoginScreen(
                                                 whatsappPassword != whatsappConfirmPassword ->
                                                     showMessage("Password and confirm password must match.")
                                                 else -> {
-                                                    val response = apiService.register(
+                                                    val response = apiService.registerWithWhatsAppOtp(
                                                         name = whatsappName.trim(),
                                                         email = whatsappEmail.trim().lowercase(),
                                                         mobile = FormValidators.cleanPhone(whatsappMobile),
                                                         password = whatsappPassword,
+                                                        verificationToken = whatsappVerificationToken,
                                                     )
                                                     val user = response["user"].asJsonMap()
                                                     if (user != null) {
@@ -841,9 +1022,9 @@ private fun LoginScreen(
                             },
                             enabled = !whatsappSubmitting,
                             label = when (whatsappStep) {
-                                "login" -> "Login"
+                                "otp" -> "Verify OTP"
                                 "register" -> "Create & Login"
-                                else -> "Continue"
+                                else -> "Send WhatsApp OTP"
                             },
                             loading = whatsappSubmitting,
                         )

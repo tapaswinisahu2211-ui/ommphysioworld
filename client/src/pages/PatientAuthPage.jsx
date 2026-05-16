@@ -29,6 +29,8 @@ export default function PatientAuthPage({ mode = "login" }) {
   const [whatsappSubmitting, setWhatsappSubmitting] = useState(false);
   const [whatsappMobile, setWhatsappMobile] = useState("");
   const [whatsappStep, setWhatsappStep] = useState("mobile");
+  const [whatsappOtp, setWhatsappOtp] = useState("");
+  const [whatsappVerificationToken, setWhatsappVerificationToken] = useState("");
   const [whatsappPassword, setWhatsappPassword] = useState("");
   const [whatsappName, setWhatsappName] = useState("");
   const [whatsappEmail, setWhatsappEmail] = useState("");
@@ -168,7 +170,7 @@ export default function PatientAuthPage({ mode = "login" }) {
     }
   };
 
-  const checkWhatsAppNumber = async () => {
+  const requestWhatsAppOtp = async () => {
     setError("");
     setNotice("");
 
@@ -180,24 +182,27 @@ export default function PatientAuthPage({ mode = "login" }) {
 
     setWhatsappSubmitting(true);
     try {
-      const response = await API.post("/auth/whatsapp/check", {
+      const response = await API.post("/auth/whatsapp/request-otp", {
         mobile: cleanPhone(whatsappMobile),
       });
-      setWhatsappStep(response.data?.registered ? "login" : "register");
-      setNotice(response.data?.message || "Continue with your account details.");
-      setWhatsappEmail(response.data?.email || "");
-      setWhatsappName(response.data?.name || "");
+      setWhatsappStep("otp");
+      setWhatsappOtp(response.data?.devOtp || "");
+      setNotice(
+        response.data?.devOtp
+          ? `Development OTP: ${response.data.devOtp}`
+          : response.data?.message || "Verification code sent on WhatsApp."
+      );
     } catch (submitError) {
       setError(
         submitError.response?.data?.message ||
-          "Unable to check WhatsApp number. Please use email login."
+          "Unable to send WhatsApp verification code. Please use email login."
       );
     } finally {
       setWhatsappSubmitting(false);
     }
   };
 
-  const loginWithWhatsAppNumber = async () => {
+  const verifyWhatsAppOtp = async () => {
     setError("");
     setNotice("");
 
@@ -207,17 +212,24 @@ export default function PatientAuthPage({ mode = "login" }) {
       return;
     }
 
-    if (!whatsappPassword || whatsappPassword.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (!/^\d{4,8}$/.test(whatsappOtp.trim())) {
+      setError("Please enter the WhatsApp verification code.");
       return;
     }
 
     setWhatsappSubmitting(true);
     try {
-      const response = await API.post("/auth/whatsapp/login", {
+      const response = await API.post("/auth/whatsapp/verify", {
         mobile: cleanPhone(whatsappMobile),
-        password: whatsappPassword,
+        otp: whatsappOtp.trim(),
       });
+      if (response.data?.needsRegistration) {
+        setWhatsappStep("register");
+        setWhatsappVerificationToken(response.data.verificationToken || "");
+        setNotice(response.data?.message || "WhatsApp verified. Complete your account.");
+        return;
+      }
+
       savePatientUser({
         ...response.data.user,
         token: response.data.token,
@@ -226,19 +238,20 @@ export default function PatientAuthPage({ mode = "login" }) {
     } catch (submitError) {
       setError(
         submitError.response?.data?.message ||
-          "Unable to login with this WhatsApp number. Please try again."
+          "Unable to verify this WhatsApp code. Please try again."
       );
     } finally {
       setWhatsappSubmitting(false);
     }
   };
 
-  const registerWithWhatsAppNumber = async () => {
+  const registerWithVerifiedWhatsApp = async () => {
     setError("");
     setNotice("");
 
     const validationError = firstValidationError([
       validatePhoneField(whatsappMobile),
+      !whatsappVerificationToken ? "Please verify your WhatsApp number first." : "",
       !whatsappName.trim() ? "Full name is required." : "",
       whatsappName.trim().length < 2 ? "Full name must be at least 2 characters." : "",
       validateEmailField(whatsappEmail),
@@ -258,11 +271,12 @@ export default function PatientAuthPage({ mode = "login" }) {
 
     setWhatsappSubmitting(true);
     try {
-      const response = await API.post("/auth/register", {
+      const response = await API.post("/auth/whatsapp/register", {
         name: whatsappName.trim(),
         email: cleanEmail(whatsappEmail),
         mobile: cleanPhone(whatsappMobile),
         password: whatsappPassword,
+        verificationToken: whatsappVerificationToken,
         createdFrom: "website",
       });
       savePatientUser({
@@ -273,7 +287,7 @@ export default function PatientAuthPage({ mode = "login" }) {
     } catch (submitError) {
       setError(
         submitError.response?.data?.message ||
-          "Unable to create account with this WhatsApp number."
+          "Unable to create account with this verified WhatsApp number."
       );
     } finally {
       setWhatsappSubmitting(false);
@@ -430,7 +444,7 @@ export default function PatientAuthPage({ mode = "login" }) {
                   <div>
                     <h3 className="font-black text-slate-950">Login with WhatsApp</h3>
                     <p className="mt-1 text-sm leading-6 text-emerald-900">
-                      Enter your WhatsApp number. Existing patients enter password; new patients complete account details.
+                      Enter your WhatsApp number and verify with the OTP sent through WhatsApp.
                     </p>
                   </div>
                 </div>
@@ -443,22 +457,23 @@ export default function PatientAuthPage({ mode = "login" }) {
                     onChange={(event) => {
                       setWhatsappMobile(event.target.value);
                       setWhatsappStep("mobile");
+                      setWhatsappOtp("");
+                      setWhatsappVerificationToken("");
                       setWhatsappPassword("");
                       setWhatsappConfirmPassword("");
                     }}
                   />
 
-                  {whatsappStep === "login" ? (
+                  {whatsappStep === "otp" ? (
                     <>
                       <input
-                        type="password"
                         className="input rounded-2xl border-emerald-200 bg-white"
-                        placeholder="Password"
-                        value={whatsappPassword}
-                        onChange={(event) => setWhatsappPassword(event.target.value)}
+                        placeholder="Enter WhatsApp OTP"
+                        value={whatsappOtp}
+                        onChange={(event) => setWhatsappOtp(event.target.value)}
                       />
                       <p className="text-xs font-semibold text-emerald-800">
-                        Account found{whatsappEmail ? ` for ${whatsappEmail}` : ""}. Enter password to login.
+                        Android one-tap/zero-tap can fill this in the mobile app. On web, copy the code from WhatsApp.
                       </p>
                     </>
                   ) : null}
@@ -498,33 +513,39 @@ export default function PatientAuthPage({ mode = "login" }) {
                   <div className="grid gap-2 sm:grid-cols-2">
                     <button
                       type="button"
-                      disabled={whatsappSubmitting}
+                      disabled={whatsappStep === "mobile" || whatsappSubmitting}
                       onClick={
-                        whatsappStep === "mobile"
-                          ? checkWhatsAppNumber
-                          : () => {
-                              setWhatsappStep("mobile");
-                              setWhatsappPassword("");
-                              setWhatsappConfirmPassword("");
-                            }
+                        () => {
+                          setWhatsappStep("mobile");
+                          setWhatsappOtp("");
+                          setWhatsappVerificationToken("");
+                          setWhatsappPassword("");
+                          setWhatsappConfirmPassword("");
+                        }
                       }
                       className="inline-flex items-center justify-center gap-2 rounded-full border border-emerald-200 bg-white px-5 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <MessageCircle size={17} />
-                      {whatsappStep === "mobile" ? "Continue" : "Change Number"}
+                      Change Number
                     </button>
                     <button
                       type="button"
-                      disabled={whatsappStep === "mobile" || whatsappSubmitting}
+                      disabled={whatsappSubmitting}
                       onClick={
-                        whatsappStep === "login"
-                          ? loginWithWhatsAppNumber
-                          : registerWithWhatsAppNumber
+                        whatsappStep === "mobile"
+                          ? requestWhatsAppOtp
+                          : whatsappStep === "otp"
+                          ? verifyWhatsAppOtp
+                          : registerWithVerifiedWhatsApp
                       }
                       className="inline-flex items-center justify-center gap-2 rounded-full bg-emerald-600 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {whatsappStep === "register" ? <UserPlus size={17} /> : <LogIn size={17} />}
-                      {whatsappStep === "register" ? "Create & Login" : "Login"}
+                      {whatsappStep === "mobile"
+                        ? "Send OTP"
+                        : whatsappStep === "otp"
+                        ? "Verify OTP"
+                        : "Create & Login"}
                     </button>
                   </div>
                 </div>

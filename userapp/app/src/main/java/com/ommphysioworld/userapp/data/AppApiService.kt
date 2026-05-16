@@ -60,9 +60,9 @@ class AppApiService(
         )
     }
 
-    suspend fun requestWhatsAppLoginOtp(mobile: String): JsonMap {
+    suspend fun checkWhatsAppLoginMobile(mobile: String): JsonMap {
         return postJson(
-            "/auth/whatsapp/request-otp",
+            "/auth/whatsapp/check",
             mapOf(
                 "mobile" to mobile,
                 "clientType" to "mobile_app",
@@ -70,12 +70,12 @@ class AppApiService(
         )
     }
 
-    suspend fun verifyWhatsAppLoginOtp(mobile: String, otp: String): JsonMap {
+    suspend fun loginWithWhatsAppMobile(mobile: String, password: String): JsonMap {
         return postJson(
-            "/auth/whatsapp/verify",
+            "/auth/whatsapp/login",
             mapOf(
                 "mobile" to mobile,
-                "otp" to otp,
+                "password" to password,
                 "clientType" to "mobile_app",
             ),
         )

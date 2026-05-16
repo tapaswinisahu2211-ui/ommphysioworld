@@ -1,10 +1,8 @@
 const User = require("../models/User");
 const PublicUser = require("../models/PublicUser");
 const Patient = require("../models/Patient");
-const WhatsAppLoginOtp = require("../models/WhatsAppLoginOtp");
 const { DEFAULT_ADMIN } = require("../config/defaults");
 const { hasMailConfig, sendMail } = require("../services/mailer");
-const { sendWhatsAppOtp } = require("../services/whatsapp");
 const { ensureDefaultAdmin, serializeUser } = require("../utils/userHelpers");
 const { hashPassword, verifyPassword } = require("../utils/password");
 const { createSessionToken } = require("../utils/sessionToken");
@@ -63,15 +61,6 @@ const generateTemporaryPassword = () =>
   `OPW${Math.random().toString(36).slice(-4).toUpperCase()}${Date.now()
     .toString()
     .slice(-4)}`;
-
-const generateWhatsAppOtp = () =>
-  String(Math.floor(100000 + Math.random() * 900000));
-
-const getWhatsAppOtpExpiry = () => {
-  const expiresAt = new Date();
-  expiresAt.setMinutes(expiresAt.getMinutes() + 10);
-  return expiresAt;
-};
 
 const findPublicUserByMobile = async (mobile) => {
   const users = await PublicUser.find({ mobile }).limit(2);
@@ -241,9 +230,14 @@ const registerPublicUser = async (req, res) => {
       return res.status(400).json({ message: "Password must be at least 6 characters." });
     }
 
-    const existingUser = await PublicUser.findOne({ email });
+    const existingUser = await PublicUser.findOne({ $or: [{ email }, { mobile }] });
     if (existingUser) {
-      return res.status(409).json({ message: "An account with this email already exists." });
+      return res.status(409).json({
+        message:
+          existingUser.mobile === mobile
+            ? "An account with this mobile number already exists."
+            : "An account with this email already exists.",
+      });
     }
 
     const user = await PublicUser.create({
@@ -326,7 +320,7 @@ const loginPublicUser = async (req, res) => {
   }
 };
 
-const requestWhatsAppLoginOtp = async (req, res) => {
+const checkWhatsAppLoginMobile = async (req, res) => {
   try {
     const mobile = cleanPhone(req.body.mobile);
 
@@ -341,8 +335,10 @@ const requestWhatsAppLoginOtp = async (req, res) => {
     const user = await findPublicUserByMobile(mobile);
 
     if (!user) {
-      return res.status(404).json({
-        message: "No patient login account found for this WhatsApp number. Please register first.",
+      return res.json({
+        registered: false,
+        mobile,
+        message: "No account found for this number. Please complete registration.",
       });
     }
 
@@ -354,95 +350,48 @@ const requestWhatsAppLoginOtp = async (req, res) => {
       });
     }
 
-    const otp = generateWhatsAppOtp();
-    await WhatsAppLoginOtp.deleteMany({ mobile, usedAt: null });
-    await WhatsAppLoginOtp.create({
-      mobile,
-      otpHash: hashPassword(otp),
-      expiresAt: getWhatsAppOtpExpiry(),
-    });
-
-    try {
-      await sendWhatsAppOtp({ mobile, otp });
-    } catch (whatsAppError) {
-      await WhatsAppLoginOtp.deleteMany({ mobile, usedAt: null });
-      console.log("WhatsApp login OTP failed:", whatsAppError.message);
-
-      if (whatsAppError.code === "WHATSAPP_NOT_CONFIGURED") {
-        return res.status(503).json({
-          message: "WhatsApp login is not configured on the server yet.",
-        });
-      }
-
-      return res.status(502).json({
-        message: "Unable to send WhatsApp OTP right now. Please try email login.",
-      });
-    }
-
     return res.json({
-      message: "WhatsApp OTP sent. Please check your WhatsApp messages.",
-      expiresInMinutes: 10,
+      registered: true,
+      mobile,
+      name: user.name,
+      email: user.email,
+      message: "Account found. Please enter your password to continue.",
     });
   } catch (error) {
     console.log(error);
     return res.status(error.statusCode || 500).json({
-      message: error.statusCode ? error.message : "Failed to request WhatsApp OTP.",
+      message: error.statusCode ? error.message : "Failed to check WhatsApp number.",
     });
   }
 };
 
-const verifyWhatsAppLoginOtp = async (req, res) => {
+const loginPublicUserWithWhatsAppMobile = async (req, res) => {
   try {
     const mobile = cleanPhone(req.body.mobile);
-    const otp = cleanText(req.body.otp).replace(/\D/g, "");
+    const password = String(req.body.password || "");
 
-    if (!mobile || !otp) {
-      return res.status(400).json({ message: "Mobile number and OTP are required." });
+    if (!mobile || !password) {
+      return res.status(400).json({ message: "Mobile number and password are required." });
     }
 
     if (!isValidPhone(mobile)) {
       return res.status(400).json({ message: "Please enter a valid 10-digit WhatsApp number." });
     }
 
-    if (!/^\d{6}$/.test(otp)) {
-      return res.status(400).json({ message: "Please enter the 6-digit WhatsApp OTP." });
-    }
-
-    const otpRecord = await WhatsAppLoginOtp.findOne({
-      mobile,
-      usedAt: null,
-      expiresAt: { $gt: new Date() },
-    }).sort({ createdAt: -1 });
-
-    if (!otpRecord) {
-      return res.status(400).json({ message: "OTP expired. Please request a new WhatsApp OTP." });
-    }
-
-    if (otpRecord.attempts >= 5) {
-      await otpRecord.deleteOne();
-      return res.status(429).json({ message: "Too many OTP attempts. Please request a new OTP." });
-    }
-
-    if (!verifyPassword(otp, otpRecord.otpHash)) {
-      otpRecord.attempts += 1;
-      await otpRecord.save();
-      return res.status(401).json({ message: "Invalid WhatsApp OTP." });
-    }
-
     const user = await findPublicUserByMobile(mobile);
-    const linkedPatient = await resolveLoginPatient(user);
+    if (!user || !verifyPassword(password, user.passwordHash)) {
+      return res.status(401).json({ message: "Invalid WhatsApp number or password." });
+    }
 
-    if (!user || !linkedPatient) {
+    const linkedPatient = await resolveLoginPatient(user);
+    if (!linkedPatient) {
       return res.status(404).json({
         message: "This patient account is no longer available. Please contact OPW support.",
       });
     }
 
-    otpRecord.usedAt = new Date();
-    await otpRecord.save();
-
     return res.json({
-      message: "WhatsApp login successful.",
+      message: "Login successful.",
       token: createPatientAuthToken(req, {
         sub: user._id.toString(),
         type: "patient",
@@ -453,7 +402,7 @@ const verifyWhatsAppLoginOtp = async (req, res) => {
   } catch (error) {
     console.log(error);
     return res.status(error.statusCode || 500).json({
-      message: error.statusCode ? error.message : "Failed to verify WhatsApp OTP.",
+      message: error.statusCode ? error.message : "Failed to login with WhatsApp number.",
     });
   }
 };
@@ -659,8 +608,8 @@ module.exports = {
   adminLogin,
   registerPublicUser,
   loginPublicUser,
-  requestWhatsAppLoginOtp,
-  verifyWhatsAppLoginOtp,
+  checkWhatsAppLoginMobile,
+  loginPublicUserWithWhatsAppMobile,
   requestPasswordReset,
   changePublicUserPassword,
   pingSession,

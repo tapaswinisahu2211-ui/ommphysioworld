@@ -247,7 +247,7 @@ class StaffApiService(
         getJsonArray(token, "/mailbox")
 
     suspend fun getNotificationHistory(token: String): List<JSONObject> =
-        getJsonArray(token, "/notifications/admin")
+        getJsonArray(token, "/notifications/admin?limit=1000")
 
     suspend fun sendCustomNotification(
         token: String,
@@ -267,11 +267,37 @@ class StaffApiService(
             JSONObject(request("POST", "/notifications/custom", token = token, body = payload))
         }
 
+    suspend fun deleteNotification(token: String, id: String) {
+        withContext(Dispatchers.IO) {
+            request("DELETE", "/notifications/admin/$id", token = token)
+        }
+    }
+
+    suspend fun deleteNotifications(token: String, ids: List<String>): JSONObject =
+        withContext(Dispatchers.IO) {
+            val payload = JSONArray()
+            ids.forEach { payload.put(it) }
+            JSONObject(
+                request(
+                    "POST",
+                    "/notifications/admin/delete",
+                    token = token,
+                    body = JSONObject().put("notificationIds", payload),
+                ),
+            )
+        }
+
     suspend fun updateMailboxRead(token: String, type: String, id: String, isRead: Boolean): JSONObject =
         withContext(Dispatchers.IO) {
             val body = JSONObject().put("isRead", isRead)
             JSONObject(request("PATCH", "/mailbox/$type/$id/read", token = token, body = body))
         }
+
+    suspend fun deleteMailboxItem(token: String, type: String, id: String) {
+        withContext(Dispatchers.IO) {
+            request("DELETE", "/mailbox/$type/$id", token = token)
+        }
+    }
 
     suspend fun getServices(token: String): List<JSONObject> =
         getJsonArray(token, "/services")

@@ -35,6 +35,7 @@ class AppApiService(
             mapOf(
                 "email" to email,
                 "password" to password,
+                "clientType" to "mobile_app",
             ),
         )
     }

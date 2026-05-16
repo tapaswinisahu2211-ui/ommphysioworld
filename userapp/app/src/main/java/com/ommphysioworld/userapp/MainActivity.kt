@@ -19,9 +19,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.PowerManager
 import android.provider.OpenableColumns
-import android.provider.Settings
 import android.webkit.MimeTypeMap
 import android.widget.VideoView
 import androidx.activity.ComponentActivity
@@ -287,10 +285,16 @@ private fun OmmPhysioWorldApp() {
             storage.clearConversationId()
             sessionUser = null
             route = AppRoute.Login
-            showMessage("Your session ended. Please log in again.")
+            showMessage("Please log in once to refresh your secure mobile session.")
         } else {
             showMessage(error.message.orEmpty())
         }
+    }
+
+    fun completeLogin(user: JsonMap) {
+        sessionUser = user
+        storage.savePatientUser(user)
+        route = AppRoute.Dashboard
     }
 
     LaunchedEffect(Unit) {
@@ -325,22 +329,14 @@ private fun OmmPhysioWorldApp() {
                     apiService = apiService,
                     onOpenRegister = { route = AppRoute.Register },
                     onOpenForgotPassword = { route = AppRoute.ForgotPassword },
-                    onLoggedIn = { user ->
-                        sessionUser = user
-                        storage.savePatientUser(user)
-                        route = AppRoute.Dashboard
-                    },
+                    onLoggedIn = ::completeLogin,
                     showMessage = ::showMessage,
                 )
 
                 AppRoute.Register -> RegisterScreen(
                     apiService = apiService,
                     onBack = { route = AppRoute.Login },
-                    onRegistered = { user ->
-                        sessionUser = user
-                        storage.savePatientUser(user)
-                        route = AppRoute.Dashboard
-                    },
+                    onRegistered = ::completeLogin,
                     showMessage = ::showMessage,
                 )
 
@@ -948,7 +944,6 @@ private fun DashboardScreen(
 
     LaunchedEffect(patientId) {
         ensureOpwPushChannel(context)
-        requestBatteryOptimizationExemptionIfNeeded(context, storage)
         syncFcmTokenWithServer(context, storage, apiService, patientId)
         refreshDashboard()
     }
@@ -5861,29 +5856,6 @@ private fun ensurePatientNotificationChannel(context: Context) {
         enableVibration(true)
     }
     manager.createNotificationChannel(channel)
-}
-
-private fun requestBatteryOptimizationExemptionIfNeeded(context: Context, storage: AppStorage) {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-        return
-    }
-
-    if (storage.hasAskedBatteryOptimizationExemption()) {
-        return
-    }
-
-    val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
-    if (powerManager.isIgnoringBatteryOptimizations(context.packageName)) {
-        storage.markBatteryOptimizationExemptionAsked()
-        return
-    }
-
-    storage.markBatteryOptimizationExemptionAsked()
-    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-        data = Uri.parse("package:${context.packageName}")
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-    }
-    runCatching { context.startActivity(intent) }
 }
 
 @Suppress("MissingPermission")

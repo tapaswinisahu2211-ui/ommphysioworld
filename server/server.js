@@ -2,6 +2,7 @@
 const cors = require("cors");
 const dotenv = require("dotenv");
 const multer = require("multer");
+const mongoose = require("mongoose");
 
 dotenv.config();
 
@@ -556,6 +557,34 @@ const getAppointmentScheduleKey = (appointment) =>
   ).slice(0, 10);
 
 const CLINIC_TIMEZONE_OFFSET = process.env.CLINIC_TIMEZONE_OFFSET || "+05:30";
+const NOTIFICATION_HISTORY_RETENTION_DAYS = Math.max(
+  Number(process.env.NOTIFICATION_HISTORY_RETENTION_DAYS) || 15,
+  1
+);
+
+const getNotificationHistoryCutoff = () => {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - NOTIFICATION_HISTORY_RETENTION_DAYS);
+  return cutoff;
+};
+
+const cleanupOldPatientNotifications = () =>
+  PatientNotification.deleteMany({
+    scheduledFor: { $lt: getNotificationHistoryCutoff() },
+  });
+
+const getNotificationReadCounts = async () => {
+  const [total, read] = await Promise.all([
+    PatientNotification.countDocuments(),
+    PatientNotification.countDocuments({ readAt: { $ne: null } }),
+  ]);
+
+  return {
+    total,
+    read,
+    unread: Math.max(total - read, 0),
+  };
+};
 
 const serializePatientNotification = (notification, patient = null) => ({
   id: notification._id.toString(),
@@ -2146,11 +2175,21 @@ app.patch("/api/patients/:id/notifications/read-all", requirePatientRecordAccess
 
 app.get("/api/notifications/admin", requireStaffAuth, async (req, res) => {
   try {
+    await cleanupOldPatientNotifications();
+
+    const limit = Math.min(
+      Math.max(Number(req.query.limit) || 500, 1),
+      2000
+    );
     const notifications = await PatientNotification.find()
       .populate("patientId", "name email mobile")
       .sort({ scheduledFor: -1, createdAt: -1 })
-      .limit(300);
+      .limit(limit);
+    const counts = await getNotificationReadCounts();
 
+    res.setHeader("X-Notification-Total", String(counts.total));
+    res.setHeader("X-Notification-Read", String(counts.read));
+    res.setHeader("X-Notification-Unread", String(counts.unread));
     res.json(
       notifications.map((notification) =>
         serializePatientNotification(notification, notification.patientId)
@@ -2159,6 +2198,50 @@ app.get("/api/notifications/admin", requireStaffAuth, async (req, res) => {
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to load notification history." });
+  }
+});
+
+app.delete("/api/notifications/admin/:id", requireStaffAuth, async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid notification id." });
+    }
+
+    const notification = await PatientNotification.findByIdAndDelete(req.params.id);
+
+    if (!notification) {
+      return res.status(404).json({ message: "Notification not found." });
+    }
+
+    res.json({ message: "Notification deleted.", deletedCount: 1 });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to delete notification." });
+  }
+});
+
+app.post("/api/notifications/admin/delete", requireStaffAuth, async (req, res) => {
+  try {
+    const notificationIds = Array.isArray(req.body.notificationIds)
+      ? req.body.notificationIds.map((id) => cleanText(id)).filter(Boolean)
+      : [];
+    const validIds = [...new Set(notificationIds)].filter((id) =>
+      mongoose.Types.ObjectId.isValid(id)
+    );
+
+    if (!validIds.length) {
+      return res.status(400).json({ message: "Choose at least one notification to delete." });
+    }
+
+    const result = await PatientNotification.deleteMany({ _id: { $in: validIds } });
+
+    res.json({
+      message: `${result.deletedCount || 0} notification(s) deleted.`,
+      deletedCount: result.deletedCount || 0,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to delete notifications." });
   }
 });
 
@@ -2283,6 +2366,33 @@ app.patch("/api/mailbox/:type/:id/read", requireStaffAuth, async (req, res) => {
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to update mailbox item." });
+  }
+});
+
+app.delete("/api/mailbox/:type/:id", requireStaffAuth, async (req, res) => {
+  try {
+    const { type, id } = req.params;
+    const Model =
+      type === "career"
+        ? StaffApplication
+        : type === "contact"
+        ? ContactMessage
+        : null;
+
+    if (!Model) {
+      return res.status(400).json({ message: "Invalid mailbox item type." });
+    }
+
+    const item = await Model.findByIdAndDelete(id);
+
+    if (!item) {
+      return res.status(404).json({ message: "Mailbox item not found." });
+    }
+
+    res.json({ message: "Mailbox item deleted." });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to delete mailbox item." });
   }
 });
 
@@ -5093,6 +5203,9 @@ const startServer = async () => {
   try {
     await connectDB();
     await ensureDefaultAdmin();
+    cleanupOldPatientNotifications().catch((error) => {
+      console.log("Failed to clean notification history:", error.message);
+    });
     sendDuePatientPushNotifications().catch((error) => {
       console.log("Failed to send due push notifications:", error.message);
     });
@@ -5106,6 +5219,11 @@ const startServer = async () => {
         console.log("Failed to send due push notifications:", error.message);
       });
     }, pushIntervalMs);
+    setInterval(() => {
+      cleanupOldPatientNotifications().catch((error) => {
+        console.log("Failed to clean notification history:", error.message);
+      });
+    }, 24 * 60 * 60 * 1000);
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);

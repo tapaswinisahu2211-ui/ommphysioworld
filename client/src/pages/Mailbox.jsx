@@ -8,6 +8,7 @@ import {
   Paperclip,
   Phone,
   Search,
+  Trash2,
   UserRound,
 } from "lucide-react";
 import { useLocation } from "react-router-dom";
@@ -37,6 +38,7 @@ export default function Mailbox() {
   const [activeTab, setActiveTab] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState("");
+  const [deletingId, setDeletingId] = useState("");
 
   const loadMailbox = useCallback(async () => {
     try {
@@ -144,6 +146,36 @@ export default function Mailbox() {
   const handleSelect = async (item) => {
     setSelectedId(item.id);
     await markItemRead(item, true);
+  };
+
+  const deleteMailboxItem = async (item) => {
+    if (!item || deletingId) {
+      return;
+    }
+
+    const label = getMailboxLabel(item.type, true).toLowerCase();
+    const confirmed = window.confirm(
+      `Delete this ${label}? This cannot be undone.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingId(item.id);
+      await API.delete(`/mailbox/${item.type}/${item.id}`);
+      setItems((current) =>
+        current.filter((entry) => !(entry.id === item.id && entry.type === item.type))
+      );
+      setSelectedId((current) => (current === item.id ? "" : current));
+      setError("");
+      notifyMailboxChanged();
+    } catch (deleteError) {
+      setError(deleteError.response?.data?.message || "Failed to delete mailbox item.");
+    } finally {
+      setDeletingId("");
+    }
   };
 
   const statCards = [
@@ -375,12 +407,22 @@ export default function Mailbox() {
                     </p>
                   </div>
 
-                  <button
-                    onClick={() => markItemRead(selectedItem, !selectedItem.isRead)}
-                    className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    Mark as {selectedItem.isRead ? "Unread" : "Read"}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => markItemRead(selectedItem, !selectedItem.isRead)}
+                      className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Mark as {selectedItem.isRead ? "Unread" : "Read"}
+                    </button>
+                    <button
+                      onClick={() => deleteMailboxItem(selectedItem)}
+                      disabled={deletingId === selectedItem.id}
+                      className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <Trash2 size={16} />
+                      {deletingId === selectedItem.id ? "Deleting..." : "Delete"}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="mt-6 grid gap-4 md:grid-cols-2">

@@ -1230,6 +1230,32 @@ private fun StaffAdminApp() {
         }
     }
 
+    fun deleteMailboxItem(item: JSONObject) {
+        val activeSession = session ?: return
+        val id = item.text("id")
+        val type = item.text("type")
+        if (id.isBlank() || type.isBlank()) return
+        scope.launch {
+            try {
+                api.deleteMailboxItem(activeSession.token, type, id)
+                dashboardState = dashboardState.copy(
+                    mailboxItems = dashboardState.mailboxItems.filterNot { current ->
+                        current.text("id") == id && current.text("type") == type
+                    },
+                )
+                showMessage("Mail deleted.")
+            } catch (error: ApiException) {
+                if (error.statusCode == 401 || error.statusCode == 403) {
+                    clearToLogin("Your session ended. Please log in again.")
+                } else {
+                    showMessage(error.message)
+                }
+            } catch (error: Exception) {
+                showMessage(networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error))
+            }
+        }
+    }
+
     fun sendCustomNotification(title: String, body: String, audience: String, patientIds: List<String>) {
         val activeSession = session ?: return
         scope.launch {
@@ -1244,6 +1270,35 @@ private fun StaffAdminApp() {
                 val history = api.getNotificationHistory(activeSession.token)
                 dashboardState = dashboardState.copy(notificationItems = history)
                 showMessage(response.optString("message").ifBlank { "Notification sent." })
+            } catch (error: ApiException) {
+                if (error.statusCode == 401 || error.statusCode == 403) {
+                    clearToLogin("Your session ended. Please log in again.")
+                } else {
+                    showMessage(error.message)
+                }
+            } catch (error: Exception) {
+                showMessage(networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error))
+            }
+        }
+    }
+
+    fun deleteNotificationHistory(ids: List<String>) {
+        val activeSession = session ?: return
+        val notificationIds = ids.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        if (notificationIds.isEmpty()) return
+        scope.launch {
+            try {
+                if (notificationIds.size == 1) {
+                    api.deleteNotification(activeSession.token, notificationIds.first())
+                } else {
+                    api.deleteNotifications(activeSession.token, notificationIds)
+                }
+                dashboardState = dashboardState.copy(
+                    notificationItems = dashboardState.notificationItems.filterNot { item ->
+                        item.text("id") in notificationIds
+                    },
+                )
+                showMessage("${notificationIds.size} notification(s) deleted.")
             } catch (error: ApiException) {
                 if (error.statusCode == 401 || error.statusCode == 403) {
                     clearToLogin("Your session ended. Please log in again.")
@@ -1717,7 +1772,9 @@ private fun StaffAdminApp() {
                     onAppointmentApprove = ::approveAppointment,
                     onAppointmentStatusChange = ::updateAppointmentStatus,
                     onMailboxReadChange = ::updateMailboxRead,
+                    onMailboxDelete = ::deleteMailboxItem,
                     onCustomNotificationSend = ::sendCustomNotification,
+                    onNotificationHistoryDelete = ::deleteNotificationHistory,
                     onServiceSave = ::saveService,
                     onServiceDelete = ::deleteService,
                     onTherapySave = ::saveTherapyResource,
@@ -1939,7 +1996,9 @@ private fun DashboardScreen(
     onAppointmentApprove: (JSONObject) -> Unit,
     onAppointmentStatusChange: (JSONObject, String) -> Unit,
     onMailboxReadChange: (JSONObject) -> Unit,
+    onMailboxDelete: (JSONObject) -> Unit,
     onCustomNotificationSend: (String, String, String, List<String>) -> Unit,
+    onNotificationHistoryDelete: (List<String>) -> Unit,
     onServiceSave: (String?, String) -> Unit,
     onServiceDelete: (JSONObject) -> Unit,
     onTherapySave: (String?, String, String, String, PickedUploadFile?) -> Unit,
@@ -2276,6 +2335,7 @@ private fun DashboardScreen(
                         items = state.mailboxItems,
                         applications = state.applications,
                         onReadChange = onMailboxReadChange,
+                        onDelete = onMailboxDelete,
                         searchOpen = headerSearchOpen,
                         onSearchOpenChange = { headerSearchOpen = it },
                     )
@@ -2283,6 +2343,7 @@ private fun DashboardScreen(
                         items = state.notificationItems,
                         patients = state.patients,
                         onSend = onCustomNotificationSend,
+                        onDelete = onNotificationHistoryDelete,
                         searchOpen = headerSearchOpen,
                         onSearchOpenChange = { headerSearchOpen = it },
                         addRequest = headerAddRequest,
@@ -6914,11 +6975,13 @@ private fun MailboxTab(
     items: List<JSONObject>,
     applications: List<StaffApplication>,
     onReadChange: (JSONObject) -> Unit,
+    onDelete: (JSONObject) -> Unit,
     searchOpen: Boolean,
     onSearchOpenChange: (Boolean) -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var selectedKey by rememberSaveable { mutableStateOf("") }
+    var deleteKey by rememberSaveable { mutableStateOf("") }
     val filteredItems = remember(items, query) {
         val keyword = query.trim().lowercase()
         if (keyword.isBlank()) {
@@ -6946,12 +7009,29 @@ private fun MailboxTab(
         }
     }
     val selectedItem = items.firstOrNull { mailboxKey(it) == selectedKey }
+    val deleteCandidate = items.firstOrNull { mailboxKey(it) == deleteKey }
 
     if (selectedItem != null) {
         MailboxDetailDialog(
             item = selectedItem,
             onDismiss = { selectedKey = "" },
             onReadChange = { onReadChange(selectedItem) },
+            onDelete = { deleteKey = mailboxKey(selectedItem) },
+        )
+    }
+
+    if (deleteCandidate != null) {
+        ConfirmDeleteDialog(
+            title = "Delete Mail",
+            message = "Delete ${deleteCandidate.text("subject", fallback = "this mail")}? This cannot be undone.",
+            onDismiss = { deleteKey = "" },
+            onConfirm = {
+                onDelete(deleteCandidate)
+                if (selectedKey == deleteKey) {
+                    selectedKey = ""
+                }
+                deleteKey = ""
+            },
         )
     }
 
@@ -6981,6 +7061,7 @@ private fun MailboxTab(
                     item = item,
                     onOpen = { selectedKey = mailboxKey(item) },
                     onReadChange = { onReadChange(item) },
+                    onDelete = { deleteKey = mailboxKey(item) },
                 )
             }
         }
@@ -6992,6 +7073,7 @@ private fun MailboxInboxCard(
     item: JSONObject,
     onOpen: () -> Unit,
     onReadChange: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     val isRead = item.optBoolean("isRead")
     Card(
@@ -7073,6 +7155,9 @@ private fun MailboxInboxCard(
                     TextButton(onClick = onReadChange) {
                         Text(if (isRead) "Unread" else "Read")
                     }
+                    TextButton(onClick = onDelete) {
+                        Text("Delete", color = OpwDanger)
+                    }
                 }
             }
         }
@@ -7084,6 +7169,7 @@ private fun MailboxDetailDialog(
     item: JSONObject,
     onDismiss: () -> Unit,
     onReadChange: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     OpwBottomSheetDialog(
         title = item.text("subject", fallback = "Message"),
@@ -7113,6 +7199,13 @@ private fun MailboxDetailDialog(
                 tone = BannerTone.Info,
             )
         }
+        OutlinedButton(
+            onClick = onDelete,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            Text("Delete Mail", color = OpwDanger)
+        }
     }
 }
 
@@ -7124,22 +7217,52 @@ private fun NotificationsTab(
     items: List<JSONObject>,
     patients: List<JSONObject>,
     onSend: (String, String, String, List<String>) -> Unit,
+    onDelete: (List<String>) -> Unit,
     searchOpen: Boolean,
     onSearchOpenChange: (Boolean) -> Unit,
     addRequest: Int,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var showDialog by rememberSaveable { mutableStateOf(false) }
-    val filteredItems = remember(items, query) {
+    var statusFilter by rememberSaveable { mutableStateOf("all") }
+    var sortMode by rememberSaveable { mutableStateOf("Unread first") }
+    var selectedIds by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
+    var deleteIds by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
+    val readCount = remember(items) { items.count { it.text("readAt").isNotBlank() } }
+    val unreadCount = remember(items, readCount) { (items.size - readCount).coerceAtLeast(0) }
+    val filteredItems = remember(items, query, statusFilter, sortMode) {
         val keyword = query.trim().lowercase()
-        if (keyword.isBlank()) {
-            items
-        } else {
-            items.filter { item ->
+        val filtered = items.filter { item ->
+            val read = item.text("readAt").isNotBlank()
+            val statusMatches = statusFilter == "all" ||
+                (statusFilter == "read" && read) ||
+                (statusFilter == "unread" && !read)
+            val queryMatches = if (keyword.isBlank()) {
+                true
+            } else {
                 listOf("title", "body", "category", "patientName", "createdByLabel")
                     .any { field -> item.text(field).lowercase().contains(keyword) }
             }
+            statusMatches && queryMatches
         }
+        when (sortMode) {
+            "Read first" -> filtered.sortedWith(
+                compareByDescending<JSONObject> { it.text("readAt").isNotBlank() }
+                    .thenByDescending { it.text("scheduledFor", "createdAt") },
+            )
+            "Newest first" -> filtered.sortedByDescending { it.text("scheduledFor", "createdAt") }
+            else -> filtered.sortedWith(
+                compareBy<JSONObject> { it.text("readAt").isNotBlank() }
+                    .thenByDescending { it.text("scheduledFor", "createdAt") },
+            )
+        }
+    }
+    val allVisibleSelected = filteredItems.isNotEmpty() &&
+        filteredItems.all { item -> item.text("id") in selectedIds }
+    val deleteLabel = if (deleteIds.size == 1) {
+        "this notification"
+    } else {
+        "${deleteIds.size} notifications"
     }
 
     LaunchedEffect(addRequest) {
@@ -7159,6 +7282,19 @@ private fun NotificationsTab(
         )
     }
 
+    if (deleteIds.isNotEmpty()) {
+        ConfirmDeleteDialog(
+            title = "Delete Notification History",
+            message = "Delete $deleteLabel from history? This cannot be undone.",
+            onDismiss = { deleteIds = emptyList() },
+            onConfirm = {
+                onDelete(deleteIds)
+                selectedIds = selectedIds.filterNot { it in deleteIds }
+                deleteIds = emptyList()
+            },
+        )
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         if (searchOpen || query.isNotBlank()) {
             ModuleSearchField(
@@ -7172,6 +7308,49 @@ private fun NotificationsTab(
             )
         }
 
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            SummaryMiniCard(label = "Total", value = items.size.toString(), modifier = Modifier.weight(1f))
+            SummaryMiniCard(label = "Read", value = readCount.toString(), modifier = Modifier.weight(1f))
+            SummaryMiniCard(label = "Unread", value = unreadCount.toString(), modifier = Modifier.weight(1f))
+        }
+
+        ChoiceChipRow(
+            options = listOf("all", "unread", "read"),
+            selected = statusFilter,
+            onSelected = { statusFilter = it },
+        )
+        ChoiceChipRow(
+            options = listOf("Unread first", "Read first", "Newest first"),
+            selected = sortMode,
+            onSelected = { sortMode = it },
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(
+                onClick = {
+                    val visibleIds = filteredItems.map { it.text("id") }.filter { it.isNotBlank() }
+                    selectedIds = if (allVisibleSelected) {
+                        selectedIds.filterNot { it in visibleIds }
+                    } else {
+                        (selectedIds + visibleIds).distinct()
+                    }
+                },
+                enabled = filteredItems.isNotEmpty(),
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(if (allVisibleSelected) "Clear Visible" else "Select Visible")
+            }
+            Button(
+                onClick = { deleteIds = selectedIds },
+                enabled = selectedIds.isNotEmpty(),
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Delete (${selectedIds.size})")
+            }
+        }
+
         if (filteredItems.isEmpty()) {
             EmptyStateCard(
                 title = "No notifications",
@@ -7180,6 +7359,8 @@ private fun NotificationsTab(
         } else {
             filteredItems.forEach { item ->
                 val read = item.text("readAt").isNotBlank()
+                val id = item.text("id")
+                val selected = id in selectedIds
                 RecordCard(
                     title = item.text("title", fallback = "Notification"),
                     subtitle = item.text("patientName", fallback = "Patient update"),
@@ -7192,7 +7373,61 @@ private fun NotificationsTab(
                         "Sender" to item.text("createdByLabel", fallback = "OPW"),
                     ),
                 )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            selectedIds = if (selected) {
+                                selectedIds.filterNot { it == id }
+                            } else if (id.isNotBlank()) {
+                                selectedIds + id
+                            } else {
+                                selectedIds
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(if (selected) "Unselect" else "Select")
+                    }
+                    OutlinedButton(
+                        onClick = { if (id.isNotBlank()) deleteIds = listOf(id) },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("Delete", color = OpwDanger)
+                    }
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun SummaryMiniCard(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        color = Color.White,
+        border = androidx.compose.foundation.BorderStroke(1.dp, OpwBorder),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = label,
+                color = Color(0xFF64748B),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = value,
+                color = OpwInk,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.ExtraBold,
+            )
         }
     }
 }

@@ -26,8 +26,12 @@ const signValue = (value) =>
 const createSessionToken = (payload, expiresInSeconds = 60 * 60 * 12) => {
   const safePayload = {
     ...payload,
-    exp: Math.floor(Date.now() / 1000) + expiresInSeconds,
   };
+
+  if (expiresInSeconds !== null && expiresInSeconds !== false) {
+    safePayload.exp = Math.floor(Date.now() / 1000) + expiresInSeconds;
+  }
+
   const encodedPayload = base64UrlEncode(JSON.stringify(safePayload));
   const signature = signValue(encodedPayload);
   return `${encodedPayload}.${signature}`;
@@ -54,7 +58,7 @@ const verifySessionToken = (token) => {
   try {
     const payload = JSON.parse(base64UrlDecode(encodedPayload));
 
-    if (!payload?.exp || payload.exp < Math.floor(Date.now() / 1000)) {
+    if (payload?.exp && payload.exp < Math.floor(Date.now() / 1000)) {
       return null;
     }
 

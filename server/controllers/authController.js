@@ -48,6 +48,15 @@ const formatCreatedFromLabel = (value) => {
   }
 };
 
+const isMobileAppAuthRequest = (req) => {
+  const clientType = cleanText(req.body.clientType).toLowerCase();
+  const createdFrom = normalizeCreatedFrom(req.body.createdFrom, "");
+  return clientType === "mobile_app" || createdFrom === "mobile_app";
+};
+
+const createPatientAuthToken = (req, payload) =>
+  createSessionToken(payload, isMobileAppAuthRequest(req) ? null : undefined);
+
 const generateTemporaryPassword = () =>
   `OPW${Math.random().toString(36).slice(-4).toUpperCase()}${Date.now()
     .toString()
@@ -225,7 +234,7 @@ const registerPublicUser = async (req, res) => {
 
     return res.status(201).json({
       message: "Account created successfully.",
-      token: createSessionToken({
+      token: createPatientAuthToken(req, {
         sub: user._id.toString(),
         type: "patient",
         patientId: patient._id.toString(),
@@ -273,7 +282,7 @@ const loginPublicUser = async (req, res) => {
 
     return res.json({
       message: "Login successful.",
-      token: createSessionToken({
+      token: createPatientAuthToken(req, {
         sub: user._id.toString(),
         type: "patient",
         patientId: linkedPatient._id.toString(),

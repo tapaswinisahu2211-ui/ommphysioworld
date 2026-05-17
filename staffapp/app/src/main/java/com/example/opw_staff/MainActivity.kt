@@ -2514,6 +2514,19 @@ private fun DashboardScreen(
                                 onArchive = onPatientArchive,
                                 onRestore = onPatientRestore,
                                 onPermanentDelete = onPatientPermanentDelete,
+                                canAddPatient = hasModulePermission(currentUser, "patients", "add"),
+                                canEditPatient = hasModulePermission(currentUser, "patients", "edit"),
+                                canViewArchive = hasModulePermission(currentUser, "archived_patients", "view"),
+                                canEditArchive = hasModulePermission(currentUser, "archived_patients", "edit"),
+                                canAddTreatmentPlan = hasModulePermission(currentUser, "treatment_plans", "add"),
+                                canEditTreatmentPlan = hasModulePermission(currentUser, "treatment_plans", "edit"),
+                                canAddClinicalNote = hasModulePermission(currentUser, "clinical_notes", "add"),
+                                canEditClinicalNote = hasModulePermission(currentUser, "clinical_notes", "edit"),
+                                canAddTherapyRecommendation = hasModulePermission(currentUser, "therapy_recommendations", "add"),
+                                canEditTherapyRecommendation = hasModulePermission(currentUser, "therapy_recommendations", "edit"),
+                                canAddPayment = hasModulePermission(currentUser, "payments", "add"),
+                                canAddAppointment = hasModulePermission(currentUser, "appointments", "add"),
+                                canEditAppointment = hasModulePermission(currentUser, "appointments", "edit"),
                                 onTreatmentPlanSave = onTreatmentPlanSave,
                                 onTreatmentPlanStatusChange = onTreatmentPlanStatusChange,
                                 onSessionDayStatusChange = onSessionDayStatusChange,
@@ -2553,18 +2566,21 @@ private fun DashboardScreen(
                         appointments = state.appointments,
                         onApprove = onAppointmentApprove,
                         onStatusChange = onAppointmentStatusChange,
+                        canEdit = canEditAdminTab(currentUser, AdminTab.Appointments),
                     )
                     AdminTab.Treatment -> TreatmentTab(
                         tracker = state.treatmentTracker,
                         onSessionDayStatusChange = onSessionDayStatusChange,
                         onAppointmentRequestDecision = onPatientAppointmentRequestDecision,
                         onAppointmentStatusChange = onAppointmentStatusChange,
+                        canEdit = canEditAdminTab(currentUser, AdminTab.Treatment),
                     )
                     AdminTab.Mailbox -> MailboxTab(
                         items = state.mailboxItems,
                         applications = state.applications,
                         onReadChange = onMailboxReadChange,
                         onDelete = onMailboxDelete,
+                        canEdit = canEditAdminTab(currentUser, AdminTab.Mailbox),
                         searchOpen = headerSearchOpen,
                         onSearchOpenChange = { headerSearchOpen = it },
                     )
@@ -2573,6 +2589,7 @@ private fun DashboardScreen(
                         patients = state.patients,
                         onSend = onCustomNotificationSend,
                         onDelete = onNotificationHistoryDelete,
+                        canEdit = canEditAdminTab(currentUser, AdminTab.Notifications),
                         searchOpen = headerSearchOpen,
                         onSearchOpenChange = { headerSearchOpen = it },
                         addRequest = headerAddRequest,
@@ -2581,6 +2598,7 @@ private fun DashboardScreen(
                         services = state.services,
                         onSave = onServiceSave,
                         onDelete = onServiceDelete,
+                        canEdit = canEditAdminTab(currentUser, AdminTab.Services),
                         searchOpen = headerSearchOpen,
                         onSearchOpenChange = { headerSearchOpen = it },
                         addRequest = headerAddRequest,
@@ -2590,6 +2608,7 @@ private fun DashboardScreen(
                         services = state.services,
                         onSave = onTherapySave,
                         onDelete = onTherapyDelete,
+                        canEdit = canEditAdminTab(currentUser, AdminTab.Therapy),
                         searchOpen = headerSearchOpen,
                         onSearchOpenChange = { headerSearchOpen = it },
                         addRequest = headerAddRequest,
@@ -2600,6 +2619,7 @@ private fun DashboardScreen(
                         onOrderStatusChange = onShopOrderStatusChange,
                         onProductSave = onShopProductSave,
                         onProductDelete = onShopProductDelete,
+                        canEdit = canEditAdminTab(currentUser, AdminTab.Shop),
                         searchOpen = headerSearchOpen,
                         onSearchOpenChange = { headerSearchOpen = it },
                         addRequest = headerAddRequest,
@@ -2611,6 +2631,8 @@ private fun DashboardScreen(
                         onDelete = onMarketingDelete,
                         onReferralAdd = onMarketingReferralAdd,
                         onReferralDelete = onMarketingReferralDelete,
+                        canAdd = canAddAdminTab(currentUser, AdminTab.Marketing),
+                        canEdit = canEditAdminTab(currentUser, AdminTab.Marketing),
                         searchOpen = headerSearchOpen,
                         onSearchOpenChange = { headerSearchOpen = it },
                         addRequest = headerAddRequest,
@@ -2619,6 +2641,7 @@ private fun DashboardScreen(
                         items = state.feedbackItems,
                         onToggleApproval = onFeedbackApprovalChange,
                         onDelete = onFeedbackDelete,
+                        canEdit = canEditAdminTab(currentUser, AdminTab.Feedback),
                         searchOpen = headerSearchOpen,
                         onSearchOpenChange = { headerSearchOpen = it },
                     )
@@ -2635,6 +2658,7 @@ private fun DashboardScreen(
                         onEdit = onJobEdit,
                         onStatusChange = onJobStatusChange,
                         onDelete = onJobDelete,
+                        canEdit = canEditAdminTab(currentUser, AdminTab.Jobs),
                         searchOpen = headerSearchOpen,
                         onSearchOpenChange = { headerSearchOpen = it },
                         addRequest = headerAddRequest,
@@ -2653,6 +2677,7 @@ private fun DashboardScreen(
                         currentUser = currentUser,
                         onRead = onChatRead,
                         onReply = onChatReply,
+                        canEdit = canEditAdminTab(currentUser, AdminTab.Chat),
                         searchOpen = headerSearchOpen,
                         onSearchOpenChange = { headerSearchOpen = it },
                     )
@@ -2666,6 +2691,7 @@ private fun DashboardScreen(
                         onSave = onStaffSave,
                         onStatusChange = onStaffStatusChange,
                         onDelete = onStaffDelete,
+                        canEdit = canEditAdminTab(currentUser, AdminTab.Team),
                         searchOpen = headerSearchOpen,
                         onSearchOpenChange = { headerSearchOpen = it },
                         addRequest = headerAddRequest,
@@ -4011,6 +4037,7 @@ private fun TeamTab(
     onSave: (String?, StaffFormState) -> Unit,
     onStatusChange: (StaffUser, String) -> Unit,
     onDelete: (StaffUser) -> Unit,
+    canEdit: Boolean,
     searchOpen: Boolean,
     onSearchOpenChange: (Boolean) -> Unit,
     addRequest: Int,
@@ -4108,15 +4135,16 @@ private fun TeamTab(
             filteredUsers.forEach { user ->
                 StaffDirectoryCard(
                     user = user,
-                    onEdit = {
+                    onEdit = if (canEdit) { {
                         editingUserId = user.id
                         showStaffDialog = true
-                    },
-                    onPermissions = { permissionUserId = user.id },
+                    } } else null,
+                    onPermissions = if (canEdit) { { permissionUserId = user.id } } else null,
                     onToggleStatus = {
                         onStatusChange(user, if (user.status == "Inactive") "Active" else "Inactive")
-                    },
+                    }.takeIf { canEdit },
                     onDelete = { onDelete(user) },
+                    canEdit = canEdit,
                 )
             }
         }
@@ -4126,10 +4154,11 @@ private fun TeamTab(
 @Composable
 private fun StaffDirectoryCard(
     user: StaffUser,
-    onEdit: () -> Unit,
-    onPermissions: () -> Unit,
-    onToggleStatus: () -> Unit,
+    onEdit: (() -> Unit)?,
+    onPermissions: (() -> Unit)?,
+    onToggleStatus: (() -> Unit)?,
     onDelete: () -> Unit,
+    canEdit: Boolean,
 ) {
     val active = user.status != "Inactive"
     SwipeDeleteModuleCard(
@@ -4143,12 +4172,17 @@ private fun StaffDirectoryCard(
         deleteMessage = "Delete ${user.name.ifBlank { "this staff member" }}? This removes the staff account from the admin panel.",
         onClick = onEdit,
         onDelete = onDelete,
+        swipeEnabled = canEdit,
         actions = {
-            ModuleIconButton(color = OpwBlue, onClick = onPermissions) {
-                PermissionGlyph(OpwBlue)
+            if (onPermissions != null) {
+                ModuleIconButton(color = OpwBlue, onClick = onPermissions) {
+                    PermissionGlyph(OpwBlue)
+                }
             }
-            ModuleIconButton(color = if (active) OpwWarning else OpwSuccess, onClick = onToggleStatus) {
-                PowerGlyph(if (active) OpwWarning else OpwSuccess)
+            if (onToggleStatus != null) {
+                ModuleIconButton(color = if (active) OpwWarning else OpwSuccess, onClick = onToggleStatus) {
+                    PowerGlyph(if (active) OpwWarning else OpwSuccess)
+                }
             }
         },
     )
@@ -4368,6 +4402,19 @@ private fun PatientsTab(
     onArchive: (JSONObject) -> Unit,
     onRestore: (JSONObject) -> Unit,
     onPermanentDelete: (JSONObject) -> Unit,
+    canAddPatient: Boolean,
+    canEditPatient: Boolean,
+    canViewArchive: Boolean,
+    canEditArchive: Boolean,
+    canAddTreatmentPlan: Boolean,
+    canEditTreatmentPlan: Boolean,
+    canAddClinicalNote: Boolean,
+    canEditClinicalNote: Boolean,
+    canAddTherapyRecommendation: Boolean,
+    canEditTherapyRecommendation: Boolean,
+    canAddPayment: Boolean,
+    canAddAppointment: Boolean,
+    canEditAppointment: Boolean,
     onTreatmentPlanSave: (String, String?, JSONObject) -> Unit,
     onTreatmentPlanStatusChange: (String, String, String) -> Unit,
     onSessionDayStatusChange: (String, String, String, String) -> Unit,
@@ -4409,26 +4456,26 @@ private fun PatientsTab(
             patients = patients,
             archivedCount = archivedPatients.size,
             onMenu = onMenu,
-            onArchiveOpen = { panel = PatientPanel.Archive },
-            onAdd = {
+            onArchiveOpen = if (canViewArchive) { { panel = PatientPanel.Archive } } else null,
+            onAdd = if (canAddPatient) { {
                 editingPatientId = ""
                 showPatientDialog = true
-            },
+            } } else null,
             onView = { patient ->
                 selectedPatientId = patient.text("id")
                 panel = PatientPanel.Detail
             },
-            onArchive = onArchive,
+            onArchive = if (canEditPatient) onArchive else null,
         )
 
         PatientPanel.Archive -> ArchivedPatientsScreen(
             archivedPatients = archivedPatients,
             onBack = { panel = PatientPanel.List },
-            onRestore = { patient ->
+            onRestore = if (canEditArchive) { { patient ->
                 onRestore(patient)
                 panel = PatientPanel.List
-            },
-            onPermanentDelete = onPermanentDelete,
+            } } else null,
+            onPermanentDelete = if (canEditArchive) onPermanentDelete else null,
         )
 
         PatientPanel.Detail -> {
@@ -4445,10 +4492,19 @@ private fun PatientsTab(
                     therapyResources = therapyResources,
                     appointmentRequests = appointmentRequests.patientRequestsFor(selectedPatient),
                     onBack = { panel = PatientPanel.List },
-                    onEdit = {
+                    onEdit = if (canEditPatient) { {
                         editingPatientId = selectedPatient.text("id")
                         showPatientDialog = true
-                    },
+                    } } else null,
+                    canAddTreatmentPlan = canAddTreatmentPlan,
+                    canEditTreatmentPlan = canEditTreatmentPlan,
+                    canAddClinicalNote = canAddClinicalNote,
+                    canEditClinicalNote = canEditClinicalNote,
+                    canAddTherapyRecommendation = canAddTherapyRecommendation,
+                    canEditTherapyRecommendation = canEditTherapyRecommendation,
+                    canAddPayment = canAddPayment,
+                    canAddAppointment = canAddAppointment,
+                    canEditAppointment = canEditAppointment,
                     onTreatmentPlanSave = onTreatmentPlanSave,
                     onTreatmentPlanStatusChange = onTreatmentPlanStatusChange,
                     onSessionDayStatusChange = onSessionDayStatusChange,
@@ -4472,10 +4528,10 @@ private fun PatientListScreen(
     patients: List<JSONObject>,
     archivedCount: Int,
     onMenu: () -> Unit,
-    onArchiveOpen: () -> Unit,
-    onAdd: () -> Unit,
+    onArchiveOpen: (() -> Unit)?,
+    onAdd: (() -> Unit)?,
     onView: (JSONObject) -> Unit,
-    onArchive: (JSONObject) -> Unit,
+    onArchive: ((JSONObject) -> Unit)?,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
@@ -4522,8 +4578,12 @@ private fun PatientListScreen(
                     active = searchOpen || query.isNotBlank(),
                     onClick = { searchOpen = !searchOpen },
                 )
-                ArchiveCircleButton(count = archivedCount, onClick = onArchiveOpen)
-                AddCircleButton(onClick = onAdd)
+                if (onArchiveOpen != null) {
+                    ArchiveCircleButton(count = archivedCount, onClick = onArchiveOpen)
+                }
+                if (onAdd != null) {
+                    AddCircleButton(onClick = onAdd)
+                }
             }
         }
 
@@ -4554,7 +4614,7 @@ private fun PatientListScreen(
                     CompactPatientCard(
                         patient = patient,
                         onView = { onView(patient) },
-                        onArchive = { onArchive(patient) },
+                        onArchive = onArchive?.let { archive -> { archive(patient) } },
                     )
                 }
             }
@@ -4566,7 +4626,7 @@ private fun PatientListScreen(
 private fun CompactPatientCard(
     patient: JSONObject,
     onView: () -> Unit,
-    onArchive: () -> Unit,
+    onArchive: (() -> Unit)?,
 ) {
     var dragOffset by remember { mutableStateOf(0f) }
     var confirmArchive by rememberSaveable(patient.text("id")) { mutableStateOf(false) }
@@ -4579,7 +4639,7 @@ private fun CompactPatientCard(
             onDismiss = { confirmArchive = false },
             onConfirm = {
                 confirmArchive = false
-                onArchive()
+                onArchive?.invoke()
             },
         )
     }
@@ -4587,17 +4647,19 @@ private fun CompactPatientCard(
     val shape = RoundedCornerShape(24.dp)
 
     Box(modifier = Modifier.fillMaxWidth()) {
-        DecoratedSwipeReveal(
-            modifier = Modifier.matchParentSize(),
-            shape = shape,
-            color = OpwWarning,
-        ) { ArchiveGlyph(OpwWarning) }
+        if (onArchive != null) {
+            DecoratedSwipeReveal(
+                modifier = Modifier.matchParentSize(),
+                shape = shape,
+                color = OpwWarning,
+            ) { ArchiveGlyph(OpwWarning) }
+        }
 
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .offset { IntOffset(dragOffset.roundToInt(), 0) }
-                .pointerInput(patient.text("id"), thresholdPx) {
+                .then(if (onArchive != null) Modifier.pointerInput(patient.text("id"), thresholdPx) {
                     detectHorizontalDragGestures(
                         onDragCancel = { dragOffset = 0f },
                         onDragEnd = {
@@ -4614,7 +4676,7 @@ private fun CompactPatientCard(
                             dragOffset = nextOffset
                         },
                     )
-                }
+                } else Modifier)
                 .clickable(onClick = onView)
                 .border(1.dp, OpwBlue.copy(alpha = 0.14f), shape),
             shape = shape,
@@ -4757,8 +4819,8 @@ private fun PatientSearchField(
 private fun ArchivedPatientsScreen(
     archivedPatients: List<JSONObject>,
     onBack: () -> Unit,
-    onRestore: (JSONObject) -> Unit,
-    onPermanentDelete: (JSONObject) -> Unit,
+    onRestore: ((JSONObject) -> Unit)?,
+    onPermanentDelete: ((JSONObject) -> Unit)?,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var permanentDeleteId by rememberSaveable { mutableStateOf("") }
@@ -4782,7 +4844,7 @@ private fun ArchivedPatientsScreen(
             message = "This will permanently remove ${deleteCandidate.text("name", fallback = "this patient")} and related records.",
             onDismiss = { permanentDeleteId = "" },
             onConfirm = {
-                onPermanentDelete(deleteCandidate)
+                onPermanentDelete?.invoke(deleteCandidate)
                 permanentDeleteId = ""
             },
         )
@@ -4829,19 +4891,25 @@ private fun ArchivedPatientsScreen(
                             "Email" to patient.text("email", fallback = "Not provided"),
                             "Archived" to formatTimestamp(patient.text("archivedAt")),
                         ),
-                        actions = {
-                            Row(
-                                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                OutlinedButton(onClick = { onRestore(patient) }) {
-                                    Text("Restore")
-                                }
-                                OutlinedButton(onClick = { permanentDeleteId = patient.text("id") }) {
-                                    Text("Delete Permanently")
+                        actions = if (onRestore != null || onPermanentDelete != null) {
+                            {
+                                Row(
+                                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    if (onRestore != null) {
+                                        OutlinedButton(onClick = { onRestore.invoke(patient) }) {
+                                            Text("Restore")
+                                        }
+                                    }
+                                    if (onPermanentDelete != null) {
+                                        OutlinedButton(onClick = { permanentDeleteId = patient.text("id") }) {
+                                            Text("Delete Permanently")
+                                        }
+                                    }
                                 }
                             }
-                        },
+                        } else null,
                     )
                 }
             }
@@ -5292,7 +5360,16 @@ private fun PatientDetailScreen(
     therapyResources: List<JSONObject>,
     appointmentRequests: List<JSONObject>,
     onBack: () -> Unit,
-    onEdit: () -> Unit,
+    onEdit: (() -> Unit)?,
+    canAddTreatmentPlan: Boolean,
+    canEditTreatmentPlan: Boolean,
+    canAddClinicalNote: Boolean,
+    canEditClinicalNote: Boolean,
+    canAddTherapyRecommendation: Boolean,
+    canEditTherapyRecommendation: Boolean,
+    canAddPayment: Boolean,
+    canAddAppointment: Boolean,
+    canEditAppointment: Boolean,
     onTreatmentPlanSave: (String, String?, JSONObject) -> Unit,
     onTreatmentPlanStatusChange: (String, String, String) -> Unit,
     onSessionDayStatusChange: (String, String, String, String) -> Unit,
@@ -5397,7 +5474,8 @@ private fun PatientDetailScreen(
                 activeAppointments = activeAppointments,
                 appointmentHistory = appointmentHistory,
                 appointmentRequests = visibleRequests,
-                onAdd = { showAppointmentDialog = true },
+                onAdd = if (canAddAppointment) { { showAppointmentDialog = true } } else null,
+                canEdit = canEditAppointment,
                 onAppointmentUpdate = onPatientAppointmentUpdate,
                 onRequestDecision = onPatientAppointmentRequestDecision,
             )
@@ -5406,14 +5484,16 @@ private fun PatientDetailScreen(
                 patientId = patientId,
                 plans = treatmentPlans,
                 activeTreatmentCount = activeTreatmentCount,
-                onStart = {
+                onStart = if (canAddTreatmentPlan) { {
                     editingPlanId = ""
                     showTreatmentDialog = true
-                },
-                onEdit = { plan ->
+                } } else null,
+                onEdit = if (canEditTreatmentPlan) { { plan ->
                     editingPlanId = plan.text("id")
                     showTreatmentDialog = true
-                },
+                } } else null,
+                canEdit = canEditTreatmentPlan,
+                canAddPayment = canAddPayment,
                 onStatusChange = onTreatmentPlanStatusChange,
                 onSessionDayStatusChange = onSessionDayStatusChange,
                 onPaymentAdd = onTreatmentPaymentAdd,
@@ -5425,15 +5505,15 @@ private fun PatientDetailScreen(
                 disease = patient.text("disease"),
                 notes = patient.text("notes"),
                 clinicalNotes = clinicalNotes,
-                onAdd = { showNoteDialog = true },
-                onDelete = onClinicalNoteDelete,
+                onAdd = if (canAddClinicalNote) { { showNoteDialog = true } } else null,
+                onDelete = if (canEditClinicalNote) onClinicalNoteDelete else null,
             )
 
             TherapyRecommendationsSection(
                 patientId = patientId,
                 recommendations = therapyRecommendations,
-                onAdd = { showTherapyDialog = true },
-                onDelete = onTherapyRecommendationDelete,
+                onAdd = if (canAddTherapyRecommendation) { { showTherapyDialog = true } } else null,
+                onDelete = if (canEditTherapyRecommendation) onTherapyRecommendationDelete else null,
             )
         }
     }
@@ -5443,7 +5523,7 @@ private fun PatientDetailScreen(
 private fun PatientProfileHeader(
     patient: JSONObject,
     onBack: () -> Unit,
-    onEdit: () -> Unit,
+    onEdit: (() -> Unit)?,
 ) {
     Surface(
         shape = RoundedCornerShape(30.dp),
@@ -5461,7 +5541,9 @@ private fun PatientProfileHeader(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 BackCircleButton(onClick = onBack)
-                PatientIconActionButton(icon = PatientActionIcon.Edit, onClick = onEdit)
+                if (onEdit != null) {
+                    PatientIconActionButton(icon = PatientActionIcon.Edit, onClick = onEdit)
+                }
             }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -5495,8 +5577,10 @@ private fun TreatmentPlansSection(
     patientId: String,
     plans: List<JSONObject>,
     activeTreatmentCount: Int,
-    onStart: () -> Unit,
-    onEdit: (JSONObject) -> Unit,
+    onStart: (() -> Unit)?,
+    onEdit: ((JSONObject) -> Unit)?,
+    canEdit: Boolean,
+    canAddPayment: Boolean,
     onStatusChange: (String, String, String) -> Unit,
     onSessionDayStatusChange: (String, String, String, String) -> Unit,
     onPaymentAdd: (String, String, Double, String) -> Unit,
@@ -5504,7 +5588,7 @@ private fun TreatmentPlansSection(
 ) {
     SectionCard(
         title = "Treatment Sessions",
-        actionLabel = if (activeTreatmentCount > 0) "Active Running" else "Session Start",
+        actionLabel = if (onStart == null) null else if (activeTreatmentCount > 0) "Active Running" else "Session Start",
         actionEnabled = activeTreatmentCount == 0,
         onAction = onStart,
     ) {
@@ -5515,7 +5599,9 @@ private fun TreatmentPlansSection(
                 TreatmentPlanCard(
                     patientId = patientId,
                     plan = plan,
-                    onEdit = { onEdit(plan) },
+                    onEdit = onEdit?.let { edit -> { edit(plan) } },
+                    canEdit = canEdit,
+                    canAddPayment = canAddPayment,
                     onStatusChange = onStatusChange,
                     onSessionDayStatusChange = onSessionDayStatusChange,
                     onPaymentAdd = onPaymentAdd,
@@ -5530,7 +5616,9 @@ private fun TreatmentPlansSection(
 private fun TreatmentPlanCard(
     patientId: String,
     plan: JSONObject,
-    onEdit: () -> Unit,
+    onEdit: (() -> Unit)?,
+    canEdit: Boolean,
+    canAddPayment: Boolean,
     onStatusChange: (String, String, String) -> Unit,
     onSessionDayStatusChange: (String, String, String, String) -> Unit,
     onPaymentAdd: (String, String, Double, String) -> Unit,
@@ -5577,20 +5665,26 @@ private fun TreatmentPlanCard(
             DetailRow("Total", formatMoney(plan.optDouble("totalAmount", 0.0)))
             DetailRow("Balance", formatMoney(plan.optDouble("balanceAmount", 0.0)))
 
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(onClick = onEdit) { Text("Edit") }
-                OutlinedButton(
-                    onClick = {
-                        onStatusChange(patientId, planId, if (status == "active") "completed" else "active")
-                    },
+            if (canEdit || onEdit != null) {
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text(if (status == "active") "Mark Completed" else "Mark Active")
-                }
-                OutlinedButton(onClick = { onDelete(patientId, planId) }) {
-                    Text("Delete")
+                    if (onEdit != null) {
+                        OutlinedButton(onClick = onEdit) { Text("Edit") }
+                    }
+                    if (canEdit) {
+                        OutlinedButton(
+                            onClick = {
+                                onStatusChange(patientId, planId, if (status == "active") "completed" else "active")
+                            },
+                        ) {
+                            Text(if (status == "active") "Mark Completed" else "Mark Active")
+                        }
+                        OutlinedButton(onClick = { onDelete(patientId, planId) }) {
+                            Text("Delete")
+                        }
+                    }
                 }
             }
 
@@ -5613,7 +5707,7 @@ private fun TreatmentPlanCard(
                             Text(day.text("date", fallback = "Date not set"), fontWeight = FontWeight.Bold, color = OpwInk)
                             Text(if (done) "Done" else "Not done", color = if (done) OpwSuccess else OpwWarning)
                         }
-                        if (today) {
+                        if (today && canEdit) {
                             OutlinedButton(
                                 onClick = {
                                     onSessionDayStatusChange(
@@ -5645,7 +5739,7 @@ private fun TreatmentPlanCard(
                 }
             }
 
-            if (showPaymentForm) {
+            if (showPaymentForm && canAddPayment) {
                 ModernPatientTextField("Amount", paymentAmount, { paymentAmount = it.filter { char -> char.isDigit() } }, KeyboardType.Number)
                 ModernPatientTextField("Payment Method", paymentMethod, { paymentMethod = it })
                 Button(
@@ -5659,7 +5753,7 @@ private fun TreatmentPlanCard(
                 ) {
                     Text("Add Payment")
                 }
-            } else {
+            } else if (canAddPayment) {
                 OutlinedButton(onClick = { showPaymentForm = true }) {
                     Text("Add Payment")
                 }
@@ -5674,7 +5768,8 @@ private fun PatientAppointmentsSection(
     activeAppointments: List<JSONObject>,
     appointmentHistory: List<JSONObject>,
     appointmentRequests: List<JSONObject>,
-    onAdd: () -> Unit,
+    onAdd: (() -> Unit)?,
+    canEdit: Boolean,
     onAppointmentUpdate: (String, JSONObject, String, String, String, String) -> Unit,
     onRequestDecision: (String, JSONObject, String, String, String, String) -> Unit,
 ) {
@@ -5691,6 +5786,7 @@ private fun PatientAppointmentsSection(
                 AppointmentRequestCard(
                     patientId = patientId,
                     request = request,
+                    canEdit = canEdit,
                     onDecision = onRequestDecision,
                 )
             }
@@ -5704,6 +5800,7 @@ private fun PatientAppointmentsSection(
                 PatientAppointmentCard(
                     patientId = patientId,
                     appointment = appointment,
+                    canEdit = canEdit,
                     onUpdate = onAppointmentUpdate,
                 )
             }
@@ -5732,6 +5829,7 @@ private fun PatientAppointmentsSection(
 private fun AppointmentRequestCard(
     patientId: String,
     request: JSONObject,
+    canEdit: Boolean,
     onDecision: (String, JSONObject, String, String, String, String) -> Unit,
 ) {
     var decisionAction by rememberSaveable(request.text("id")) { mutableStateOf("") }
@@ -5779,15 +5877,17 @@ private fun AppointmentRequestCard(
                 }
                 StatusChip("Request", Color.White, OpwWarning)
             }
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Button(onClick = { decisionAction = "approve" }) {
-                    Text("Approve")
-                }
-                OutlinedButton(onClick = { decisionAction = "reschedule" }) {
-                    Text("Reschedule")
+            if (canEdit) {
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(onClick = { decisionAction = "approve" }) {
+                        Text("Approve")
+                    }
+                    OutlinedButton(onClick = { decisionAction = "reschedule" }) {
+                        Text("Reschedule")
+                    }
                 }
             }
         }
@@ -5891,6 +5991,7 @@ private fun AppointmentRequestDecisionDialog(
 private fun PatientAppointmentCard(
     patientId: String,
     appointment: JSONObject,
+    canEdit: Boolean,
     onUpdate: (String, JSONObject, String, String, String, String) -> Unit,
 ) {
     var updateStatus by rememberSaveable(appointment.text("id")) { mutableStateOf("") }
@@ -5935,18 +6036,20 @@ private fun PatientAppointmentCard(
                 }
                 StatusChip("Active", Color(0xFFDCFCE7), OpwSuccess)
             }
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(onClick = { updateStatus = "rescheduled" }) {
-                    Text("Reschedule")
-                }
-                OutlinedButton(onClick = { updateStatus = "completed" }) {
-                    Text("Done")
-                }
-                OutlinedButton(onClick = { updateStatus = "cancelled" }) {
-                    Text("Cancel")
+            if (canEdit) {
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(onClick = { updateStatus = "rescheduled" }) {
+                        Text("Reschedule")
+                    }
+                    OutlinedButton(onClick = { updateStatus = "completed" }) {
+                        Text("Done")
+                    }
+                    OutlinedButton(onClick = { updateStatus = "cancelled" }) {
+                        Text("Cancel")
+                    }
                 }
             }
         }
@@ -6062,8 +6165,8 @@ private fun ClinicalNotesSection(
     disease: String,
     notes: String,
     clinicalNotes: List<JSONObject>,
-    onAdd: () -> Unit,
-    onDelete: (String, String) -> Unit,
+    onAdd: (() -> Unit)?,
+    onDelete: ((String, String) -> Unit)?,
 ) {
     SectionCard(
         title = "Clinical Notes",
@@ -6088,11 +6191,13 @@ private fun ClinicalNotesSection(
                         "Note" to note.text("note", fallback = "No note text added."),
                         "Documents" to note.array("documents").length().toString(),
                     ),
-                    actions = {
+                    actions = if (onDelete != null) {
+                        {
                         OutlinedButton(onClick = { onDelete(patientId, note.text("id")) }) {
                             Text("Delete")
                         }
-                    },
+                        }
+                    } else null,
                 )
             }
         }
@@ -6103,8 +6208,8 @@ private fun ClinicalNotesSection(
 private fun TherapyRecommendationsSection(
     patientId: String,
     recommendations: List<JSONObject>,
-    onAdd: () -> Unit,
-    onDelete: (String, String) -> Unit,
+    onAdd: (() -> Unit)?,
+    onDelete: ((String, String) -> Unit)?,
 ) {
     SectionCard(
         title = "Recommended Therapy",
@@ -6124,11 +6229,13 @@ private fun TherapyRecommendationsSection(
                         "Note" to recommendation.text("note", fallback = "No note"),
                         "Items" to items.joinToString(", ") { it.text("title", "fileName", fallback = "Item") },
                     ),
-                    actions = {
+                    actions = if (onDelete != null) {
+                        {
                         OutlinedButton(onClick = { onDelete(patientId, recommendation.text("id")) }) {
                             Text("Delete")
                         }
-                    },
+                        }
+                    } else null,
                 )
             }
         }
@@ -6845,6 +6952,7 @@ private fun AppointmentsTab(
     appointments: List<JSONObject>,
     onApprove: (JSONObject) -> Unit,
     onStatusChange: (JSONObject, String) -> Unit,
+    canEdit: Boolean,
 ) {
     JsonListTab(
         title = "Appointment Requests",
@@ -6872,28 +6980,30 @@ private fun AppointmentsTab(
                 "Note" to appointment.text("decisionNote", "message", fallback = "No note"),
                 "Created" to formatTimestamp(appointment.text("createdAt")),
             ),
-            actions = {
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (status != "approved" && status != "completed" && status != "cancelled") {
-                        OutlinedButton(onClick = { onApprove(appointment) }) {
-                            Text("Approve")
+            actions = if (canEdit) {
+                {
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (status != "approved" && status != "completed" && status != "cancelled") {
+                            OutlinedButton(onClick = { onApprove(appointment) }) {
+                                Text("Approve")
+                            }
                         }
-                    }
-                    if (status != "completed") {
-                        OutlinedButton(onClick = { onStatusChange(appointment, "completed") }) {
-                            Text("Done")
+                        if (status != "completed") {
+                            OutlinedButton(onClick = { onStatusChange(appointment, "completed") }) {
+                                Text("Done")
+                            }
                         }
-                    }
-                    if (status != "cancelled") {
-                        OutlinedButton(onClick = { onStatusChange(appointment, "cancelled") }) {
-                            Text("Cancel")
+                        if (status != "cancelled") {
+                            OutlinedButton(onClick = { onStatusChange(appointment, "cancelled") }) {
+                                Text("Cancel")
+                            }
                         }
                     }
                 }
-            },
+            } else null,
         )
     }
 }
@@ -6904,6 +7014,7 @@ private fun TreatmentTab(
     onSessionDayStatusChange: (String, String, String, String) -> Unit,
     onAppointmentRequestDecision: (String, JSONObject, String, String, String, String) -> Unit,
     onAppointmentStatusChange: (JSONObject, String) -> Unit,
+    canEdit: Boolean,
 ) {
     if (tracker == null) {
         EmptyStateCard(
@@ -6971,20 +7082,22 @@ private fun TreatmentTab(
                             "Mobile" to session.text("patientMobile", fallback = "Not provided"),
                             "Date" to session.text("date", fallback = "Not set"),
                         ),
-                        actions = {
-                            OutlinedButton(
-                                onClick = {
-                                    onSessionDayStatusChange(
-                                        session.text("patientId"),
-                                        session.text("planId"),
-                                        session.text("dayId"),
-                                        if (done) "not_done" else "done",
-                                    )
-                                },
-                            ) {
-                                Text(if (done) "Mark Not Done" else "Mark Done")
+                        actions = if (canEdit) {
+                            {
+                                OutlinedButton(
+                                    onClick = {
+                                        onSessionDayStatusChange(
+                                            session.text("patientId"),
+                                            session.text("planId"),
+                                            session.text("dayId"),
+                                            if (done) "not_done" else "done",
+                                        )
+                                    },
+                                ) {
+                                    Text(if (done) "Mark Not Done" else "Mark Done")
+                                }
                             }
-                        },
+                        } else null,
                     )
                 }
             }
@@ -7012,23 +7125,25 @@ private fun TreatmentTab(
                                 appointment.text("confirmedTime", "requestedTime"),
                             ),
                         ),
-                        actions = {
-                            Row(
-                                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                if (status != "completed") {
-                                    OutlinedButton(onClick = { onAppointmentStatusChange(appointment, "completed") }) {
-                                        Text("Done")
+                        actions = if (canEdit) {
+                            {
+                                Row(
+                                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    if (status != "completed") {
+                                        OutlinedButton(onClick = { onAppointmentStatusChange(appointment, "completed") }) {
+                                            Text("Done")
+                                        }
                                     }
-                                }
-                                if (status != "cancelled") {
-                                    OutlinedButton(onClick = { onAppointmentStatusChange(appointment, "cancelled") }) {
-                                        Text("Cancel")
+                                    if (status != "cancelled") {
+                                        OutlinedButton(onClick = { onAppointmentStatusChange(appointment, "cancelled") }) {
+                                            Text("Cancel")
+                                        }
                                     }
                                 }
                             }
-                        },
+                        } else null,
                     )
                 }
             }
@@ -7046,7 +7161,8 @@ private fun TreatmentTab(
                     TreatmentTrackerAppointmentRequestCard(
                         request = request,
                         onDecision = onAppointmentRequestDecision,
-                        onCancel = { onAppointmentStatusChange(request, "cancelled") },
+                        onCancel = if (canEdit) { { onAppointmentStatusChange(request, "cancelled") } } else null,
+                        canEdit = canEdit,
                     )
                 }
             }
@@ -7131,7 +7247,8 @@ private fun TreatmentTab(
 private fun TreatmentTrackerAppointmentRequestCard(
     request: JSONObject,
     onDecision: (String, JSONObject, String, String, String, String) -> Unit,
-    onCancel: () -> Unit,
+    onCancel: (() -> Unit)?,
+    canEdit: Boolean,
 ) {
     val status = request.text("status", fallback = "pending").trim().lowercase()
     val patientId = request.text("patientId")
@@ -7161,26 +7278,28 @@ private fun TreatmentTrackerAppointmentRequestCard(
             "Location" to formatServiceLocation(request.text("serviceLocation")),
             "Message" to request.text("message", fallback = "No message"),
         ),
-        actions = {
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (status !in listOf("approved", "completed", "cancelled")) {
-                    Button(onClick = { decisionAction = "approve" }) {
-                        Text("Approve")
+        actions = if (canEdit) {
+            {
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (status !in listOf("approved", "completed", "cancelled")) {
+                        Button(onClick = { decisionAction = "approve" }) {
+                            Text("Approve")
+                        }
+                        OutlinedButton(onClick = { decisionAction = "reschedule" }) {
+                            Text("Reschedule")
+                        }
                     }
-                    OutlinedButton(onClick = { decisionAction = "reschedule" }) {
-                        Text("Reschedule")
-                    }
-                }
-                if (status != "cancelled") {
-                    OutlinedButton(onClick = onCancel) {
-                        Text("Cancel")
+                    if (status != "cancelled" && onCancel != null) {
+                        OutlinedButton(onClick = onCancel) {
+                            Text("Cancel")
+                        }
                     }
                 }
             }
-        },
+        } else null,
     )
 }
 
@@ -7233,6 +7352,7 @@ private fun MailboxTab(
     applications: List<StaffApplication>,
     onReadChange: (JSONObject) -> Unit,
     onDelete: (JSONObject) -> Unit,
+    canEdit: Boolean,
     searchOpen: Boolean,
     onSearchOpenChange: (Boolean) -> Unit,
 ) {
@@ -7272,8 +7392,8 @@ private fun MailboxTab(
         MailboxDetailDialog(
             item = selectedItem,
             onDismiss = { selectedKey = "" },
-            onReadChange = { onReadChange(selectedItem) },
-            onDelete = { deleteKey = mailboxKey(selectedItem) },
+            onReadChange = if (canEdit) { { onReadChange(selectedItem) } } else null,
+            onDelete = if (canEdit) { { deleteKey = mailboxKey(selectedItem) } } else null,
         )
     }
 
@@ -7317,8 +7437,8 @@ private fun MailboxTab(
                 MailboxInboxCard(
                     item = item,
                     onOpen = { selectedKey = mailboxKey(item) },
-                    onReadChange = { onReadChange(item) },
-                    onDelete = { deleteKey = mailboxKey(item) },
+                    onReadChange = if (canEdit) { { onReadChange(item) } } else null,
+                    onDelete = if (canEdit) { { deleteKey = mailboxKey(item) } } else null,
                 )
             }
         }
@@ -7329,8 +7449,8 @@ private fun MailboxTab(
 private fun MailboxInboxCard(
     item: JSONObject,
     onOpen: () -> Unit,
-    onReadChange: () -> Unit,
-    onDelete: () -> Unit,
+    onReadChange: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
 ) {
     val isRead = item.optBoolean("isRead")
     Card(
@@ -7409,11 +7529,15 @@ private fun MailboxInboxCard(
                         background = if (item.text("type") == "career") Color(0xFFFFEDD5) else Color(0xFFE0F2FE),
                         foreground = if (item.text("type") == "career") OpwWarning else OpwBlue,
                     )
-                    TextButton(onClick = onReadChange) {
-                        Text(if (isRead) "Unread" else "Read")
+                    if (onReadChange != null) {
+                        TextButton(onClick = onReadChange) {
+                            Text(if (isRead) "Unread" else "Read")
+                        }
                     }
-                    TextButton(onClick = onDelete) {
-                        Text("Delete", color = OpwDanger)
+                    if (onDelete != null) {
+                        TextButton(onClick = onDelete) {
+                            Text("Delete", color = OpwDanger)
+                        }
                     }
                 }
             }
@@ -7425,14 +7549,18 @@ private fun MailboxInboxCard(
 private fun MailboxDetailDialog(
     item: JSONObject,
     onDismiss: () -> Unit,
-    onReadChange: () -> Unit,
-    onDelete: () -> Unit,
+    onReadChange: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
 ) {
     OpwBottomSheetDialog(
         title = item.text("subject", fallback = "Message"),
-        primaryLabel = if (item.optBoolean("isRead")) "Mark Unread" else "Mark Read",
+        primaryLabel = if (onReadChange != null) {
+            if (item.optBoolean("isRead")) "Mark Unread" else "Mark Read"
+        } else {
+            "Close"
+        },
         onDismiss = onDismiss,
-        onPrimary = onReadChange,
+        onPrimary = onReadChange ?: onDismiss,
     ) {
         DetailRow("From", item.text("senderName", fallback = "Unknown"))
         DetailRow("Email", item.text("senderEmail", fallback = "Not provided"))
@@ -7456,12 +7584,14 @@ private fun MailboxDetailDialog(
                 tone = BannerTone.Info,
             )
         }
-        OutlinedButton(
-            onClick = onDelete,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-        ) {
-            Text("Delete Mail", color = OpwDanger)
+        if (onDelete != null) {
+            OutlinedButton(
+                onClick = onDelete,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+            ) {
+                Text("Delete Mail", color = OpwDanger)
+            }
         }
     }
 }
@@ -7475,6 +7605,7 @@ private fun NotificationsTab(
     patients: List<JSONObject>,
     onSend: (String, String, String, List<String>) -> Unit,
     onDelete: (List<String>) -> Unit,
+    canEdit: Boolean,
     searchOpen: Boolean,
     onSearchOpenChange: (Boolean) -> Unit,
     addRequest: Int,
@@ -7589,6 +7720,7 @@ private fun NotificationsTab(
                             onDelete(listOf(id))
                         }
                     },
+                    swipeEnabled = canEdit,
                     actions = {
                         StatusChip(
                             label = item.text("category", fallback = "custom"),
@@ -7905,6 +8037,7 @@ private fun ServicesTab(
     services: List<JSONObject>,
     onSave: (String?, String) -> Unit,
     onDelete: (JSONObject) -> Unit,
+    canEdit: Boolean,
     searchOpen: Boolean,
     onSearchOpenChange: (Boolean) -> Unit,
     addRequest: Int,
@@ -7967,6 +8100,7 @@ private fun ServicesTab(
                 ServiceListCard(
                     service = service,
                     delayMillis = (index * 80).coerceAtMost(320),
+                    canEdit = canEdit,
                     onClick = {
                         editingServiceId = service.text("id")
                         showServiceDialog = true
@@ -7982,6 +8116,7 @@ private fun ServicesTab(
 private fun ServiceListCard(
     service: JSONObject,
     delayMillis: Int,
+    canEdit: Boolean,
     onClick: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -8006,18 +8141,20 @@ private fun ServiceListCard(
     }
 
     Box(modifier = Modifier.fillMaxWidth()) {
-        DecoratedSwipeReveal(
-            modifier = Modifier.matchParentSize(),
-            shape = shape,
-            color = OpwDanger,
-        ) { TrashGlyph(OpwDanger) }
+        if (canEdit) {
+            DecoratedSwipeReveal(
+                modifier = Modifier.matchParentSize(),
+                shape = shape,
+                color = OpwDanger,
+            ) { TrashGlyph(OpwDanger) }
+        }
 
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .offset(y = motion.lift)
                 .offset { IntOffset(dragOffset.roundToInt(), 0) }
-                .pointerInput(service.text("id"), thresholdPx) {
+                .then(if (canEdit) Modifier.pointerInput(service.text("id"), thresholdPx) {
                     detectHorizontalDragGestures(
                         onDragCancel = { dragOffset = 0f },
                         onDragEnd = {
@@ -8034,7 +8171,7 @@ private fun ServiceListCard(
                             dragOffset = nextOffset
                         },
                     )
-                }
+                } else Modifier)
                 .shadow(
                     elevation = motion.elevation + 2.dp,
                     shape = shape,
@@ -8042,7 +8179,7 @@ private fun ServiceListCard(
                     spotColor = OpwBlue.copy(alpha = 0.2f),
                 )
                 .border(1.dp, Color(0xFFD8EAFB), shape)
-                .clickable(onClick = onClick),
+                .then(if (canEdit) Modifier.clickable(onClick = onClick) else Modifier),
             shape = shape,
             colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.98f)),
             elevation = CardDefaults.cardElevation(defaultElevation = motion.elevation),
@@ -8302,8 +8439,9 @@ private fun SwipeDeleteModuleCard(
     accent: Color,
     deleteTitle: String,
     deleteMessage: String,
-    onClick: () -> Unit,
+    onClick: (() -> Unit)?,
     onDelete: () -> Unit,
+    swipeEnabled: Boolean = true,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     var dragOffset by remember { mutableStateOf(0f) }
@@ -8323,11 +8461,13 @@ private fun SwipeDeleteModuleCard(
     }
 
     Box(modifier = Modifier.fillMaxWidth()) {
-        DecoratedSwipeReveal(
-            modifier = Modifier.matchParentSize(),
-            shape = RoundedCornerShape(26.dp),
-            color = OpwDanger,
-        ) { TrashGlyph(OpwDanger) }
+        if (swipeEnabled) {
+            DecoratedSwipeReveal(
+                modifier = Modifier.matchParentSize(),
+                shape = RoundedCornerShape(26.dp),
+                color = OpwDanger,
+            ) { TrashGlyph(OpwDanger) }
+        }
 
         SimpleModuleCard(
             title = title,
@@ -8335,7 +8475,7 @@ private fun SwipeDeleteModuleCard(
             accent = accent,
             modifier = Modifier
                 .offset { IntOffset(dragOffset.roundToInt(), 0) }
-                .pointerInput(title, subtitle, thresholdPx) {
+                .then(if (swipeEnabled) Modifier.pointerInput(title, subtitle, thresholdPx) {
                     detectHorizontalDragGestures(
                         onDragCancel = { dragOffset = 0f },
                         onDragEnd = {
@@ -8352,7 +8492,7 @@ private fun SwipeDeleteModuleCard(
                             dragOffset = nextOffset
                         },
                     )
-                },
+                } else Modifier),
             onClick = onClick,
             actions = actions,
         )
@@ -8365,6 +8505,7 @@ private fun TherapyTab(
     services: List<JSONObject>,
     onSave: (String?, String, String, String, PickedUploadFile?) -> Unit,
     onDelete: (JSONObject) -> Unit,
+    canEdit: Boolean,
     searchOpen: Boolean,
     onSearchOpenChange: (Boolean) -> Unit,
     addRequest: Int,
@@ -8438,8 +8579,9 @@ private fun TherapyTab(
                     onClick = {
                         editingResourceId = resource.text("id")
                         showTherapyDialog = true
-                    },
+                    }.takeIf { canEdit },
                     onDelete = { onDelete(resource) },
+                    swipeEnabled = canEdit,
                 )
             }
         }
@@ -8564,6 +8706,7 @@ private fun ShopTab(
     onOrderStatusChange: (JSONObject, String) -> Unit,
     onProductSave: (String?, JSONObject) -> Unit,
     onProductDelete: (JSONObject) -> Unit,
+    canEdit: Boolean,
     searchOpen: Boolean,
     onSearchOpenChange: (Boolean) -> Unit,
     addRequest: Int,
@@ -8658,8 +8801,10 @@ private fun ShopTab(
                         ) {
                             listOf("pending", "confirmed", "completed", "cancelled").forEach { status ->
                                 if (order.text("status", fallback = "pending") != status) {
-                                    OutlinedButton(onClick = { onOrderStatusChange(order, status) }) {
-                                        Text(status.replaceFirstChar { it.titlecase() })
+                                    if (canEdit) {
+                                        OutlinedButton(onClick = { onOrderStatusChange(order, status) }) {
+                                            Text(status.replaceFirstChar { it.titlecase() })
+                                        }
                                     }
                                 }
                             }
@@ -8683,8 +8828,9 @@ private fun ShopTab(
                     onClick = {
                         editingProductId = product.text("id")
                         showProductDialog = true
-                    },
+                    }.takeIf { canEdit },
                     onDelete = { onProductDelete(product) },
+                    swipeEnabled = canEdit,
                 )
             }
         }
@@ -8786,6 +8932,8 @@ private fun MarketingTab(
     onDelete: (JSONObject) -> Unit,
     onReferralAdd: (JSONObject, JSONObject) -> Unit,
     onReferralDelete: (JSONObject, JSONObject) -> Unit,
+    canAdd: Boolean,
+    canEdit: Boolean,
     searchOpen: Boolean,
     onSearchOpenChange: (Boolean) -> Unit,
     addRequest: Int,
@@ -8841,13 +8989,13 @@ private fun MarketingTab(
             source = viewSource,
             token = token,
             onDismiss = { viewSourceId = "" },
-            onEdit = {
+            onEdit = if (canEdit) { {
                 editingSourceId = viewSource.text("id")
                 showSourceDialog = true
-            },
-            onDelete = { onDelete(viewSource) },
-            onGenerateLead = { leadSourceId = viewSource.text("id") },
-            onReferralDelete = { referral -> onReferralDelete(viewSource, referral) },
+            } } else null,
+            onDelete = if (canEdit) { { onDelete(viewSource) } } else null,
+            onGenerateLead = if (canAdd) { { leadSourceId = viewSource.text("id") } } else null,
+            onReferralDelete = if (canEdit) { { referral -> onReferralDelete(viewSource, referral) } } else null,
         )
     }
 
@@ -8911,11 +9059,12 @@ private fun MarketingTab(
                     accent = accent,
                     delayMillis = (index * 90).coerceAtMost(360),
                     onView = { viewSourceId = source.text("id") },
-                    onEdit = {
+                    onEdit = if (canEdit) { {
                         editingSourceId = source.text("id")
                         showSourceDialog = true
-                    },
+                    } } else null,
                     onDelete = { onDelete(source) },
+                    canEdit = canEdit,
                 )
             }
         }
@@ -8928,8 +9077,9 @@ private fun MarketingSourceCard(
     accent: Color,
     delayMillis: Int,
     onView: () -> Unit,
-    onEdit: () -> Unit,
+    onEdit: (() -> Unit)?,
     onDelete: () -> Unit,
+    canEdit: Boolean,
 ) {
     val shape = RoundedCornerShape(24.dp)
     val motion = rememberStaffFloatingCardMotion(delayMillis = delayMillis)
@@ -8957,18 +9107,20 @@ private fun MarketingSourceCard(
     }
 
     Box(modifier = Modifier.fillMaxWidth()) {
-        DecoratedSwipeReveal(
-            modifier = Modifier.matchParentSize(),
-            shape = shape,
-            color = OpwDanger,
-        ) { TrashGlyph(OpwDanger) }
+        if (canEdit) {
+            DecoratedSwipeReveal(
+                modifier = Modifier.matchParentSize(),
+                shape = shape,
+                color = OpwDanger,
+            ) { TrashGlyph(OpwDanger) }
+        }
 
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .offset(y = motion.lift)
                 .offset { IntOffset(dragOffset.roundToInt(), 0) }
-                .pointerInput(source.text("id"), thresholdPx) {
+                .then(if (canEdit) Modifier.pointerInput(source.text("id"), thresholdPx) {
                     detectHorizontalDragGestures(
                         onDragCancel = { dragOffset = 0f },
                         onDragEnd = {
@@ -8985,7 +9137,7 @@ private fun MarketingSourceCard(
                             dragOffset = nextOffset
                         },
                     )
-                }
+                } else Modifier)
                 .shadow(
                     elevation = motion.elevation,
                     shape = shape,
@@ -9080,8 +9232,10 @@ private fun MarketingSourceCard(
                             ModuleIconButton(color = OpwBlue, onClick = onView) {
                                 ViewGlyph(OpwBlue)
                             }
-                            ModuleIconButton(color = OpwSuccess, onClick = onEdit) {
-                                EditGlyph(OpwSuccess)
+                            if (onEdit != null) {
+                                ModuleIconButton(color = OpwSuccess, onClick = onEdit) {
+                                    EditGlyph(OpwSuccess)
+                                }
                             }
                         }
                     }
@@ -9282,10 +9436,10 @@ private fun MarketingSourceViewDialog(
     source: JSONObject,
     token: String?,
     onDismiss: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-    onGenerateLead: () -> Unit,
-    onReferralDelete: (JSONObject) -> Unit,
+    onEdit: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
+    onGenerateLead: (() -> Unit)?,
+    onReferralDelete: ((JSONObject) -> Unit)?,
 ) {
     val referrals = source.array("referrals").toJsonObjects().asReversed()
     val photos = source.array("photos").toJsonObjects()
@@ -9305,14 +9459,20 @@ private fun MarketingSourceViewDialog(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(onClick = onGenerateLead, modifier = Modifier.weight(1f)) {
-                Text("Generate Lead")
+            if (onGenerateLead != null) {
+                OutlinedButton(onClick = onGenerateLead, modifier = Modifier.weight(1f)) {
+                    Text("Generate Lead")
+                }
             }
-            OutlinedButton(onClick = onEdit, modifier = Modifier.weight(1f)) {
-                Text("Edit")
+            if (onEdit != null) {
+                OutlinedButton(onClick = onEdit, modifier = Modifier.weight(1f)) {
+                    Text("Edit")
+                }
             }
-            OutlinedButton(onClick = onDelete, modifier = Modifier.weight(1f)) {
-                Text("Delete")
+            if (onDelete != null) {
+                OutlinedButton(onClick = onDelete, modifier = Modifier.weight(1f)) {
+                    Text("Delete")
+                }
             }
         }
 
@@ -9330,7 +9490,7 @@ private fun MarketingSourceViewDialog(
             }
         }
 
-        SectionCard(title = "Lead Data", actionLabel = "Add", onAction = onGenerateLead) {
+        SectionCard(title = "Lead Data", actionLabel = if (onGenerateLead != null) "Add" else null, onAction = onGenerateLead) {
             if (referrals.isEmpty()) {
                 InlineEmpty("No lead data generated yet.")
             } else {
@@ -9361,8 +9521,10 @@ private fun MarketingSourceViewDialog(
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             }
-                            ModuleIconButton(color = OpwDanger, onClick = { onReferralDelete(referral) }) {
-                                TrashGlyph(OpwDanger)
+                            if (onReferralDelete != null) {
+                                ModuleIconButton(color = OpwDanger, onClick = { onReferralDelete(referral) }) {
+                                    TrashGlyph(OpwDanger)
+                                }
                             }
                         }
                     }
@@ -9473,6 +9635,7 @@ private fun FeedbackTab(
     items: List<JSONObject>,
     onToggleApproval: (JSONObject) -> Unit,
     onDelete: (JSONObject) -> Unit,
+    canEdit: Boolean,
     searchOpen: Boolean,
     onSearchOpenChange: (Boolean) -> Unit,
 ) {
@@ -9538,26 +9701,28 @@ private fun FeedbackTab(
                     "Comment" to item.text("comment", fallback = "No comment"),
                     "Submitted" to formatTimestamp(item.text("createdAt")),
                 ),
-                actions = {
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        ModuleIconButton(
-                            color = if (approvedItem) OpwWarning else OpwSuccess,
-                            onClick = { onToggleApproval(item) },
+                actions = if (canEdit) {
+                    {
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            if (approvedItem) {
-                                CloseGlyph(OpwWarning)
-                            } else {
-                                ViewGlyph(OpwSuccess)
+                            ModuleIconButton(
+                                color = if (approvedItem) OpwWarning else OpwSuccess,
+                                onClick = { onToggleApproval(item) },
+                            ) {
+                                if (approvedItem) {
+                                    CloseGlyph(OpwWarning)
+                                } else {
+                                    ViewGlyph(OpwSuccess)
+                                }
+                            }
+                            ModuleIconButton(color = OpwDanger, onClick = { onDelete(item) }) {
+                                TrashGlyph(OpwDanger)
                             }
                         }
-                        ModuleIconButton(color = OpwDanger, onClick = { onDelete(item) }) {
-                            TrashGlyph(OpwDanger)
-                        }
                     }
-                },
+                } else null,
             )
             }
         }
@@ -9578,6 +9743,7 @@ private fun JobRequirementsTab(
     onEdit: (JSONObject) -> Unit,
     onStatusChange: (JSONObject, String) -> Unit,
     onDelete: (JSONObject) -> Unit,
+    canEdit: Boolean,
     searchOpen: Boolean,
     onSearchOpenChange: (Boolean) -> Unit,
     addRequest: Int,
@@ -9664,18 +9830,23 @@ private fun JobRequirementsTab(
                     accent = statusColor(status),
                     deleteTitle = "Delete Career Opening",
                     deleteMessage = "Delete ${item.text("title", fallback = "this career opening")}? This cannot be undone.",
-                    onClick = {
+                    onClick = if (canEdit) { {
                         onEdit(item)
                         showJobDialog = true
-                    },
+                    } } else null,
                     onDelete = { onDelete(item) },
-                    actions = {
-                        ModuleIconButton(
-                            color = if (status == "Active") OpwWarning else OpwSuccess,
-                            onClick = { onStatusChange(item, if (status == "Active") "Completed" else "Active") },
-                        ) {
-                            PowerGlyph(if (status == "Active") OpwWarning else OpwSuccess)
+                    swipeEnabled = canEdit,
+                    actions = if (canEdit) {
+                        {
+                            ModuleIconButton(
+                                color = if (status == "Active") OpwWarning else OpwSuccess,
+                                onClick = { onStatusChange(item, if (status == "Active") "Completed" else "Active") },
+                            ) {
+                                PowerGlyph(if (status == "Active") OpwWarning else OpwSuccess)
+                            }
                         }
+                    } else {
+                        {}
                     },
                 )
             }
@@ -10106,6 +10277,7 @@ private fun ChatTab(
     currentUser: StaffUser?,
     onRead: (JSONObject) -> Unit,
     onReply: (JSONObject, String) -> Unit,
+    canEdit: Boolean,
     searchOpen: Boolean,
     onSearchOpenChange: (Boolean) -> Unit,
 ) {
@@ -10148,8 +10320,8 @@ private fun ChatTab(
             ChatThreadCard(
                 conversation = selectedConversation,
                 currentUser = currentUser,
-                onRead = { onRead(selectedConversation) },
-                onReply = { message -> onReply(selectedConversation, message) },
+                onRead = if (canEdit) { { onRead(selectedConversation) } } else null,
+                onReply = if (canEdit) { { message -> onReply(selectedConversation, message) } } else null,
             )
         }
         return
@@ -10196,7 +10368,7 @@ private fun ChatTab(
                             returnPanel = panel
                             selectedId = conversation.text("id")
                             panel = ChatPanel.Thread
-                            if (conversation.optBoolean("unreadForAgent")) {
+                            if (canEdit && conversation.optBoolean("unreadForAgent")) {
                                 onRead(conversation)
                             }
                         },
@@ -10319,8 +10491,8 @@ private fun ChatConversationRow(
 private fun ChatThreadCard(
     conversation: JSONObject,
     currentUser: StaffUser?,
-    onRead: () -> Unit,
-    onReply: (String) -> Unit,
+    onRead: (() -> Unit)?,
+    onReply: ((String) -> Unit)?,
 ) {
     var reply by remember(conversation.text("id")) { mutableStateOf("") }
     val messages = conversation.array("messages").toJsonObjects()
@@ -10355,7 +10527,7 @@ private fun ChatThreadCard(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
-                if (conversation.optBoolean("unreadForAgent")) {
+                if (conversation.optBoolean("unreadForAgent") && onRead != null) {
                     TextButton(onClick = onRead) {
                         Text("Read", color = Color.White)
                     }
@@ -10382,54 +10554,56 @@ private fun ChatThreadCard(
                 }
             }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Surface(
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(22.dp),
-                    color = Color(0xFFF8FAFC),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            if (onReply != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    BasicTextField(
-                        value = reply,
-                        onValueChange = { reply = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 13.dp),
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = OpwInk),
-                        cursorBrush = SolidColor(OpwBlue),
-                        decorationBox = { innerTextField ->
-                            Box(contentAlignment = Alignment.CenterStart) {
-                                if (reply.isBlank()) {
-                                    Text(
-                                        text = "Reply as ${currentUser?.name?.ifBlank { "staff" } ?: "staff"}",
-                                        color = Color(0xFF94A3B8),
-                                    )
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(22.dp),
+                        color = Color(0xFFF8FAFC),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    ) {
+                        BasicTextField(
+                            value = reply,
+                            onValueChange = { reply = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 13.dp),
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = OpwInk),
+                            cursorBrush = SolidColor(OpwBlue),
+                            decorationBox = { innerTextField ->
+                                Box(contentAlignment = Alignment.CenterStart) {
+                                    if (reply.isBlank()) {
+                                        Text(
+                                            text = "Reply as ${currentUser?.name?.ifBlank { "staff" } ?: "staff"}",
+                                            color = Color(0xFF94A3B8),
+                                        )
+                                    }
+                                    innerTextField()
                                 }
-                                innerTextField()
+                            },
+                        )
+                    }
+                    Surface(
+                        shape = CircleShape,
+                        color = if (reply.trim().isBlank()) Color(0xFFCBD5E1) else Color(0xFF0F766E),
+                        shadowElevation = 3.dp,
+                        onClick = {
+                            val message = reply.trim()
+                            if (message.isNotBlank()) {
+                                onReply(message)
+                                reply = ""
                             }
                         },
-                    )
-                }
-                Surface(
-                    shape = CircleShape,
-                    color = if (reply.trim().isBlank()) Color(0xFFCBD5E1) else Color(0xFF0F766E),
-                    shadowElevation = 3.dp,
-                    onClick = {
-                        val message = reply.trim()
-                        if (message.isNotBlank()) {
-                            onReply(message)
-                            reply = ""
+                    ) {
+                        Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                            SendGlyph(Color.White)
                         }
-                    },
-                ) {
-                    Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                        SendGlyph(Color.White)
                     }
                 }
             }
@@ -11460,6 +11634,9 @@ private fun hasModulePermission(user: StaffUser?, module: String?, action: Strin
 
 private fun canAddAdminTab(user: StaffUser?, tab: AdminTab): Boolean =
     hasModulePermission(user, adminTabPermissionKey(tab), "add")
+
+private fun canEditAdminTab(user: StaffUser?, tab: AdminTab): Boolean =
+    hasModulePermission(user, adminTabPermissionKey(tab), "edit")
 
 private fun canOpenAdminTab(user: StaffUser?, tab: AdminTab): Boolean {
     if (tab == AdminTab.Profile) {

@@ -1,4 +1,5 @@
 import { ShieldCheck, Mail, Bell, Database, Lock, UserCheck } from "lucide-react";
+import { Link } from "react-router-dom";
 import Seo from "../components/Seo";
 import PublicLayout from "../layout/PublicLayout";
 import { createBreadcrumbSchema, createMedicalBusinessSchema } from "../utils/seo";
@@ -120,6 +121,11 @@ export default function PrivacyPolicyPage() {
               For privacy questions, account updates, or deletion requests, contact
               Omm Physio World at <a className="font-semibold text-cyan-700" href="mailto:contact@ommphysioworld.com">contact@ommphysioworld.com</a> or
               call <a className="font-semibold text-cyan-700" href="tel:+918895555519">+91 88955 55519</a>.
+              You can also visit the{" "}
+              <Link className="font-semibold text-cyan-700" to="/delete-account">
+                account deletion request page
+              </Link>
+              .
             </p>
           </div>
         </div>

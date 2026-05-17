@@ -9,6 +9,7 @@ import ContactPage from "./pages/ContactPage";
 import HomePage from "./pages/HomePage";
 import JobRequirementsManagement from "./pages/JobRequirementsManagement";
 import Login from "./pages/Login";
+import DeleteAccountPage from "./pages/DeleteAccountPage";
 import PatientAuthPage from "./pages/PatientAuthPage";
 import PatientDashboardPage from "./pages/PatientDashboardPage";
 import PatientProfilePage from "./pages/PatientProfilePage";
@@ -70,6 +71,7 @@ function App() {
         <Route path="/patient-dashboard" element={<PatientDashboardPage />} />
         <Route path="/patient-profile" element={<PatientProfilePage />} />
         <Route path="/contact" element={<ContactPage />} />
+        <Route path="/delete-account" element={<DeleteAccountPage />} />
         <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
 
         {/* LOGIN */}

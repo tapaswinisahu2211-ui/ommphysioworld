@@ -70,6 +70,7 @@ data class AdminDashboardSnapshot(
     val therapyResources: List<JSONObject> = emptyList(),
     val shopProducts: List<JSONObject> = emptyList(),
     val shopOrders: List<JSONObject> = emptyList(),
+    val marketingSources: List<JSONObject> = emptyList(),
     val feedbackItems: List<JSONObject> = emptyList(),
     val jobRequirements: List<JSONObject> = emptyList(),
     val reports: JSONObject? = null,

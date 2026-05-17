@@ -383,6 +383,71 @@ class StaffApiService(
         }
     }
 
+    suspend fun getMarketingSources(token: String): List<JSONObject> =
+        getJsonArray(token, "/marketing/sources")
+
+    suspend fun saveMarketingSource(
+        token: String,
+        id: String?,
+        payload: JSONObject,
+        photoName: String?,
+        photoMimeType: String?,
+        photoBytes: ByteArray?,
+    ): JSONObject =
+        withContext(Dispatchers.IO) {
+            val fields = mutableMapOf<String, String>()
+            listOf(
+                "sourceType",
+                "name",
+                "contactPerson",
+                "doctorName",
+                "mobile",
+                "alternateMobile",
+                "email",
+                "area",
+                "city",
+                "address",
+                "visitDate",
+                "nextFollowUpDate",
+                "assignedTo",
+                "pitchStatus",
+                "expectedDailyPatients",
+                "notes",
+                "removePhotoIds",
+            ).forEach { key ->
+                fields[key] = payload.optString(key).trim()
+            }
+
+            JSONObject(
+                requestMultipart(
+                    method = if (id.isNullOrBlank()) "POST" else "PUT",
+                    path = if (id.isNullOrBlank()) "/marketing/sources" else "/marketing/sources/$id",
+                    token = token,
+                    fields = fields,
+                    fileField = if (photoBytes != null) "photos" else null,
+                    fileName = photoName,
+                    mimeType = photoMimeType,
+                    fileBytes = photoBytes,
+                ),
+            )
+        }
+
+    suspend fun deleteMarketingSource(token: String, id: String) {
+        withContext(Dispatchers.IO) {
+            request("DELETE", "/marketing/sources/$id", token = token)
+        }
+    }
+
+    suspend fun addMarketingReferral(token: String, sourceId: String, payload: JSONObject): JSONObject =
+        withContext(Dispatchers.IO) {
+            JSONObject(request("POST", "/marketing/sources/$sourceId/referrals", token = token, body = payload))
+        }
+
+    suspend fun deleteMarketingReferral(token: String, sourceId: String, referralId: String): JSONObject =
+        withContext(Dispatchers.IO) {
+            JSONObject(request("DELETE", "/marketing/sources/$sourceId/referrals/$referralId", token = token))
+        }
+
     suspend fun getFeedback(token: String): List<JSONObject> =
         getJsonArray(token, "/feedback")
 

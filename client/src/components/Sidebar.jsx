@@ -73,9 +73,9 @@ export default function Sidebar({ collapsed, onNavigate }) {
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.16),_transparent_32%),radial-gradient(circle_at_bottom,_rgba(16,185,129,0.14),_transparent_28%)]" />
 
-      <div className="relative flex h-full flex-col overflow-hidden px-4 py-5">
+      <div className="relative flex h-full min-h-0 flex-col overflow-hidden px-4 py-5">
         <div
-          className={`rounded-3xl border border-white/10 bg-white/5 backdrop-blur ${
+          className={`shrink-0 rounded-3xl border border-white/10 bg-white/5 backdrop-blur ${
             collapsed
               ? "mx-auto flex h-20 w-20 items-center justify-center"
               : "flex items-center justify-between px-4 py-4"
@@ -103,7 +103,7 @@ export default function Sidebar({ collapsed, onNavigate }) {
           )}
         </div>
 
-        <div className="mt-8 flex-1 overflow-y-auto px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="sidebar-scroll mt-6 min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-8 pr-1">
           {!collapsed && (
             <p className="mb-3 px-3 text-xs uppercase tracking-[0.22em] text-white/35">
               Workspace
@@ -154,7 +154,7 @@ export default function Sidebar({ collapsed, onNavigate }) {
           </nav>
         </div>
 
-        <div className="mt-auto px-2">
+        <div className="shrink-0 border-t border-white/10 px-2 pt-4">
           <div
             className={`rounded-3xl border border-white/10 bg-white/5 p-4 backdrop-blur ${
               collapsed ? "mx-auto flex h-24 w-16 items-center justify-center p-0" : ""

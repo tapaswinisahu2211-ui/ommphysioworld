@@ -11,6 +11,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import android.os.Bundle
 import android.provider.OpenableColumns
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -77,6 +83,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -118,11 +125,11 @@ import com.example.opw_staff.ui.theme.OpwAqua
 import com.example.opw_staff.ui.theme.OpwBorder
 import com.example.opw_staff.ui.theme.OpwCard
 import com.example.opw_staff.ui.theme.OpwDanger
-import com.example.opw_staff.ui.theme.OpwFrost
 import com.example.opw_staff.ui.theme.OpwInk
 import com.example.opw_staff.ui.theme.OpwMist
 import com.example.opw_staff.ui.theme.OpwNavy
 import com.example.opw_staff.ui.theme.OpwSky
+import com.example.opw_staff.ui.theme.OpwSlate
 import com.example.opw_staff.ui.theme.OpwStaffTheme
 import com.example.opw_staff.ui.theme.OpwSuccess
 import com.example.opw_staff.ui.theme.OpwWarning
@@ -166,6 +173,7 @@ private enum class AdminTab(val label: String, val adminOnly: Boolean = false) {
     Services("Services"),
     Therapy("Therapy"),
     Shop("Shop"),
+    Marketing("Marketing"),
     Feedback("Feedback", adminOnly = true),
     Jobs("Job Requirements", adminOnly = true),
     Reports("Report", adminOnly = true),
@@ -191,6 +199,7 @@ private data class DashboardUiState(
     val therapyResources: List<JSONObject> = emptyList(),
     val shopProducts: List<JSONObject> = emptyList(),
     val shopOrders: List<JSONObject> = emptyList(),
+    val marketingSources: List<JSONObject> = emptyList(),
     val feedbackItems: List<JSONObject> = emptyList(),
     val jobRequirements: List<JSONObject> = emptyList(),
     val reports: JSONObject? = null,
@@ -266,18 +275,18 @@ private fun emptyJobForm() = JobFormState()
 private fun appBackgroundBrush(): Brush =
     Brush.verticalGradient(
         colors = listOf(
-            Color(0xFFE8F2FF),
-            Color(0xFFF7FBFF),
-            Color(0xFFF8FAFC),
+            OpwMist,
+            Color(0xFFF8FBFF),
+            Color.White,
         ),
     )
 
 private fun drawerBrush(): Brush =
-    Brush.verticalGradient(
+    Brush.linearGradient(
         colors = listOf(
-            Color(0xFF03111F),
-            Color(0xFF081B2E),
-            Color(0xFF0F172A),
+            Color(0xFF071224),
+            Color(0xFF123C7C),
+            OpwBlue,
         ),
     )
 
@@ -290,6 +299,7 @@ private fun moduleAccent(tab: AdminTab): Color =
         AdminTab.Services -> Color(0xFF0284C7)
         AdminTab.Therapy -> Color(0xFF0891B2)
         AdminTab.Shop -> Color(0xFFEA580C)
+        AdminTab.Marketing -> OpwAqua
         AdminTab.Feedback -> Color(0xFFEAB308)
         AdminTab.Jobs -> Color(0xFF16A34A)
         AdminTab.Reports -> Color(0xFF4F46E5)
@@ -310,6 +320,7 @@ private fun moduleCaption(tab: AdminTab): String =
         AdminTab.Services -> "Treatments available across the clinic"
         AdminTab.Therapy -> "Exercise files and therapy resources"
         AdminTab.Shop -> "Products, stock, and patient orders"
+        AdminTab.Marketing -> "Marketing visits, partners, and generated leads"
         AdminTab.Feedback -> "Approve public testimonials"
         AdminTab.Jobs -> "Career openings published to the website"
         AdminTab.Reports -> "Date-wise patients, sessions, and payments"
@@ -320,6 +331,46 @@ private fun moduleCaption(tab: AdminTab): String =
         AdminTab.Create -> "Create staff accounts with module access"
         AdminTab.Profile -> "Current staff profile and account details"
     }
+
+private data class StaffFloatingCardMotion(
+    val lift: androidx.compose.ui.unit.Dp,
+    val elevation: androidx.compose.ui.unit.Dp,
+)
+
+@Composable
+private fun rememberStaffFloatingCardMotion(delayMillis: Int = 0): StaffFloatingCardMotion {
+    val transition = rememberInfiniteTransition(label = "staff-floating-card")
+    val lift = transition.animateFloat(
+        initialValue = 0f,
+        targetValue = -3.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 2200,
+                delayMillis = delayMillis,
+                easing = FastOutSlowInEasing,
+            ),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "staff-card-lift",
+    )
+    val elevation = transition.animateFloat(
+        initialValue = 5f,
+        targetValue = 13f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 2200,
+                delayMillis = delayMillis,
+                easing = FastOutSlowInEasing,
+            ),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "staff-card-elevation",
+    )
+    return StaffFloatingCardMotion(
+        lift = lift.value.dp,
+        elevation = elevation.value.dp,
+    )
+}
 
 @Composable
 private fun StaffAdminApp() {
@@ -454,6 +505,9 @@ private fun StaffAdminApp() {
                 shopOrders = loadOptional("shop orders", emptyList()) {
                     api.getShopOrders(activeSession.token)
                 },
+                marketingSources = loadOptional("marketing", emptyList()) {
+                    api.getMarketingSources(activeSession.token)
+                },
                 feedbackItems = if (isAdmin) {
                     loadOptional("feedback", emptyList()) {
                         api.getFeedback(activeSession.token)
@@ -500,6 +554,7 @@ private fun StaffAdminApp() {
                 therapyResources = snapshot.therapyResources,
                 shopProducts = snapshot.shopProducts,
                 shopOrders = snapshot.shopOrders,
+                marketingSources = snapshot.marketingSources,
                 feedbackItems = snapshot.feedbackItems,
                 jobRequirements = snapshot.jobRequirements,
                 reports = snapshot.reports,
@@ -1501,6 +1556,117 @@ private fun StaffAdminApp() {
         }
     }
 
+    fun saveMarketingSource(id: String?, payload: JSONObject, photo: PickedUploadFile?) {
+        val activeSession = session ?: return
+        scope.launch {
+            try {
+                val saved = api.saveMarketingSource(
+                    token = activeSession.token,
+                    id = id,
+                    payload = payload,
+                    photoName = photo?.name,
+                    photoMimeType = photo?.mimeType,
+                    photoBytes = photo?.bytes,
+                )
+                val nextSources = if (id.isNullOrBlank()) {
+                    listOf(saved) + dashboardState.marketingSources
+                } else {
+                    dashboardState.marketingSources.map { current ->
+                        if (current.text("id") == id) saved else current
+                    }
+                }
+                dashboardState = dashboardState.copy(marketingSources = sortMarketingSources(nextSources))
+                showMessage(if (id.isNullOrBlank()) "Marketing source added." else "Marketing source updated.")
+            } catch (error: ApiException) {
+                if (error.statusCode == 401 || error.statusCode == 403) {
+                    clearToLogin("Your session ended. Please log in again.")
+                } else {
+                    showMessage(error.message)
+                }
+            } catch (error: Exception) {
+                showMessage(networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error))
+            }
+        }
+    }
+
+    fun deleteMarketingSource(item: JSONObject) {
+        val activeSession = session ?: return
+        val id = item.text("id")
+        if (id.isBlank()) return
+        scope.launch {
+            try {
+                api.deleteMarketingSource(activeSession.token, id)
+                dashboardState = dashboardState.copy(
+                    marketingSources = dashboardState.marketingSources.filterNot { it.text("id") == id },
+                )
+                showMessage("Marketing source deleted.")
+            } catch (error: ApiException) {
+                if (error.statusCode == 401 || error.statusCode == 403) {
+                    clearToLogin("Your session ended. Please log in again.")
+                } else {
+                    showMessage(error.message)
+                }
+            } catch (error: Exception) {
+                showMessage(networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error))
+            }
+        }
+    }
+
+    fun addMarketingReferral(source: JSONObject, payload: JSONObject) {
+        val activeSession = session ?: return
+        val sourceId = source.text("id")
+        if (sourceId.isBlank()) return
+        scope.launch {
+            try {
+                val updated = api.addMarketingReferral(activeSession.token, sourceId, payload)
+                dashboardState = dashboardState.copy(
+                    marketingSources = sortMarketingSources(
+                        dashboardState.marketingSources.map { current ->
+                            if (current.text("id") == sourceId) updated else current
+                        },
+                    ),
+                )
+                showMessage("Lead data generated.")
+            } catch (error: ApiException) {
+                if (error.statusCode == 401 || error.statusCode == 403) {
+                    clearToLogin("Your session ended. Please log in again.")
+                } else {
+                    showMessage(error.message)
+                }
+            } catch (error: Exception) {
+                showMessage(networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error))
+            }
+        }
+    }
+
+    fun deleteMarketingReferral(source: JSONObject, referral: JSONObject) {
+        val activeSession = session ?: return
+        val sourceId = source.text("id")
+        val referralId = referral.text("id")
+        if (sourceId.isBlank() || referralId.isBlank()) return
+        scope.launch {
+            try {
+                val updated = api.deleteMarketingReferral(activeSession.token, sourceId, referralId)
+                dashboardState = dashboardState.copy(
+                    marketingSources = sortMarketingSources(
+                        dashboardState.marketingSources.map { current ->
+                            if (current.text("id") == sourceId) updated else current
+                        },
+                    ),
+                )
+                showMessage("Lead data deleted.")
+            } catch (error: ApiException) {
+                if (error.statusCode == 401 || error.statusCode == 403) {
+                    clearToLogin("Your session ended. Please log in again.")
+                } else {
+                    showMessage(error.message)
+                }
+            } catch (error: Exception) {
+                showMessage(networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error))
+            }
+        }
+    }
+
     fun saveStaffMember(id: String?, form: StaffFormState) {
         val activeSession = session ?: return
         val validationError = validateCreateStaffForm(form, requirePassword = id.isNullOrBlank())
@@ -1782,6 +1948,10 @@ private fun StaffAdminApp() {
                     onShopOrderStatusChange = ::updateShopOrderStatus,
                     onShopProductSave = ::saveShopProduct,
                     onShopProductDelete = ::deleteShopProduct,
+                    onMarketingSave = ::saveMarketingSource,
+                    onMarketingDelete = ::deleteMarketingSource,
+                    onMarketingReferralAdd = ::addMarketingReferral,
+                    onMarketingReferralDelete = ::deleteMarketingReferral,
                     onFormChange = {
                         createForm = it
                         createError = ""
@@ -2006,6 +2176,10 @@ private fun DashboardScreen(
     onShopOrderStatusChange: (JSONObject, String) -> Unit,
     onShopProductSave: (String?, JSONObject) -> Unit,
     onShopProductDelete: (JSONObject) -> Unit,
+    onMarketingSave: (String?, JSONObject, PickedUploadFile?) -> Unit,
+    onMarketingDelete: (JSONObject) -> Unit,
+    onMarketingReferralAdd: (JSONObject, JSONObject) -> Unit,
+    onMarketingReferralDelete: (JSONObject, JSONObject) -> Unit,
     onFormChange: (StaffFormState) -> Unit,
     onStaffSave: (String?, StaffFormState) -> Unit,
     onStaffStatusChange: (StaffUser, String) -> Unit,
@@ -2035,6 +2209,7 @@ private fun DashboardScreen(
         AdminTab.Services,
         AdminTab.Therapy,
         AdminTab.Shop,
+        AdminTab.Marketing,
         AdminTab.Feedback,
         AdminTab.Jobs,
         AdminTab.Chat,
@@ -2045,6 +2220,7 @@ private fun DashboardScreen(
         AdminTab.Notifications,
         AdminTab.Therapy,
         AdminTab.Shop,
+        AdminTab.Marketing,
         AdminTab.Jobs,
         AdminTab.Team,
     )
@@ -2371,6 +2547,17 @@ private fun DashboardScreen(
                         onOrderStatusChange = onShopOrderStatusChange,
                         onProductSave = onShopProductSave,
                         onProductDelete = onShopProductDelete,
+                        searchOpen = headerSearchOpen,
+                        onSearchOpenChange = { headerSearchOpen = it },
+                        addRequest = headerAddRequest,
+                    )
+                    AdminTab.Marketing -> MarketingTab(
+                        sources = state.marketingSources,
+                        token = session?.token,
+                        onSave = onMarketingSave,
+                        onDelete = onMarketingDelete,
+                        onReferralAdd = onMarketingReferralAdd,
+                        onReferralDelete = onMarketingReferralDelete,
                         searchOpen = headerSearchOpen,
                         onSearchOpenChange = { headerSearchOpen = it },
                         addRequest = headerAddRequest,
@@ -6490,16 +6677,26 @@ private fun SectionCard(
     onAction: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    val motion = rememberStaffFloatingCardMotion(delayMillis = (title.length * 28).coerceAtMost(280))
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .offset(y = motion.lift)
+            .shadow(
+                elevation = motion.elevation,
+                shape = RoundedCornerShape(30.dp),
+                ambientColor = OpwBlue.copy(alpha = 0.12f),
+                spotColor = OpwSky.copy(alpha = 0.16f),
+            )
             .border(1.dp, Color(0xFFE5EDF7), RoundedCornerShape(30.dp)),
         shape = RoundedCornerShape(30.dp),
-        colors = CardDefaults.cardColors(containerColor = OpwCard),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.97f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = motion.elevation),
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
+            modifier = Modifier
+                .background(Brush.verticalGradient(listOf(Color.White, Color(0xFFF8FBFF))))
+                .padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Row(
@@ -7592,15 +7789,26 @@ private fun ModuleSearchField(
     onQueryChange: (String) -> Unit,
     onClose: () -> Unit,
 ) {
+    val shape = RoundedCornerShape(24.dp)
+    val motion = rememberStaffFloatingCardMotion(delayMillis = 80)
     Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = Color.White,
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE0ECF8)),
-        shadowElevation = 4.dp,
+        modifier = Modifier
+            .offset(y = motion.lift)
+            .shadow(
+                elevation = motion.elevation,
+                shape = shape,
+                ambientColor = OpwBlue.copy(alpha = 0.12f),
+                spotColor = OpwSky.copy(alpha = 0.18f),
+            ),
+        shape = shape,
+        color = Color.White.copy(alpha = 0.97f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, OpwBorder),
+        shadowElevation = motion.elevation,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.White, Color(0xFFF8FBFF))))
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -7617,7 +7825,7 @@ private fun ModuleSearchField(
             OutlinedTextField(
                 value = query,
                 onValueChange = onQueryChange,
-                label = { Text(label) },
+                placeholder = { Text(label) },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
@@ -7837,16 +8045,28 @@ private fun SimpleModuleCard(
     accent: Color,
     actions: @Composable RowScope.() -> Unit,
 ) {
+    val shape = RoundedCornerShape(26.dp)
+    val motion = rememberStaffFloatingCardMotion(delayMillis = (title.length * 19).coerceAtMost(260))
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, Color(0xFFE5EDF7), RoundedCornerShape(26.dp)),
-        shape = RoundedCornerShape(26.dp),
-        colors = CardDefaults.cardColors(containerColor = OpwCard),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            .offset(y = motion.lift)
+            .shadow(
+                elevation = motion.elevation,
+                shape = shape,
+                ambientColor = accent.copy(alpha = 0.12f),
+                spotColor = accent.copy(alpha = 0.16f),
+            )
+            .border(1.dp, accent.copy(alpha = 0.13f), shape),
+        shape = shape,
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.97f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = motion.elevation),
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.White, accent.copy(alpha = 0.035f))))
+                .padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -8286,6 +8506,659 @@ private fun ShopProductFormDialog(
             color = Color(0xFF64748B),
             style = MaterialTheme.typography.bodySmall,
         )
+    }
+}
+
+private val marketingTypeOptions = listOf(
+    "medical_shop" to "Medical Shop",
+    "clinic" to "Clinic",
+    "institute" to "Institute",
+    "hospital" to "Hospital",
+    "doctor" to "Doctor",
+    "other" to "Other",
+)
+
+private val marketingStatusOptions = listOf(
+    "new" to "New Lead",
+    "visited" to "Visited",
+    "interested" to "Interested",
+    "follow_up" to "Follow-up",
+    "converted" to "Converted",
+    "not_interested" to "Not Interested",
+)
+
+@Composable
+private fun MarketingTab(
+    sources: List<JSONObject>,
+    token: String?,
+    onSave: (String?, JSONObject, PickedUploadFile?) -> Unit,
+    onDelete: (JSONObject) -> Unit,
+    onReferralAdd: (JSONObject, JSONObject) -> Unit,
+    onReferralDelete: (JSONObject, JSONObject) -> Unit,
+    searchOpen: Boolean,
+    onSearchOpenChange: (Boolean) -> Unit,
+    addRequest: Int,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    var showSourceDialog by rememberSaveable { mutableStateOf(false) }
+    var editingSourceId by rememberSaveable { mutableStateOf("") }
+    var viewSourceId by rememberSaveable { mutableStateOf("") }
+    var leadSourceId by rememberSaveable { mutableStateOf("") }
+    val editingSource = sources.firstOrNull { it.text("id") == editingSourceId }
+    val viewSource = sources.firstOrNull { it.text("id") == viewSourceId }
+    val leadSource = sources.firstOrNull { it.text("id") == leadSourceId }
+    val filteredSources = remember(sources, query) {
+        val keyword = query.trim().lowercase()
+        sortMarketingSources(
+            if (keyword.isBlank()) {
+                sources
+            } else {
+                sources.filter { source ->
+                    listOf(
+                        "name",
+                        "contactPerson",
+                        "doctorName",
+                        "mobile",
+                        "area",
+                        "city",
+                        "assignedTo",
+                        "sourceTypeLabel",
+                        "pitchStatusLabel",
+                    ).any { field -> source.text(field).lowercase().contains(keyword) }
+                }
+            },
+        )
+    }
+
+    if (showSourceDialog) {
+        MarketingSourceFormDialog(
+            source = editingSource,
+            onDismiss = {
+                showSourceDialog = false
+                editingSourceId = ""
+            },
+            onSave = { id, payload, photo ->
+                onSave(id, payload, photo)
+                showSourceDialog = false
+                editingSourceId = ""
+            },
+        )
+    }
+
+    if (viewSource != null) {
+        MarketingSourceViewDialog(
+            source = viewSource,
+            token = token,
+            onDismiss = { viewSourceId = "" },
+            onEdit = {
+                editingSourceId = viewSource.text("id")
+                showSourceDialog = true
+            },
+            onDelete = { onDelete(viewSource) },
+            onGenerateLead = { leadSourceId = viewSource.text("id") },
+            onReferralDelete = { referral -> onReferralDelete(viewSource, referral) },
+        )
+    }
+
+    if (leadSource != null) {
+        MarketingLeadDialog(
+            source = leadSource,
+            onDismiss = { leadSourceId = "" },
+            onSave = { payload ->
+                onReferralAdd(leadSource, payload)
+                leadSourceId = ""
+            },
+        )
+    }
+
+    LaunchedEffect(addRequest) {
+        if (addRequest > 0) {
+            editingSourceId = ""
+            showSourceDialog = true
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        if (searchOpen || query.isNotBlank()) {
+            ModuleSearchField(
+                label = "Search marketing sources",
+                query = query,
+                onQueryChange = { query = it },
+                onClose = {
+                    query = ""
+                    onSearchOpenChange(false)
+                },
+            )
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            MetricCard(
+                modifier = Modifier.weight(1f),
+                label = "Sources",
+                value = sources.size.toString(),
+                accent = OpwBlue,
+            )
+            MetricCard(
+                modifier = Modifier.weight(1f),
+                label = "Converted",
+                value = sources.count { it.text("pitchStatus", "status") == "converted" }.toString(),
+                accent = OpwSuccess,
+            )
+        }
+
+        if (filteredSources.isEmpty()) {
+            EmptyStateCard(
+                title = "No marketing sources",
+                message = "Use the plus button to add a medical shop, clinic, institute, or doctor source.",
+            )
+        } else {
+            filteredSources.forEachIndexed { index, source ->
+                val status = source.text("pitchStatus", "status", fallback = "new")
+                val accent = if (status == "converted") OpwSuccess else moduleAccent(AdminTab.Marketing)
+                MarketingSourceCard(
+                    source = source,
+                    accent = accent,
+                    delayMillis = (index * 90).coerceAtMost(360),
+                    onView = { viewSourceId = source.text("id") },
+                    onEdit = {
+                        editingSourceId = source.text("id")
+                        showSourceDialog = true
+                    },
+                    onDelete = { onDelete(source) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MarketingSourceCard(
+    source: JSONObject,
+    accent: Color,
+    delayMillis: Int,
+    onView: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val shape = RoundedCornerShape(24.dp)
+    val motion = rememberStaffFloatingCardMotion(delayMillis = delayMillis)
+    val status = source.text("pitchStatus", "status", fallback = "new")
+    val sourceName = source.text("name", fallback = "Marketing source")
+    val contactLine = listOf(
+        source.text("doctorName", "contactPerson"),
+        source.text("mobile", "alternateMobile"),
+    ).filter { it.isNotBlank() }.joinToString(" | ").ifBlank { "Contact not added" }
+    val locationLine = listOf(source.text("area"), source.text("city")).filter { it.isNotBlank() }.joinToString(", ")
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .offset(y = motion.lift)
+            .shadow(
+                elevation = motion.elevation,
+                shape = shape,
+                ambientColor = accent.copy(alpha = 0.14f),
+                spotColor = accent.copy(alpha = 0.2f),
+            )
+            .border(1.dp, accent.copy(alpha = 0.14f), shape)
+            .clickable(onClick = onView),
+        shape = shape,
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.97f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = motion.elevation),
+    ) {
+        Column(
+            modifier = Modifier
+                .background(Brush.verticalGradient(listOf(Color.White, accent.copy(alpha = 0.045f))))
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Surface(
+                    color = accent.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    Box(
+                        modifier = Modifier.padding(10.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = sourceName.firstOrNull()?.uppercaseChar()?.toString() ?: "M",
+                            color = accent,
+                            fontWeight = FontWeight.Black,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
+                }
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = sourceName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black,
+                        color = OpwInk,
+                    )
+                    Text(
+                        text = contactLine,
+                        color = OpwSlate,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    if (locationLine.isNotBlank()) {
+                        Text(
+                            text = locationLine,
+                            color = Color(0xFF64748B),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+                StatusChip(
+                    label = marketingStatusLabel(status),
+                    background = accent.copy(alpha = 0.12f),
+                    foreground = accent,
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                StatusChip(
+                    label = marketingTypeLabel(source.text("sourceType")),
+                    background = Color(0xFFEFF7FF),
+                    foreground = OpwBlue,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ModuleIconButton(color = OpwBlue, onClick = onView) {
+                        ViewGlyph(OpwBlue)
+                    }
+                    ModuleIconButton(color = OpwSuccess, onClick = onEdit) {
+                        EditGlyph(OpwSuccess)
+                    }
+                    ModuleIconButton(color = OpwDanger, onClick = onDelete) {
+                        TrashGlyph(OpwDanger)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MarketingSourceFormDialog(
+    source: JSONObject?,
+    onDismiss: () -> Unit,
+    onSave: (String?, JSONObject, PickedUploadFile?) -> Unit,
+) {
+    val context = LocalContext.current
+    val sourceId = source?.text("id").orEmpty()
+    var step by rememberSaveable(sourceId) { mutableStateOf(0) }
+    var sourceType by rememberSaveable(sourceId) { mutableStateOf(source?.text("sourceType").orEmpty().ifBlank { "medical_shop" }) }
+    var name by rememberSaveable(sourceId) { mutableStateOf(source?.text("name").orEmpty()) }
+    var assignedTo by rememberSaveable(sourceId) { mutableStateOf(source?.text("assignedTo", "marketingPerson").orEmpty()) }
+    var contactPerson by rememberSaveable(sourceId) { mutableStateOf(source?.text("contactPerson").orEmpty()) }
+    var doctorName by rememberSaveable(sourceId) { mutableStateOf(source?.text("doctorName").orEmpty()) }
+    var mobile by rememberSaveable(sourceId) { mutableStateOf(source?.text("mobile").orEmpty()) }
+    var alternateMobile by rememberSaveable(sourceId) { mutableStateOf(source?.text("alternateMobile").orEmpty()) }
+    var email by rememberSaveable(sourceId) { mutableStateOf(source?.text("email").orEmpty()) }
+    var area by rememberSaveable(sourceId) { mutableStateOf(source?.text("area").orEmpty()) }
+    var city by rememberSaveable(sourceId) { mutableStateOf(source?.text("city").orEmpty()) }
+    var address by rememberSaveable(sourceId) { mutableStateOf(source?.text("address").orEmpty()) }
+    var visitDate by rememberSaveable(sourceId) { mutableStateOf(source?.text("visitDate").orEmpty()) }
+    var followUpDate by rememberSaveable(sourceId) { mutableStateOf(source?.text("nextFollowUpDate").orEmpty()) }
+    var pitchStatus by rememberSaveable(sourceId) { mutableStateOf(source?.text("pitchStatus", "status").orEmpty().ifBlank { "new" }) }
+    var expectedDailyPatients by rememberSaveable(sourceId) { mutableStateOf(source?.optInt("expectedDailyPatients", 0)?.takeIf { it > 0 }?.toString().orEmpty()) }
+    var notes by rememberSaveable(sourceId) { mutableStateOf(source?.text("notes").orEmpty()) }
+    var pickedPhoto by remember { mutableStateOf<PickedUploadFile?>(null) }
+    var error by rememberSaveable(sourceId) { mutableStateOf("") }
+    var showVisitPicker by rememberSaveable { mutableStateOf(false) }
+    var showFollowUpPicker by rememberSaveable { mutableStateOf(false) }
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            val picked = readPickedUploadFile(context, uri)
+            if (picked == null) {
+                error = "Could not read selected photo."
+            } else if (!picked.mimeType.startsWith("image/", ignoreCase = true)) {
+                error = "Please select an image file."
+            } else {
+                pickedPhoto = picked
+                error = ""
+            }
+        }
+    }
+
+    if (showVisitPicker) {
+        AppointmentDatePickerDialog(
+            selectedDate = visitDate.ifBlank { todayDateKey() },
+            onDismiss = { showVisitPicker = false },
+            onDateSelected = {
+                visitDate = it
+                showVisitPicker = false
+            },
+        )
+    }
+
+    if (showFollowUpPicker) {
+        AppointmentDatePickerDialog(
+            selectedDate = followUpDate.ifBlank { todayDateKey() },
+            onDismiss = { showFollowUpPicker = false },
+            onDateSelected = {
+                followUpDate = it
+                showFollowUpPicker = false
+            },
+        )
+    }
+
+    fun validateStep(): Boolean {
+        error = when {
+            step == 0 && name.trim().length < 2 -> "Source name must be at least 2 characters."
+            step == 1 && mobile.isNotBlank() && normalizePhone(mobile).length != 10 -> "Primary mobile must be 10 digits."
+            step == 1 && alternateMobile.isNotBlank() && normalizePhone(alternateMobile).length != 10 -> "Alternate mobile must be 10 digits."
+            step == 1 && email.isNotBlank() && !Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() -> "Please enter a valid email address."
+            else -> ""
+        }
+        return error.isBlank()
+    }
+
+    OpwBottomSheetDialog(
+        title = if (source == null) "Add Marketing Source" else "Edit Marketing Source",
+        primaryLabel = if (step < 3) "Next" else if (source == null) "Save Source" else "Update Source",
+        onDismiss = onDismiss,
+        onPrimary = {
+            if (!validateStep()) return@OpwBottomSheetDialog
+            if (step < 3) {
+                step += 1
+            } else {
+                onSave(
+                    source?.text("id")?.takeIf { it.isNotBlank() },
+                    JSONObject()
+                        .put("sourceType", sourceType)
+                        .put("name", name.trim())
+                        .put("assignedTo", assignedTo.trim())
+                        .put("contactPerson", contactPerson.trim())
+                        .put("doctorName", doctorName.trim())
+                        .put("mobile", normalizePhone(mobile))
+                        .put("alternateMobile", normalizePhone(alternateMobile))
+                        .put("email", email.trim().lowercase())
+                        .put("area", area.trim())
+                        .put("city", city.trim())
+                        .put("address", address.trim())
+                        .put("visitDate", visitDate.trim())
+                        .put("nextFollowUpDate", followUpDate.trim())
+                        .put("pitchStatus", pitchStatus)
+                        .put("expectedDailyPatients", expectedDailyPatients.toIntOrNull() ?: 0)
+                        .put("notes", notes.trim())
+                        .put("removePhotoIds", "[]"),
+                    pickedPhoto,
+                )
+            }
+        },
+    ) {
+        Text(
+            text = "Part ${step + 1} of 4",
+            color = moduleAccent(AdminTab.Marketing),
+            fontWeight = FontWeight.ExtraBold,
+        )
+        ChoiceChipRow(
+            options = listOf("Source", "Contact", "Visit", "Photos"),
+            selected = listOf("Source", "Contact", "Visit", "Photos")[step],
+            onSelected = { selected -> step = listOf("Source", "Contact", "Visit", "Photos").indexOf(selected).coerceAtLeast(0) },
+        )
+        if (step > 0) {
+            OutlinedButton(
+                onClick = {
+                    step -= 1
+                    error = ""
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Previous")
+            }
+        }
+        if (error.isNotBlank()) {
+            StatusBanner(message = error, tone = BannerTone.Error)
+        }
+
+        when (step) {
+            0 -> {
+                Text("Source Type", fontWeight = FontWeight.Bold, color = OpwInk)
+                ChoiceChipRow(
+                    options = marketingTypeOptions.map { it.second },
+                    selected = marketingTypeLabel(sourceType),
+                    onSelected = { label ->
+                        sourceType = marketingTypeOptions.firstOrNull { it.second == label }?.first ?: "medical_shop"
+                    },
+                )
+                SheetPatientField("Place / Source Name", name, { name = it; error = "" })
+                SheetPatientField("Marketing Person", assignedTo, { assignedTo = it })
+            }
+            1 -> {
+                SheetPatientField("Contact Person", contactPerson, { contactPerson = it })
+                SheetPatientField("Doctor Name", doctorName, { doctorName = it })
+                SheetPatientField("Mobile", mobile, { mobile = it.filter(Char::isDigit); error = "" }, KeyboardType.Phone)
+                SheetPatientField("Alternate Mobile", alternateMobile, { alternateMobile = it.filter(Char::isDigit); error = "" }, KeyboardType.Phone)
+                SheetPatientField("Email", email, { email = it; error = "" }, KeyboardType.Email)
+            }
+            2 -> {
+                SheetPatientField("Area", area, { area = it })
+                SheetPatientField("City", city, { city = it })
+                SheetPickerField("Visit Date", appointmentDateLabel(visitDate), "Pick visit date", onClick = { showVisitPicker = true })
+                SheetPickerField("Next Follow-up", appointmentDateLabel(followUpDate), "Pick follow-up date", onClick = { showFollowUpPicker = true })
+                Text("Pitch Status", fontWeight = FontWeight.Bold, color = OpwInk)
+                ChoiceChipRow(
+                    options = marketingStatusOptions.map { it.second },
+                    selected = marketingStatusLabel(pitchStatus),
+                    onSelected = { label ->
+                        pitchStatus = marketingStatusOptions.firstOrNull { it.second == label }?.first ?: "new"
+                    },
+                )
+                SheetPatientField("Expected Daily Patients", expectedDailyPatients, { expectedDailyPatients = it.filter(Char::isDigit) }, KeyboardType.Number)
+                SheetPatientField("Full Address", address, { address = it }, minLines = 3)
+            }
+            else -> {
+                SheetPatientField("Marketing Notes", notes, { notes = it }, minLines = 4)
+                OutlinedButton(onClick = { photoPicker.launch("image/*") }, modifier = Modifier.fillMaxWidth()) {
+                    Text(pickedPhoto?.name ?: "Choose Visit Photo")
+                }
+                Text(
+                    text = "Photo upload is optional. Existing photos stay saved unless changed from web admin.",
+                    color = Color(0xFF64748B),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MarketingSourceViewDialog(
+    source: JSONObject,
+    token: String?,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onGenerateLead: () -> Unit,
+    onReferralDelete: (JSONObject) -> Unit,
+) {
+    val referrals = source.array("referrals").toJsonObjects().asReversed()
+    val photos = source.array("photos").toJsonObjects()
+
+    OpwBottomSheetDialog(
+        title = source.text("name", fallback = "Marketing Source"),
+        primaryLabel = "Close",
+        onDismiss = onDismiss,
+        onPrimary = onDismiss,
+    ) {
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            StatusChip(marketingTypeLabel(source.text("sourceType")), Color(0xFFE0F2FE), OpwBlue)
+            StatusChip(marketingStatusLabel(source.text("pitchStatus", "status")), Color(0xFFDCFCE7), statusColor(source.text("pitchStatus", "status")))
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = onGenerateLead, modifier = Modifier.weight(1f)) {
+                Text("Generate Lead")
+            }
+            OutlinedButton(onClick = onEdit, modifier = Modifier.weight(1f)) {
+                Text("Edit")
+            }
+            OutlinedButton(onClick = onDelete, modifier = Modifier.weight(1f)) {
+                Text("Delete")
+            }
+        }
+
+        SectionCard(title = "Details") {
+            DetailRow("Contact", source.text("contactPerson", fallback = "Not added"))
+            DetailRow("Doctor", source.text("doctorName", fallback = "Not added"))
+            DetailRow("Mobile", source.text("mobile", "alternateMobile", fallback = "No mobile"))
+            DetailRow("Area", listOf(source.text("area"), source.text("city")).filter { it.isNotBlank() }.joinToString(", ").ifBlank { "Not added" })
+            DetailRow("Visit", appointmentDateLabel(source.text("visitDate")))
+            DetailRow("Follow-up", appointmentDateLabel(source.text("nextFollowUpDate")))
+            DetailRow("Target", "${source.optInt("expectedDailyPatients", 0)} / day")
+            DetailRow("Generated", "${source.optInt("totalGeneratedPatients", 0)} patients")
+            if (source.text("notes").isNotBlank()) {
+                DetailRow("Notes", source.text("notes"))
+            }
+        }
+
+        SectionCard(title = "Lead Data", actionLabel = "Add", onAction = onGenerateLead) {
+            if (referrals.isEmpty()) {
+                InlineEmpty("No lead data generated yet.")
+            } else {
+                referrals.forEach { referral ->
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = OpwMist,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, OpwBorder),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "${referral.optInt("patientCount", 0)} patient(s)",
+                                    color = OpwInk,
+                                    fontWeight = FontWeight.ExtraBold,
+                                )
+                                Text(
+                                    listOf(appointmentDateLabel(referral.text("date")), referral.text("notes"))
+                                        .filter { it.isNotBlank() && it != "Not set" }
+                                        .joinToString(" | "),
+                                    color = Color(0xFF64748B),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            ModuleIconButton(color = OpwDanger, onClick = { onReferralDelete(referral) }) {
+                                TrashGlyph(OpwDanger)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        SectionCard(title = "Visit Photos") {
+            if (photos.isEmpty()) {
+                InlineEmpty("No photos added yet.")
+            } else {
+                photos.forEach { photo ->
+                    MarketingPhotoPreview(photo = photo, token = token)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MarketingLeadDialog(
+    source: JSONObject,
+    onDismiss: () -> Unit,
+    onSave: (JSONObject) -> Unit,
+) {
+    var date by rememberSaveable(source.text("id")) { mutableStateOf(todayDateKey()) }
+    var count by rememberSaveable(source.text("id")) { mutableStateOf("1") }
+    var names by rememberSaveable(source.text("id")) { mutableStateOf("") }
+    var notes by rememberSaveable(source.text("id")) { mutableStateOf("") }
+    var error by rememberSaveable { mutableStateOf("") }
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
+
+    if (showDatePicker) {
+        AppointmentDatePickerDialog(
+            selectedDate = date,
+            onDismiss = { showDatePicker = false },
+            onDateSelected = {
+                date = it
+                showDatePicker = false
+            },
+        )
+    }
+
+    OpwBottomSheetDialog(
+        title = "Generate Lead Data",
+        primaryLabel = "Save Lead",
+        onDismiss = onDismiss,
+        onPrimary = {
+            val parsedCount = count.toIntOrNull()
+            if (parsedCount == null || parsedCount < 0) {
+                error = "Patient count cannot be negative."
+            } else {
+                val patientNames = JSONArray()
+                names.lines().map { it.trim() }.filter { it.isNotBlank() }.forEach { patientNames.put(it) }
+                onSave(
+                    JSONObject()
+                        .put("date", date)
+                        .put("patientCount", parsedCount)
+                        .put("patientNames", patientNames)
+                        .put("notes", notes.trim()),
+                )
+            }
+        },
+    ) {
+        Text(source.text("name", fallback = "Marketing source"), color = OpwInk, fontWeight = FontWeight.ExtraBold)
+        if (error.isNotBlank()) {
+            StatusBanner(message = error, tone = BannerTone.Error)
+        }
+        SheetPickerField("Date", appointmentDateLabel(date), "Pick date", onClick = { showDatePicker = true })
+        SheetPatientField("Patient Count", count, { count = it.filter(Char::isDigit).ifBlank { "0" }; error = "" }, KeyboardType.Number)
+        SheetPatientField("Patient Names", names, { names = it }, minLines = 3)
+        SheetPatientField("Notes", notes, { notes = it }, minLines = 3)
+    }
+}
+
+@Composable
+private fun MarketingPhotoPreview(photo: JSONObject, token: String?) {
+    val imageUrl = remember(photo.text("url")) { absoluteApiAssetUrl(photo.text("url")) }
+    var imageBitmap by remember(imageUrl, token) { mutableStateOf<ImageBitmap?>(null) }
+
+    LaunchedEffect(imageUrl, token) {
+        imageBitmap = if (imageUrl.isBlank()) null else loadProfileImage(imageUrl, token)
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(150.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(OpwMist),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (imageBitmap != null) {
+            Image(
+                bitmap = imageBitmap!!,
+                contentDescription = photo.text("name", fallback = "Visit photo"),
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        } else {
+            Text("Photo", color = Color(0xFF94A3B8), fontWeight = FontWeight.Bold)
+        }
     }
 }
 
@@ -9982,12 +10855,20 @@ private fun MetricCard(
     accent: Color,
 ) {
     val shape = RoundedCornerShape(28.dp)
+    val motion = rememberStaffFloatingCardMotion(delayMillis = (label.length * 45).coerceAtMost(300))
     Card(
         modifier = modifier
+            .offset(y = motion.lift)
+            .shadow(
+                elevation = motion.elevation,
+                shape = shape,
+                ambientColor = accent.copy(alpha = 0.13f),
+                spotColor = accent.copy(alpha = 0.18f),
+            )
             .border(1.dp, Color.White.copy(alpha = 0.86f), shape),
         shape = shape,
-        colors = CardDefaults.cardColors(containerColor = OpwCard),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.97f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = motion.elevation),
     ) {
         Column(
             modifier = Modifier
@@ -10043,13 +10924,22 @@ private fun EmptyStateCard(
     title: String,
     message: String,
 ) {
+    val shape = RoundedCornerShape(30.dp)
+    val motion = rememberStaffFloatingCardMotion(delayMillis = 120)
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.dp, Color(0xFFE5EDF7), RoundedCornerShape(30.dp)),
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = OpwCard),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+            .offset(y = motion.lift)
+            .shadow(
+                elevation = motion.elevation,
+                shape = shape,
+                ambientColor = OpwBlue.copy(alpha = 0.1f),
+                spotColor = OpwSky.copy(alpha = 0.14f),
+            )
+            .border(1.dp, Color(0xFFE5EDF7), shape),
+        shape = shape,
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.97f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = motion.elevation),
     ) {
         Column(
             modifier = Modifier
@@ -10218,6 +11108,7 @@ private fun moduleCount(tab: AdminTab, state: DashboardUiState): Int =
         AdminTab.Services -> state.services.size
         AdminTab.Therapy -> state.therapyResources.size
         AdminTab.Shop -> state.shopOrders.size
+        AdminTab.Marketing -> state.marketingSources.size
         AdminTab.Feedback -> state.feedbackItems.count { !it.optBoolean("isApproved") }
         AdminTab.Jobs -> state.jobRequirements.count {
             it.text("status", fallback = "Active") == "Active" && it.optBoolean("isPublished", true)
@@ -10238,6 +11129,7 @@ private fun adminTabPermissionKey(tab: AdminTab): String? =
         AdminTab.Services -> "services"
         AdminTab.Therapy -> "therapy"
         AdminTab.Shop -> "shop"
+        AdminTab.Marketing -> "marketing"
         AdminTab.Mailbox -> "mailbox"
         AdminTab.Notifications -> null
         AdminTab.Chat -> "chat"
@@ -10282,6 +11174,7 @@ private fun moduleErrorsForTab(tab: AdminTab, state: DashboardUiState): List<Str
         AdminTab.Services -> listOf("services")
         AdminTab.Therapy -> listOf("therapy")
         AdminTab.Shop -> listOf("shop products", "shop orders")
+        AdminTab.Marketing -> listOf("marketing")
         AdminTab.Feedback -> listOf("feedback")
         AdminTab.Jobs -> listOf("job requirements")
         AdminTab.Reports -> listOf("reports")
@@ -10437,6 +11330,34 @@ private fun absoluteProfileImageUrl(value: String): String {
         return trimmed
     }
     return "${StaffApiService.DEFAULT_BASE_URL.trimEnd('/')}/${trimmed.trimStart('/')}"
+}
+
+private fun absoluteApiAssetUrl(value: String): String =
+    absoluteProfileImageUrl(value)
+
+private fun normalizePhone(value: String): String =
+    value.filter(Char::isDigit)
+
+private fun marketingTypeLabel(value: String): String =
+    marketingTypeOptions.firstOrNull { it.first == value.trim() }?.second ?: "Medical Shop"
+
+private fun marketingStatusLabel(value: String): String =
+    marketingStatusOptions.firstOrNull { it.first == value.trim() }?.second ?: "New Lead"
+
+private fun sortMarketingSources(sources: List<JSONObject>): List<JSONObject> {
+    val rank = mapOf(
+        "converted" to 0,
+        "interested" to 1,
+        "follow_up" to 2,
+        "visited" to 3,
+        "new" to 4,
+        "not_interested" to 5,
+    )
+
+    return sources.sortedWith(
+        compareBy<JSONObject> { rank[it.text("pitchStatus", "status", fallback = "new")] ?: 9 }
+            .thenByDescending { it.text("updatedAt", "createdAt") },
+    )
 }
 
 private suspend fun loadProfileImage(url: String, token: String?): ImageBitmap? =

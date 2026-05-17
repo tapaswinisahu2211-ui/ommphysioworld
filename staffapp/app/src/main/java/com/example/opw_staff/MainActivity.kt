@@ -31,12 +31,15 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -93,6 +96,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -100,6 +104,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -107,6 +112,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -134,6 +140,7 @@ import com.example.opw_staff.ui.theme.OpwStaffTheme
 import com.example.opw_staff.ui.theme.OpwSuccess
 import com.example.opw_staff.ui.theme.OpwWarning
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -174,9 +181,9 @@ private enum class AdminTab(val label: String, val adminOnly: Boolean = false) {
     Therapy("Therapy"),
     Shop("Shop"),
     Marketing("Marketing"),
-    Feedback("Feedback", adminOnly = true),
-    Jobs("Job Requirements", adminOnly = true),
-    Reports("Report", adminOnly = true),
+    Feedback("Feedback"),
+    Jobs("Career"),
+    Reports("Report"),
     Mailbox("Mailbox"),
     Notifications("Notifications"),
     Chat("Chat"),
@@ -275,18 +282,18 @@ private fun emptyJobForm() = JobFormState()
 private fun appBackgroundBrush(): Brush =
     Brush.verticalGradient(
         colors = listOf(
-            OpwMist,
-            Color(0xFFF8FBFF),
-            Color.White,
+            Color(0xFFFFFEFA),
+            Color(0xFFF8FCFF),
+            Color(0xFFFFFEFA),
         ),
     )
 
 private fun drawerBrush(): Brush =
-    Brush.linearGradient(
+    Brush.verticalGradient(
         colors = listOf(
-            Color(0xFF071224),
-            Color(0xFF123C7C),
-            OpwBlue,
+            Color(0xFFFFFEFA),
+            Color(0xFFFFFEFA),
+            Color(0xFFF8FCFF),
         ),
     )
 
@@ -370,6 +377,63 @@ private fun rememberStaffFloatingCardMotion(delayMillis: Int = 0): StaffFloating
         lift = lift.value.dp,
         elevation = elevation.value.dp,
     )
+}
+
+@Composable
+private fun StaffPastelBackground() {
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .offset(x = (-92).dp, y = (-112).dp)
+                .size(275.dp)
+                .background(Color(0xFFC7F8D9).copy(alpha = 0.78f), CircleShape),
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .offset(x = 72.dp, y = 82.dp)
+                .size(220.dp)
+                .background(Color(0xFFF3F8C8).copy(alpha = 0.56f), CircleShape),
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .offset(x = (-118).dp, y = 96.dp)
+                .size(210.dp)
+                .background(Color(0xFFD9FBE7).copy(alpha = 0.7f), CircleShape),
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .offset(x = 126.dp)
+                .size(170.dp)
+                .background(Color(0xFFEAF7FF).copy(alpha = 0.76f), CircleShape),
+        )
+    }
+}
+
+@Composable
+private fun OpwLogoMark(
+    modifier: Modifier = Modifier,
+    cornerRadius: Dp = 24.dp,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(cornerRadius),
+        color = Color.White.copy(alpha = 0.96f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, OpwBorder.copy(alpha = 0.7f)),
+        shadowElevation = 4.dp,
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.opw_logo),
+            contentDescription = "Omm Physio World logo",
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(5.dp),
+            contentScale = ContentScale.Fit,
+        )
+    }
 }
 
 @Composable
@@ -458,83 +522,80 @@ private fun StaffAdminApp() {
                     fallback
                 }
 
-            val resolvedAdmin = if (activeSession.user.role == "Admin") {
-                loadOptional("profile", activeSession.user) {
-                    api.getAdminProfile(activeSession.token)
-                }
-            } else {
-                activeSession.user
+            val resolvedAdmin = loadOptional("profile", activeSession.user) {
+                api.getAdminProfile(activeSession.token)
             }
             val isAdmin = resolvedAdmin.role == "Admin"
+            fun canView(tab: AdminTab): Boolean = canOpenAdminTab(resolvedAdmin, tab)
             val snapshot = AdminDashboardSnapshot(
                 admin = resolvedAdmin,
-                users = loadOptional("staff", emptyList()) {
+                users = if (canView(AdminTab.Team)) loadOptional("staff", emptyList()) {
                     api.getUsers(activeSession.token)
-                },
-                applications = loadOptional("applications", emptyList()) {
+                } else emptyList(),
+                applications = if (hasModulePermission(resolvedAdmin, "staff_applications")) loadOptional("applications", emptyList()) {
                     api.getStaffApplications(activeSession.token)
-                },
-                patients = loadOptional("patients", emptyList()) {
+                } else emptyList(),
+                patients = if (canView(AdminTab.Patients) || canView(AdminTab.Notifications)) loadOptional("patients", emptyList()) {
                     api.getPatients(activeSession.token)
-                },
-                archivedPatients = if (isAdmin) {
+                } else emptyList(),
+                archivedPatients = if (isAdmin || hasModulePermission(resolvedAdmin, "archived_patients")) {
                     loadOptional("archived patients", emptyList()) {
                         api.getArchivedPatients(activeSession.token)
                     }
                 } else {
                     emptyList()
                 },
-                appointments = loadOptional("appointments", emptyList()) {
+                appointments = if (canView(AdminTab.Treatment)) loadOptional("appointments", emptyList()) {
                     api.getAppointments(activeSession.token)
-                },
-                mailboxItems = loadOptional("mailbox", emptyList()) {
+                } else emptyList(),
+                mailboxItems = if (canView(AdminTab.Mailbox)) loadOptional("mailbox", emptyList()) {
                     api.getMailbox(activeSession.token)
-                },
-                notificationItems = loadOptional("notifications", emptyList()) {
+                } else emptyList(),
+                notificationItems = if (canView(AdminTab.Notifications)) loadOptional("notifications", emptyList()) {
                     api.getNotificationHistory(activeSession.token)
-                },
-                services = loadOptional("services", emptyList()) {
+                } else emptyList(),
+                services = if (canView(AdminTab.Services) || canView(AdminTab.Therapy) || canView(AdminTab.Patients)) loadOptional("services", emptyList()) {
                     api.getServices(activeSession.token)
-                },
-                therapyResources = loadOptional("therapy", emptyList()) {
+                } else emptyList(),
+                therapyResources = if (canView(AdminTab.Therapy) || canView(AdminTab.Patients)) loadOptional("therapy", emptyList()) {
                     api.getTherapyResources(activeSession.token)
-                },
-                shopProducts = loadOptional("shop products", emptyList()) {
+                } else emptyList(),
+                shopProducts = if (canView(AdminTab.Shop)) loadOptional("shop products", emptyList()) {
                     api.getShopProducts(activeSession.token)
-                },
-                shopOrders = loadOptional("shop orders", emptyList()) {
+                } else emptyList(),
+                shopOrders = if (canView(AdminTab.Shop)) loadOptional("shop orders", emptyList()) {
                     api.getShopOrders(activeSession.token)
-                },
-                marketingSources = loadOptional("marketing", emptyList()) {
+                } else emptyList(),
+                marketingSources = if (canView(AdminTab.Marketing)) loadOptional("marketing", emptyList()) {
                     api.getMarketingSources(activeSession.token)
-                },
-                feedbackItems = if (isAdmin) {
+                } else emptyList(),
+                feedbackItems = if (canView(AdminTab.Feedback)) {
                     loadOptional("feedback", emptyList()) {
                         api.getFeedback(activeSession.token)
                     }
                 } else {
                     emptyList()
                 },
-                jobRequirements = if (isAdmin) {
+                jobRequirements = if (canView(AdminTab.Jobs)) {
                     loadOptional("job requirements", emptyList()) {
                         api.getJobRequirements(activeSession.token)
                     }
                 } else {
                     emptyList()
                 },
-                reports = if (isAdmin) {
+                reports = if (canView(AdminTab.Reports)) {
                     loadOptional("reports", null) {
                         api.getReports(activeSession.token, reportFromDate, reportToDate)
                     }
                 } else {
                     null
                 },
-                chatConversations = loadOptional("chat", emptyList()) {
+                chatConversations = if (canView(AdminTab.Chat)) loadOptional("chat", emptyList()) {
                     api.getChatConversations(activeSession.token)
-                },
-                treatmentTracker = loadOptional("treatment tracker", null) {
+                } else emptyList(),
+                treatmentTracker = if (canView(AdminTab.Treatment)) loadOptional("treatment tracker", null) {
                     api.getTreatmentTracker(activeSession.token)
-                },
+                } else null,
                 moduleErrors = moduleErrors,
             )
             val updatedSession = activeSession.copy(user = snapshot.admin)
@@ -589,6 +650,15 @@ private fun StaffAdminApp() {
             session = storedSession
             route = AppRoute.Dashboard
             refreshDashboard(storedSession, showLoader = true)
+        }
+    }
+
+    LaunchedEffect(route, session?.token) {
+        while (route == AppRoute.Dashboard && session != null) {
+            delay(15_000)
+            session?.let { activeSession ->
+                refreshDashboard(activeSession, showLoader = false)
+            }
         }
     }
 
@@ -684,9 +754,9 @@ private fun StaffAdminApp() {
                 jobForm = emptyJobForm()
                 jobEditingId = ""
                 jobMessage = if (editingId == null) {
-                    "Job requirement posted."
+                    "Career opening posted."
                 } else {
-                    "Job requirement updated."
+                    "Career opening updated."
                 }
                 showMessage(jobMessage)
             } catch (error: ApiException) {
@@ -715,7 +785,7 @@ private fun StaffAdminApp() {
         val activeSession = session ?: return
         val id = item.text("id")
         if (id.isBlank()) {
-            showMessage("Job requirement id is missing.")
+            showMessage("Career opening id is missing.")
             return
         }
 
@@ -750,7 +820,7 @@ private fun StaffAdminApp() {
         val activeSession = session ?: return
         val id = item.text("id")
         if (id.isBlank()) {
-            showMessage("Job requirement id is missing.")
+            showMessage("Career opening id is missing.")
             return
         }
 
@@ -764,7 +834,7 @@ private fun StaffAdminApp() {
                     jobForm = emptyJobForm()
                     jobEditingId = ""
                 }
-                showMessage("Job requirement deleted.")
+                showMessage("Career opening deleted.")
             } catch (error: ApiException) {
                 if (error.statusCode == 401 || error.statusCode == 403) {
                     clearToLogin("Your admin session ended. Please log in again.")
@@ -1985,14 +2055,7 @@ private fun LoadingScreen() {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(76.dp)
-                    .background(Brush.linearGradient(listOf(OpwBlue, OpwAqua)), RoundedCornerShape(28.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("OPW", color = Color.White, fontWeight = FontWeight.ExtraBold)
-            }
+            OpwLogoMark(modifier = Modifier.size(82.dp), cornerRadius = 28.dp)
             CircularProgressIndicator(color = OpwBlue)
             Text(
                 text = "Preparing OPW staff workspace",
@@ -2018,13 +2081,10 @@ private fun LoginScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Color(0xFFE8F2FF), Color(0xFFF8FBFF), Color(0xFFFFFFFF)),
-                ),
-            ),
+            .background(appBackgroundBrush()),
         contentAlignment = Alignment.Center,
     ) {
+        StaffPastelBackground()
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2044,14 +2104,7 @@ private fun LoginScreen(
                     .padding(horizontal = 22.dp, vertical = 26.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(68.dp)
-                        .background(Brush.linearGradient(listOf(OpwBlue, OpwAqua)), RoundedCornerShape(24.dp)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("OPW", color = Color.White, fontWeight = FontWeight.ExtraBold)
-                }
+                OpwLogoMark(modifier = Modifier.size(76.dp), cornerRadius = 24.dp)
                 Text(
                     text = "OPW Staff Admin",
                     style = MaterialTheme.typography.headlineMedium,
@@ -2095,14 +2148,6 @@ private fun LoginScreen(
                         imeAction = ImeAction.Done,
                     ),
                 )
-
-                OutlinedButton(
-                    onClick = onTestApi,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !loading && !testLoading,
-                ) {
-                    Text(if (testLoading) "Testing API..." else "Test API")
-                }
 
                 Button(
                     onClick = { onLogin(email, password) },
@@ -2223,7 +2268,7 @@ private fun DashboardScreen(
         AdminTab.Marketing,
         AdminTab.Jobs,
         AdminTab.Team,
-    )
+    ) && canAddAdminTab(currentUser, activeTab)
     val activeAdmins = state.users.count { it.role == "Admin" }
     val activeStaff = state.users.count { it.role != "Admin" && it.status != "Inactive" }
     val unreadMailbox = state.mailboxItems.count { !it.optBoolean("isRead") }
@@ -2249,55 +2294,43 @@ private fun DashboardScreen(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(304.dp),
+                drawerShape = RoundedCornerShape(0.dp),
                 drawerContainerColor = Color.Transparent,
+                windowInsets = WindowInsets(0.dp),
             ) {
-                Column(
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .background(drawerBrush())
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                        .fillMaxSize()
+                        .background(drawerBrush()),
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(30.dp),
-                        color = Color.White.copy(alpha = 0.08f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f)),
+                    StaffPastelBackground()
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 18.dp, vertical = 22.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(52.dp)
-                                    .background(
-                                        Brush.linearGradient(listOf(OpwSky, OpwAqua)),
-                                        RoundedCornerShape(18.dp),
-                                    ),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = "OPW",
-                                    color = OpwNavy,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    style = MaterialTheme.typography.labelLarge,
-                                )
-                            }
+                            OpwLogoMark(modifier = Modifier.size(58.dp), cornerRadius = 18.dp)
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Omm Physio World",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.ExtraBold,
+                                    text = currentUser?.name?.takeIf { it.isNotBlank() } ?: "Omm Physio World",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = OpwInk,
+                                    fontWeight = FontWeight.Black,
                                 )
                                 Text(
-                                    text = if (isAdmin) "Admin Suite" else "Staff Suite",
-                                    color = Color.White.copy(alpha = 0.58f),
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    text = if (isAdmin) "Admin account" else "Staff account",
+                                    color = OpwSlate,
+                                    style = MaterialTheme.typography.bodyLarge,
                                 )
                             }
                             DrawerProfileButton(
@@ -2309,93 +2342,112 @@ private fun DashboardScreen(
                                 },
                             )
                         }
-                    }
 
-                    Text(
-                        text = "WORKSPACE",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = Color.White.copy(alpha = 0.38f),
-                        modifier = Modifier.padding(top = 10.dp, start = 8.dp),
-                    )
-                    visibleTabs.forEach { tab ->
-                        val accent = moduleAccent(tab)
+                        Spacer(modifier = Modifier.height(10.dp))
+                        visibleTabs.forEach { tab ->
+                            val accent = moduleAccent(tab)
+                            NavigationDrawerItem(
+                                label = {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(18.dp),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(if (activeTab == tab) 10.dp else 8.dp)
+                                                        .background(accent, CircleShape),
+                                                )
+                                            }
+                                            Text(
+                                                text = tab.label,
+                                                fontWeight = FontWeight.Black,
+                                                style = MaterialTheme.typography.titleMedium,
+                                            )
+                                        }
+                                        val count = moduleCount(tab, state)
+                                        if (count > 0) {
+                                            StatusChip(
+                                                label = count.toString(),
+                                                background = accent.copy(alpha = 0.12f),
+                                                foreground = accent,
+                                            )
+                                        }
+                                    }
+                                },
+                                selected = activeTab == tab,
+                                shape = RoundedCornerShape(14.dp),
+                                colors = NavigationDrawerItemDefaults.colors(
+                                    selectedContainerColor = Color(0xFFDDFBEA),
+                                    selectedTextColor = OpwBlue,
+                                    unselectedContainerColor = Color.Transparent,
+                                    unselectedTextColor = OpwInk,
+                                ),
+                                onClick = {
+                                    onTabSelected(tab)
+                                    scope.launch { drawerState.close() }
+                                },
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        DividerLine()
                         NavigationDrawerItem(
                             label = {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
+                                    Box(
+                                        modifier = Modifier
+                                            .size(18.dp),
+                                        contentAlignment = Alignment.Center,
                                     ) {
                                         Box(
                                             modifier = Modifier
-                                                .size(10.dp)
-                                                .background(accent, CircleShape),
-                                        )
-                                        Text(
-                                            text = tab.label,
-                                            fontWeight = FontWeight.SemiBold,
+                                                .size(9.dp)
+                                                .background(OpwDanger, CircleShape),
                                         )
                                     }
-                                    val count = moduleCount(tab, state)
-                                    if (count > 0) {
-                                        StatusChip(
-                                            label = count.toString(),
-                                            background = Color.White.copy(alpha = 0.12f),
-                                            foreground = Color.White.copy(alpha = 0.84f),
-                                        )
-                                    }
+                                    Text(
+                                        "Logout",
+                                        fontWeight = FontWeight.Black,
+                                        style = MaterialTheme.typography.titleMedium,
+                                    )
                                 }
                             },
-                            selected = activeTab == tab,
+                            selected = false,
+                            shape = RoundedCornerShape(14.dp),
                             colors = NavigationDrawerItemDefaults.colors(
-                                selectedContainerColor = Color.White,
-                                selectedTextColor = OpwInk,
+                                selectedContainerColor = Color(0xFFFFE4E6),
+                                selectedTextColor = OpwDanger,
                                 unselectedContainerColor = Color.Transparent,
-                                unselectedTextColor = Color.White.copy(alpha = 0.72f),
+                                unselectedTextColor = OpwDanger,
                             ),
                             onClick = {
-                                onTabSelected(tab)
                                 scope.launch { drawerState.close() }
+                                onLogout()
                             },
                         )
+                        Spacer(modifier = Modifier.height(22.dp))
+                        Text(
+                            text = "Check our website",
+                            modifier = Modifier.fillMaxWidth(),
+                            color = OpwBlue,
+                            fontWeight = FontWeight.Black,
+                            style = MaterialTheme.typography.titleMedium,
+                            textAlign = TextAlign.Center,
+                        )
                     }
-
-                    Text(
-                        text = "ACCOUNT",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = Color.White.copy(alpha = 0.38f),
-                        modifier = Modifier.padding(top = 10.dp, start = 8.dp),
-                    )
-                    NavigationDrawerItem(
-                        label = {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .background(OpwDanger, CircleShape),
-                                )
-                                Text("Logout", fontWeight = FontWeight.SemiBold)
-                            }
-                        },
-                        selected = false,
-                        colors = NavigationDrawerItemDefaults.colors(
-                            selectedContainerColor = Color.White,
-                            selectedTextColor = OpwInk,
-                            unselectedContainerColor = Color.Transparent,
-                            unselectedTextColor = Color.White.copy(alpha = 0.72f),
-                        ),
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            onLogout()
-                        },
-                    )
                 }
             }
         },
@@ -2405,6 +2457,7 @@ private fun DashboardScreen(
                 .fillMaxSize()
                 .background(appBackgroundBrush()),
         ) {
+            StaffPastelBackground()
             Scaffold(containerColor = Color.Transparent) { innerPadding ->
                 Column(
                     modifier = Modifier
@@ -2721,8 +2774,8 @@ private fun DrawerProfileButton(
 ) {
     Surface(
         shape = CircleShape,
-        color = Color.White.copy(alpha = 0.12f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.22f)),
+        color = Color.White.copy(alpha = 0.94f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD9EAF8)),
         shadowElevation = 2.dp,
         onClick = onClick,
     ) {
@@ -2735,11 +2788,11 @@ private fun DrawerProfileButton(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .size(20.dp)
-                    .background(OpwAqua, CircleShape)
-                    .border(2.dp, Color(0xFF081B2E), CircleShape),
+                    .background(OpwBlue, CircleShape)
+                    .border(2.dp, Color.White, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                TinyEditGlyph(Color(0xFF062033))
+                TinyEditGlyph(Color.White)
             }
         }
     }
@@ -3089,21 +3142,44 @@ private fun AddCircleButton(
 ) {
     Surface(
         shape = CircleShape,
-        color = OpwBlue,
-        shadowElevation = 3.dp,
+        color = Color.White.copy(alpha = 0.96f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, OpwBlue.copy(alpha = 0.16f)),
+        shadowElevation = 6.dp,
         onClick = onClick,
     ) {
         Box(
-            modifier = Modifier.size(44.dp),
+            modifier = Modifier.size(46.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = "+",
-                color = Color.White,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.ExtraBold,
-            )
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .background(OpwBlue.copy(alpha = 0.1f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                PlusGlyph(OpwBlue)
+            }
         }
+    }
+}
+
+@Composable
+private fun PlusGlyph(color: Color) {
+    Canvas(modifier = Modifier.size(18.dp)) {
+        drawLine(
+            color,
+            Offset(size.width / 2f, 3.dp.toPx()),
+            Offset(size.width / 2f, size.height - 3.dp.toPx()),
+            strokeWidth = 3.dp.toPx(),
+            cap = StrokeCap.Round,
+        )
+        drawLine(
+            color,
+            Offset(3.dp.toPx(), size.height / 2f),
+            Offset(size.width - 3.dp.toPx(), size.height / 2f),
+            strokeWidth = 3.dp.toPx(),
+            cap = StrokeCap.Round,
+        )
     }
 }
 
@@ -3337,26 +3413,6 @@ private fun BackGlyph(color: Color) {
 }
 
 @Composable
-private fun ForwardGlyph(color: Color) {
-    Canvas(modifier = Modifier.size(22.dp)) {
-        drawLine(
-            color = color,
-            start = Offset(8.dp.toPx(), 4.dp.toPx()),
-            end = Offset(15.dp.toPx(), 11.dp.toPx()),
-            strokeWidth = 2.8.dp.toPx(),
-            cap = StrokeCap.Round,
-        )
-        drawLine(
-            color = color,
-            start = Offset(15.dp.toPx(), 11.dp.toPx()),
-            end = Offset(8.dp.toPx(), 18.dp.toPx()),
-            strokeWidth = 2.8.dp.toPx(),
-            cap = StrokeCap.Round,
-        )
-    }
-}
-
-@Composable
 private fun CloseGlyph(color: Color) {
     Canvas(modifier = Modifier.size(20.dp)) {
         drawLine(
@@ -3480,13 +3536,14 @@ private fun PremiumPanel(
 private fun AccentOrb(
     accent: Color,
     label: String,
+    size: Dp = 46.dp,
 ) {
     Box(
         modifier = Modifier
-            .size(46.dp)
+            .size(size)
             .background(
                 Brush.linearGradient(listOf(accent.copy(alpha = 0.95f), accent.copy(alpha = 0.55f))),
-                RoundedCornerShape(17.dp),
+                CircleShape,
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -3939,7 +3996,6 @@ private fun DashboardActivityCard(
                 Text(title, color = OpwInk, fontWeight = FontWeight.ExtraBold)
                 Text(subtitle, color = Color(0xFF64748B), style = MaterialTheme.typography.bodySmall)
             }
-            ForwardGlyph(color = accent)
         }
     }
 }
@@ -3962,11 +4018,9 @@ private fun TeamTab(
     var query by rememberSaveable { mutableStateOf("") }
     var editingUserId by rememberSaveable { mutableStateOf("") }
     var permissionUserId by rememberSaveable { mutableStateOf("") }
-    var deletingUserId by rememberSaveable { mutableStateOf("") }
     var showStaffDialog by rememberSaveable { mutableStateOf(false) }
     val editingUser = users.firstOrNull { it.id == editingUserId }
     val permissionUser = users.firstOrNull { it.id == permissionUserId }
-    val deletingUser = users.firstOrNull { it.id == deletingUserId }
     val filteredUsers = remember(users, query) {
         val keyword = query.trim().lowercase()
         if (keyword.isBlank()) {
@@ -4025,18 +4079,6 @@ private fun TeamTab(
         )
     }
 
-    if (deletingUser != null) {
-        ConfirmDeleteDialog(
-            title = "Delete Staff",
-            message = "Delete ${deletingUser.name}? This removes the staff account from the admin panel.",
-            onDismiss = { deletingUserId = "" },
-            onConfirm = {
-                onDelete(deletingUser)
-                deletingUserId = ""
-            },
-        )
-    }
-
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         if (searchOpen || query.isNotBlank()) {
             ModuleSearchField(
@@ -4074,7 +4116,7 @@ private fun TeamTab(
                     onToggleStatus = {
                         onStatusChange(user, if (user.status == "Inactive") "Active" else "Inactive")
                     },
-                    onDelete = { deletingUserId = user.id },
+                    onDelete = { onDelete(user) },
                 )
             }
         }
@@ -4090,25 +4132,23 @@ private fun StaffDirectoryCard(
     onDelete: () -> Unit,
 ) {
     val active = user.status != "Inactive"
-    SimpleModuleCard(
+    SwipeDeleteModuleCard(
         title = user.name.ifBlank { "Staff member" },
         subtitle = listOf(
             user.mobile.ifBlank { "No mobile" },
             user.workType.ifBlank { user.role.ifBlank { "Staff" } },
         ).joinToString(" | "),
         accent = if (active) OpwSuccess else OpwDanger,
+        deleteTitle = "Delete Staff",
+        deleteMessage = "Delete ${user.name.ifBlank { "this staff member" }}? This removes the staff account from the admin panel.",
+        onClick = onEdit,
+        onDelete = onDelete,
         actions = {
-            ModuleIconButton(color = OpwSuccess, onClick = onEdit) {
-                EditGlyph(OpwSuccess)
-            }
             ModuleIconButton(color = OpwBlue, onClick = onPermissions) {
                 PermissionGlyph(OpwBlue)
             }
             ModuleIconButton(color = if (active) OpwWarning else OpwSuccess, onClick = onToggleStatus) {
                 PowerGlyph(if (active) OpwWarning else OpwSuccess)
-            }
-            ModuleIconButton(color = OpwDanger, onClick = onDelete) {
-                TrashGlyph(OpwDanger)
             }
         },
     )
@@ -4544,29 +4584,14 @@ private fun CompactPatientCard(
         )
     }
 
+    val shape = RoundedCornerShape(24.dp)
+
     Box(modifier = Modifier.fillMaxWidth()) {
-        Surface(
+        DecoratedSwipeReveal(
             modifier = Modifier.matchParentSize(),
-            shape = RoundedCornerShape(28.dp),
-            color = OpwWarning.copy(alpha = 0.11f),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 18.dp),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ArchiveGlyph(OpwWarning)
-                Spacer(modifier = Modifier.size(8.dp))
-                Text(
-                    text = "Archive",
-                    color = OpwWarning,
-                    fontWeight = FontWeight.ExtraBold,
-                    style = MaterialTheme.typography.labelLarge,
-                )
-            }
-        }
+            shape = shape,
+            color = OpwWarning,
+        ) { ArchiveGlyph(OpwWarning) }
 
         Card(
             modifier = Modifier
@@ -4591,29 +4616,50 @@ private fun CompactPatientCard(
                     )
                 }
                 .clickable(onClick = onView)
-                .border(1.dp, Color(0xFFE5EDF7), RoundedCornerShape(28.dp)),
-            shape = RoundedCornerShape(28.dp),
-            colors = CardDefaults.cardColors(containerColor = OpwCard),
+                .border(1.dp, OpwBlue.copy(alpha = 0.14f), shape),
+            shape = shape,
+            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.98f)),
             elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Brush.linearGradient(listOf(Color.White, Color(0xFFF9FCFF), OpwBlue.copy(alpha = 0.055f))))
+                    .padding(horizontal = 13.dp, vertical = 12.dp),
             ) {
-                AccentOrb(accent = OpwBlue, label = patient.text("name", fallback = "P"))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = patient.text("name", fallback = "Patient"),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = OpwInk,
-                    )
-                    Text(
-                        text = patient.text("mobile", fallback = "Mobile not provided"),
-                        color = Color(0xFF64748B),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 28.dp, y = (-32).dp)
+                        .size(88.dp)
+                        .background(OpwBlue.copy(alpha = 0.09f), CircleShape),
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .offset(x = (-34).dp, y = 28.dp)
+                        .size(68.dp)
+                        .background(OpwAqua.copy(alpha = 0.07f), CircleShape),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AccentOrb(accent = OpwBlue, label = patient.text("name", fallback = "P"), size = 48.dp)
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(
+                            text = patient.text("name", fallback = "Patient"),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Black,
+                            color = OpwInk,
+                        )
+                        Text(
+                            text = patient.text("mobile", fallback = "Mobile not provided"),
+                            color = OpwSlate,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
             }
         }
@@ -7437,8 +7483,6 @@ private fun NotificationsTab(
     var showDialog by rememberSaveable { mutableStateOf(false) }
     var statusFilter by rememberSaveable { mutableStateOf("all") }
     var sortMode by rememberSaveable { mutableStateOf("Unread first") }
-    var selectedIds by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
-    var deleteIds by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
     val readCount = remember(items) { items.count { it.text("readAt").isNotBlank() } }
     val unreadCount = remember(items, readCount) { (items.size - readCount).coerceAtLeast(0) }
     val filteredItems = remember(items, query, statusFilter, sortMode) {
@@ -7468,13 +7512,6 @@ private fun NotificationsTab(
             )
         }
     }
-    val allVisibleSelected = filteredItems.isNotEmpty() &&
-        filteredItems.all { item -> item.text("id") in selectedIds }
-    val deleteLabel = if (deleteIds.size == 1) {
-        "this notification"
-    } else {
-        "${deleteIds.size} notifications"
-    }
 
     LaunchedEffect(addRequest) {
         if (addRequest > 0) {
@@ -7489,19 +7526,6 @@ private fun NotificationsTab(
             onSend = { title, body, audience, patientIds ->
                 onSend(title, body, audience, patientIds)
                 showDialog = false
-            },
-        )
-    }
-
-    if (deleteIds.isNotEmpty()) {
-        ConfirmDeleteDialog(
-            title = "Delete Notification History",
-            message = "Delete $deleteLabel from history? This cannot be undone.",
-            onDismiss = { deleteIds = emptyList() },
-            onConfirm = {
-                onDelete(deleteIds)
-                selectedIds = selectedIds.filterNot { it in deleteIds }
-                deleteIds = emptyList()
             },
         )
     }
@@ -7538,29 +7562,6 @@ private fun NotificationsTab(
             selected = sortMode,
             onSelected = { sortMode = it },
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = {
-                    val visibleIds = filteredItems.map { it.text("id") }.filter { it.isNotBlank() }
-                    selectedIds = if (allVisibleSelected) {
-                        selectedIds.filterNot { it in visibleIds }
-                    } else {
-                        (selectedIds + visibleIds).distinct()
-                    }
-                },
-                enabled = filteredItems.isNotEmpty(),
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(if (allVisibleSelected) "Clear Visible" else "Select Visible")
-            }
-            Button(
-                onClick = { deleteIds = selectedIds },
-                enabled = selectedIds.isNotEmpty(),
-                modifier = Modifier.weight(1f),
-            ) {
-                Text("Delete (${selectedIds.size})")
-            }
-        }
 
         if (filteredItems.isEmpty()) {
             EmptyStateCard(
@@ -7571,41 +7572,31 @@ private fun NotificationsTab(
             filteredItems.forEach { item ->
                 val read = item.text("readAt").isNotBlank()
                 val id = item.text("id")
-                val selected = id in selectedIds
-                RecordCard(
+                val accent = if (read) Color(0xFF64748B) else moduleAccent(AdminTab.Notifications)
+                SwipeDeleteModuleCard(
                     title = item.text("title", fallback = "Notification"),
-                    subtitle = item.text("patientName", fallback = "Patient update"),
-                    status = if (read) "Read" else "Unread",
-                    statusColor = if (read) Color(0xFF64748B) else moduleAccent(AdminTab.Notifications),
-                    rows = listOf(
-                        "Message" to item.text("body"),
-                        "Category" to item.text("category", fallback = "custom"),
-                        "Scheduled" to formatTimestamp(item.text("scheduledFor", fallback = item.text("createdAt"))),
-                        "Sender" to item.text("createdByLabel", fallback = "OPW"),
-                    ),
+                    subtitle = listOf(
+                        if (read) "Read" else "Unread",
+                        item.text("patientName", fallback = item.text("audienceLabel", fallback = "Patient update")),
+                        formatTimestamp(item.text("scheduledFor", fallback = item.text("createdAt"))),
+                    ).filter { it.isNotBlank() }.joinToString(" | "),
+                    accent = accent,
+                    deleteTitle = "Delete Notification",
+                    deleteMessage = "Delete ${item.text("title", fallback = "this notification")}? This cannot be undone.",
+                    onClick = {},
+                    onDelete = {
+                        if (id.isNotBlank()) {
+                            onDelete(listOf(id))
+                        }
+                    },
+                    actions = {
+                        StatusChip(
+                            label = item.text("category", fallback = "custom"),
+                            background = accent.copy(alpha = 0.1f),
+                            foreground = accent,
+                        )
+                    },
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = {
-                            selectedIds = if (selected) {
-                                selectedIds.filterNot { it == id }
-                            } else if (id.isNotBlank()) {
-                                selectedIds + id
-                            } else {
-                                selectedIds
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text(if (selected) "Unselect" else "Select")
-                    }
-                    OutlinedButton(
-                        onClick = { if (id.isNotBlank()) deleteIds = listOf(id) },
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text("Delete", color = OpwDanger)
-                    }
-                }
             }
         }
     }
@@ -7972,28 +7963,184 @@ private fun ServicesTab(
                 message = "Clinic services managed on the web admin will appear here.",
             )
         } else {
-            filteredServices.forEach { service ->
-                SimpleModuleCard(
-                    title = service.text("name", fallback = "Service"),
-                    subtitle = "Clinic service",
-                    accent = OpwBlue,
-                    actions = {
-                        ModuleIconButton(
-                            color = OpwSuccess,
-                            onClick = {
-                                editingServiceId = service.text("id")
-                                showServiceDialog = true
-                            },
-                        ) {
-                            EditGlyph(OpwSuccess)
-                        }
-                        ModuleIconButton(color = OpwDanger, onClick = { onDelete(service) }) {
-                            TrashGlyph(OpwDanger)
-                        }
+            filteredServices.forEachIndexed { index, service ->
+                ServiceListCard(
+                    service = service,
+                    delayMillis = (index * 80).coerceAtMost(320),
+                    onClick = {
+                        editingServiceId = service.text("id")
+                        showServiceDialog = true
                     },
+                    onDelete = { onDelete(service) },
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ServiceListCard(
+    service: JSONObject,
+    delayMillis: Int,
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    val title = service.text("name", fallback = "Service")
+    val accent = OpwBlue
+    val shape = RoundedCornerShape(24.dp)
+    val motion = rememberStaffFloatingCardMotion(delayMillis = delayMillis)
+    var dragOffset by remember { mutableStateOf(0f) }
+    var confirmDelete by rememberSaveable(service.text("id")) { mutableStateOf(false) }
+    val thresholdPx = with(LocalDensity.current) { 88.dp.toPx() }
+
+    if (confirmDelete) {
+        ConfirmDeleteDialog(
+            title = "Delete Service",
+            message = "Delete $title? This cannot be undone.",
+            onDismiss = { confirmDelete = false },
+            onConfirm = {
+                confirmDelete = false
+                onDelete()
+            },
+        )
+    }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        DecoratedSwipeReveal(
+            modifier = Modifier.matchParentSize(),
+            shape = shape,
+            color = OpwDanger,
+        ) { TrashGlyph(OpwDanger) }
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset(y = motion.lift)
+                .offset { IntOffset(dragOffset.roundToInt(), 0) }
+                .pointerInput(service.text("id"), thresholdPx) {
+                    detectHorizontalDragGestures(
+                        onDragCancel = { dragOffset = 0f },
+                        onDragEnd = {
+                            if (dragOffset <= -thresholdPx) {
+                                confirmDelete = true
+                            }
+                            dragOffset = 0f
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
+                            val nextOffset = (dragOffset + dragAmount).coerceIn(-thresholdPx * 1.35f, 0f)
+                            if (nextOffset != dragOffset) {
+                                change.consume()
+                            }
+                            dragOffset = nextOffset
+                        },
+                    )
+                }
+                .shadow(
+                    elevation = motion.elevation + 2.dp,
+                    shape = shape,
+                    ambientColor = OpwSky.copy(alpha = 0.18f),
+                    spotColor = OpwBlue.copy(alpha = 0.2f),
+                )
+                .border(1.dp, Color(0xFFD8EAFB), shape)
+                .clickable(onClick = onClick),
+            shape = shape,
+            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.98f)),
+            elevation = CardDefaults.cardElevation(defaultElevation = motion.elevation),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        Brush.linearGradient(
+                            listOf(
+                                Color.White,
+                                Color(0xFFF7FCFF),
+                                Color(0xFFEFF8FF),
+                            ),
+                        ),
+                    )
+                    .padding(horizontal = 13.dp, vertical = 12.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 28.dp, y = (-32).dp)
+                        .size(88.dp)
+                        .background(OpwSky.copy(alpha = 0.13f), CircleShape),
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .offset(x = (-34).dp, y = 28.dp)
+                        .size(68.dp)
+                        .background(OpwAqua.copy(alpha = 0.1f), CircleShape),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFFEAF3FF),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, OpwBlue.copy(alpha = 0.12f)),
+                        shadowElevation = 2.dp,
+                    ) {
+                        Box(
+                            modifier = Modifier.size(48.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            StethoscopeMark(OpwBlue)
+                        }
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            text = title,
+                            color = OpwInk,
+                            fontWeight = FontWeight.Black,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            text = "Clinic service",
+                            color = OpwSlate,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StethoscopeMark(color: Color) {
+    Canvas(modifier = Modifier.size(30.dp)) {
+        val stroke = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+        drawArc(
+            color = color,
+            startAngle = 200f,
+            sweepAngle = 140f,
+            useCenter = false,
+            topLeft = Offset(5.dp.toPx(), 4.dp.toPx()),
+            size = Size(20.dp.toPx(), 18.dp.toPx()),
+            style = stroke,
+        )
+        drawLine(
+            color,
+            Offset(15.dp.toPx(), 20.dp.toPx()),
+            Offset(15.dp.toPx(), 24.dp.toPx()),
+            strokeWidth = 3.dp.toPx(),
+            cap = StrokeCap.Round,
+        )
+        drawCircle(
+            color = color,
+            radius = 4.dp.toPx(),
+            center = Offset(22.dp.toPx(), 23.dp.toPx()),
+            style = stroke,
+        )
     }
 }
 
@@ -8043,12 +8190,14 @@ private fun SimpleModuleCard(
     title: String,
     subtitle: String,
     accent: Color,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit,
 ) {
-    val shape = RoundedCornerShape(26.dp)
+    val shape = RoundedCornerShape(24.dp)
     val motion = rememberStaffFloatingCardMotion(delayMillis = (title.length * 19).coerceAtMost(260))
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .offset(y = motion.lift)
             .shadow(
@@ -8057,40 +8206,156 @@ private fun SimpleModuleCard(
                 ambientColor = accent.copy(alpha = 0.12f),
                 spotColor = accent.copy(alpha = 0.16f),
             )
-            .border(1.dp, accent.copy(alpha = 0.13f), shape),
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .border(1.dp, accent.copy(alpha = 0.14f), shape),
         shape = shape,
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.97f)),
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.98f)),
         elevation = CardDefaults.cardElevation(defaultElevation = motion.elevation),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            Color.White,
+                            Color(0xFFF9FCFF),
+                            accent.copy(alpha = 0.055f),
+                        ),
+                    ),
+                )
+                .padding(horizontal = 13.dp, vertical = 12.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 28.dp, y = (-32).dp)
+                    .size(88.dp)
+                    .background(accent.copy(alpha = 0.09f), CircleShape),
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .offset(x = (-34).dp, y = 28.dp)
+                    .size(68.dp)
+                    .background(OpwAqua.copy(alpha = 0.07f), CircleShape),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AccentOrb(accent = accent, label = title, size = 48.dp)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black,
+                        color = OpwInk,
+                    )
+                    Text(
+                        text = subtitle,
+                        color = OpwSlate,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2,
+                    )
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    actions()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DecoratedSwipeReveal(
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(24.dp),
+    color: Color,
+    icon: @Composable () -> Unit,
+) {
+    Surface(
+        modifier = modifier,
+        shape = shape,
+        color = color.copy(alpha = 0.1f),
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Color.White, accent.copy(alpha = 0.035f))))
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                .fillMaxSize()
+                .padding(horizontal = 18.dp),
+            horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AccentOrb(accent = accent, label = title)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = OpwInk,
-                )
-                Text(
-                    text = subtitle,
-                    color = Color(0xFF64748B),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                actions()
-            }
+            icon()
         }
+    }
+}
+
+@Composable
+private fun SwipeDeleteModuleCard(
+    title: String,
+    subtitle: String,
+    accent: Color,
+    deleteTitle: String,
+    deleteMessage: String,
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+    actions: @Composable RowScope.() -> Unit = {},
+) {
+    var dragOffset by remember { mutableStateOf(0f) }
+    var confirmDelete by rememberSaveable(title, subtitle) { mutableStateOf(false) }
+    val thresholdPx = with(LocalDensity.current) { 88.dp.toPx() }
+
+    if (confirmDelete) {
+        ConfirmDeleteDialog(
+            title = deleteTitle,
+            message = deleteMessage,
+            onDismiss = { confirmDelete = false },
+            onConfirm = {
+                confirmDelete = false
+                onDelete()
+            },
+        )
+    }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        DecoratedSwipeReveal(
+            modifier = Modifier.matchParentSize(),
+            shape = RoundedCornerShape(26.dp),
+            color = OpwDanger,
+        ) { TrashGlyph(OpwDanger) }
+
+        SimpleModuleCard(
+            title = title,
+            subtitle = subtitle,
+            accent = accent,
+            modifier = Modifier
+                .offset { IntOffset(dragOffset.roundToInt(), 0) }
+                .pointerInput(title, subtitle, thresholdPx) {
+                    detectHorizontalDragGestures(
+                        onDragCancel = { dragOffset = 0f },
+                        onDragEnd = {
+                            if (dragOffset <= -thresholdPx) {
+                                confirmDelete = true
+                            }
+                            dragOffset = 0f
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
+                            val nextOffset = (dragOffset + dragAmount).coerceIn(-thresholdPx * 1.35f, 0f)
+                            if (nextOffset != dragOffset) {
+                                change.consume()
+                            }
+                            dragOffset = nextOffset
+                        },
+                    )
+                },
+            onClick = onClick,
+            actions = actions,
+        )
     }
 }
 
@@ -8164,24 +8429,17 @@ private fun TherapyTab(
             )
         } else {
             filteredResources.forEach { resource ->
-                SimpleModuleCard(
+                SwipeDeleteModuleCard(
                     title = resource.text("title", fallback = "Therapy resource"),
                     subtitle = resource.text("serviceName", fallback = resource.text("fileName", fallback = "Therapy file")),
                     accent = OpwAqua,
-                    actions = {
-                        ModuleIconButton(
-                            color = OpwSuccess,
-                            onClick = {
-                                editingResourceId = resource.text("id")
-                                showTherapyDialog = true
-                            },
-                        ) {
-                            EditGlyph(OpwSuccess)
-                        }
-                        ModuleIconButton(color = OpwDanger, onClick = { onDelete(resource) }) {
-                            TrashGlyph(OpwDanger)
-                        }
+                    deleteTitle = "Delete Therapy File",
+                    deleteMessage = "Delete ${resource.text("title", fallback = "this therapy file")}? This cannot be undone.",
+                    onClick = {
+                        editingResourceId = resource.text("id")
+                        showTherapyDialog = true
                     },
+                    onDelete = { onDelete(resource) },
                 )
             }
         }
@@ -8416,25 +8674,18 @@ private fun ShopTab(
             EmptyStateCard("No products", "Products created from mobile or web admin will appear here.")
         } else {
             filteredProducts.forEach { product ->
-                SimpleModuleCard(
-                title = product.text("name", fallback = "Product"),
+                SwipeDeleteModuleCard(
+                    title = product.text("name", fallback = "Product"),
                     subtitle = "${formatMoney(product.opt("price"))} | Stock ${product.optInt("stockQuantity", 0)}",
                     accent = if (product.optBoolean("isActive", true)) OpwSuccess else Color(0xFF64748B),
-                actions = {
-                        ModuleIconButton(
-                            color = OpwSuccess,
-                            onClick = {
-                                editingProductId = product.text("id")
-                                showProductDialog = true
-                            },
-                        ) {
-                            EditGlyph(OpwSuccess)
-                        }
-                        ModuleIconButton(color = OpwDanger, onClick = { onProductDelete(product) }) {
-                            TrashGlyph(OpwDanger)
-                        }
-                },
-            )
+                    deleteTitle = "Delete Product",
+                    deleteMessage = "Delete ${product.text("name", fallback = "this product")}? This cannot be undone.",
+                    onClick = {
+                        editingProductId = product.text("id")
+                        showProductDialog = true
+                    },
+                    onDelete = { onProductDelete(product) },
+                )
             }
         }
     }
@@ -8682,6 +8933,9 @@ private fun MarketingSourceCard(
 ) {
     val shape = RoundedCornerShape(24.dp)
     val motion = rememberStaffFloatingCardMotion(delayMillis = delayMillis)
+    var dragOffset by remember { mutableStateOf(0f) }
+    var confirmDelete by rememberSaveable(source.text("id")) { mutableStateOf(false) }
+    val thresholdPx = with(LocalDensity.current) { 88.dp.toPx() }
     val status = source.text("pitchStatus", "status", fallback = "new")
     val sourceName = source.text("name", fallback = "Marketing source")
     val contactLine = listOf(
@@ -8690,94 +8944,146 @@ private fun MarketingSourceCard(
     ).filter { it.isNotBlank() }.joinToString(" | ").ifBlank { "Contact not added" }
     val locationLine = listOf(source.text("area"), source.text("city")).filter { it.isNotBlank() }.joinToString(", ")
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .offset(y = motion.lift)
-            .shadow(
-                elevation = motion.elevation,
-                shape = shape,
-                ambientColor = accent.copy(alpha = 0.14f),
-                spotColor = accent.copy(alpha = 0.2f),
-            )
-            .border(1.dp, accent.copy(alpha = 0.14f), shape)
-            .clickable(onClick = onView),
-        shape = shape,
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.97f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = motion.elevation),
-    ) {
-        Column(
+    if (confirmDelete) {
+        ConfirmDeleteDialog(
+            title = "Delete Marketing Source",
+            message = "Delete $sourceName? This cannot be undone.",
+            onDismiss = { confirmDelete = false },
+            onConfirm = {
+                confirmDelete = false
+                onDelete()
+            },
+        )
+    }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        DecoratedSwipeReveal(
+            modifier = Modifier.matchParentSize(),
+            shape = shape,
+            color = OpwDanger,
+        ) { TrashGlyph(OpwDanger) }
+
+        Card(
             modifier = Modifier
-                .background(Brush.verticalGradient(listOf(Color.White, accent.copy(alpha = 0.045f))))
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .fillMaxWidth()
+                .offset(y = motion.lift)
+                .offset { IntOffset(dragOffset.roundToInt(), 0) }
+                .pointerInput(source.text("id"), thresholdPx) {
+                    detectHorizontalDragGestures(
+                        onDragCancel = { dragOffset = 0f },
+                        onDragEnd = {
+                            if (dragOffset <= -thresholdPx) {
+                                confirmDelete = true
+                            }
+                            dragOffset = 0f
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
+                            val nextOffset = (dragOffset + dragAmount).coerceIn(-thresholdPx * 1.35f, 0f)
+                            if (nextOffset != dragOffset) {
+                                change.consume()
+                            }
+                            dragOffset = nextOffset
+                        },
+                    )
+                }
+                .shadow(
+                    elevation = motion.elevation,
+                    shape = shape,
+                    ambientColor = accent.copy(alpha = 0.14f),
+                    spotColor = accent.copy(alpha = 0.2f),
+                )
+                .border(1.dp, accent.copy(alpha = 0.14f), shape)
+                .clickable(onClick = onView),
+            shape = shape,
+            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.97f)),
+            elevation = CardDefaults.cardElevation(defaultElevation = motion.elevation),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.Top,
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Brush.linearGradient(listOf(Color.White, Color(0xFFF9FCFF), accent.copy(alpha = 0.055f))))
+                    .padding(horizontal = 13.dp, vertical = 12.dp),
             ) {
-                Surface(
-                    color = accent.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    Box(
-                        modifier = Modifier.padding(10.dp),
-                        contentAlignment = Alignment.Center,
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 28.dp, y = (-32).dp)
+                        .size(88.dp)
+                        .background(accent.copy(alpha = 0.09f), CircleShape),
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .offset(x = (-34).dp, y = 28.dp)
+                        .size(68.dp)
+                        .background(OpwAqua.copy(alpha = 0.07f), CircleShape),
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            text = sourceName.firstOrNull()?.uppercaseChar()?.toString() ?: "M",
-                            color = accent,
-                            fontWeight = FontWeight.Black,
-                            style = MaterialTheme.typography.titleMedium,
+                        Surface(
+                            color = accent.copy(alpha = 0.12f),
+                            shape = CircleShape,
+                        ) {
+                            Box(
+                                modifier = Modifier.size(48.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = sourceName.firstOrNull()?.uppercaseChar()?.toString() ?: "M",
+                                    color = accent,
+                                    fontWeight = FontWeight.Black,
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                            }
+                        }
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(
+                                text = sourceName,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Black,
+                                color = OpwInk,
+                            )
+                            Text(
+                                text = contactLine,
+                                color = OpwSlate,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            if (locationLine.isNotBlank()) {
+                                Text(
+                                    text = locationLine,
+                                    color = Color(0xFF64748B),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
+                        StatusChip(
+                            label = marketingStatusLabel(status),
+                            background = accent.copy(alpha = 0.12f),
+                            foreground = accent,
                         )
                     }
-                }
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = sourceName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Black,
-                        color = OpwInk,
-                    )
-                    Text(
-                        text = contactLine,
-                        color = OpwSlate,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    if (locationLine.isNotBlank()) {
-                        Text(
-                            text = locationLine,
-                            color = Color(0xFF64748B),
-                            style = MaterialTheme.typography.bodySmall,
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        StatusChip(
+                            label = marketingTypeLabel(source.text("sourceType")),
+                            background = Color(0xFFEFF7FF),
+                            foreground = OpwBlue,
                         )
-                    }
-                }
-                StatusChip(
-                    label = marketingStatusLabel(status),
-                    background = accent.copy(alpha = 0.12f),
-                    foreground = accent,
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                StatusChip(
-                    label = marketingTypeLabel(source.text("sourceType")),
-                    background = Color(0xFFEFF7FF),
-                    foreground = OpwBlue,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ModuleIconButton(color = OpwBlue, onClick = onView) {
-                        ViewGlyph(OpwBlue)
-                    }
-                    ModuleIconButton(color = OpwSuccess, onClick = onEdit) {
-                        EditGlyph(OpwSuccess)
-                    }
-                    ModuleIconButton(color = OpwDanger, onClick = onDelete) {
-                        TrashGlyph(OpwDanger)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ModuleIconButton(color = OpwBlue, onClick = onView) {
+                                ViewGlyph(OpwBlue)
+                            }
+                            ModuleIconButton(color = OpwSuccess, onClick = onEdit) {
+                                EditGlyph(OpwSuccess)
+                            }
+                        }
                     }
                 }
             }
@@ -9321,7 +9627,7 @@ private fun JobRequirementsTab(
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         if (searchOpen || query.isNotBlank()) {
             ModuleSearchField(
-                label = "Search job requirements",
+                label = "Search career openings",
                 query = query,
                 onQueryChange = { query = it },
                 onClose = {
@@ -9340,15 +9646,15 @@ private fun JobRequirementsTab(
 
         if (filteredRequirements.isEmpty()) {
             EmptyStateCard(
-                title = "No job requirements",
+                title = "No career openings",
                 message = "Use the plus button to add a career opening.",
             )
         } else {
             filteredRequirements.forEach { item ->
                 val status = item.text("status", fallback = "Active")
                 val visibleStatus = if (item.optBoolean("isPublished", true)) status else "Hidden"
-                SimpleModuleCard(
-                    title = item.text("title", fallback = "Job requirement"),
+                SwipeDeleteModuleCard(
+                    title = item.text("title", fallback = "Career opening"),
                     subtitle = listOf(
                         item.text("department"),
                         item.text("location"),
@@ -9356,24 +9662,19 @@ private fun JobRequirementsTab(
                         visibleStatus,
                     ).filter { it.isNotBlank() }.joinToString(" | "),
                     accent = statusColor(status),
+                    deleteTitle = "Delete Career Opening",
+                    deleteMessage = "Delete ${item.text("title", fallback = "this career opening")}? This cannot be undone.",
+                    onClick = {
+                        onEdit(item)
+                        showJobDialog = true
+                    },
+                    onDelete = { onDelete(item) },
                     actions = {
                         ModuleIconButton(
                             color = if (status == "Active") OpwWarning else OpwSuccess,
                             onClick = { onStatusChange(item, if (status == "Active") "Completed" else "Active") },
                         ) {
                             PowerGlyph(if (status == "Active") OpwWarning else OpwSuccess)
-                        }
-                        ModuleIconButton(
-                            color = OpwSuccess,
-                            onClick = {
-                                onEdit(item)
-                                showJobDialog = true
-                            },
-                        ) {
-                            EditGlyph(OpwSuccess)
-                        }
-                        ModuleIconButton(color = OpwDanger, onClick = { onDelete(item) }) {
-                            TrashGlyph(OpwDanger)
                         }
                     },
                 )
@@ -9394,8 +9695,8 @@ private fun JobRequirementFormDialog(
     onReset: () -> Unit,
 ) {
     OpwBottomSheetDialog(
-        title = if (editingId.isBlank()) "Add Requirement" else "Edit Requirement",
-        primaryLabel = if (loading) "Saving..." else if (editingId.isBlank()) "Post Requirement" else "Update Requirement",
+        title = if (editingId.isBlank()) "Add Career Opening" else "Edit Career Opening",
+        primaryLabel = if (loading) "Saving..." else if (editingId.isBlank()) "Post Opening" else "Update Opening",
         onDismiss = onDismiss,
         onPrimary = onSave,
         onReset = onReset,
@@ -9403,7 +9704,7 @@ private fun JobRequirementFormDialog(
         if (error.isNotBlank()) {
             StatusBanner(message = error, tone = BannerTone.Error)
         }
-        SheetPatientField("Job Title", form.title, { onFormChange(form.copy(title = it)) })
+        SheetPatientField("Position Title", form.title, { onFormChange(form.copy(title = it)) })
         SheetPatientField("Department", form.department, { onFormChange(form.copy(department = it)) })
         SheetPatientField("Employment Type", form.employmentType, { onFormChange(form.copy(employmentType = it)) })
         SheetPatientField("Experience", form.experience, { onFormChange(form.copy(experience = it)) })
@@ -9421,7 +9722,7 @@ private fun JobRequirementFormDialog(
         SheetPatientField("Requirements", form.requirements, { onFormChange(form.copy(requirements = it)) }, minLines = 3)
         SheetPatientField("Benefits", form.benefits, { onFormChange(form.copy(benefits = it)) }, minLines = 3)
 
-        Text("Job Status", fontWeight = FontWeight.Bold, color = OpwInk)
+        Text("Career Status", fontWeight = FontWeight.Bold, color = OpwInk)
         ChoiceChipRow(
             options = listOf("Active", "Completed", "Unpublished"),
             selected = form.status,
@@ -9444,7 +9745,7 @@ private fun JobRequirementFormDialog(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Show on website", color = OpwInk, fontWeight = FontWeight.Bold)
-                    Text("Published jobs appear on the career page.", color = Color(0xFF64748B), style = MaterialTheme.typography.bodySmall)
+                    Text("Published openings appear on the career page.", color = Color(0xFF64748B), style = MaterialTheme.typography.bodySmall)
                 }
                 Switch(
                     checked = form.isPublished,
@@ -11131,15 +11432,34 @@ private fun adminTabPermissionKey(tab: AdminTab): String? =
         AdminTab.Shop -> "shop"
         AdminTab.Marketing -> "marketing"
         AdminTab.Mailbox -> "mailbox"
-        AdminTab.Notifications -> null
+        AdminTab.Notifications -> "notifications"
         AdminTab.Chat -> "chat"
         AdminTab.Team -> "staff"
-        AdminTab.Feedback,
-        AdminTab.Jobs,
-        AdminTab.Reports,
+        AdminTab.Feedback -> "feedback"
+        AdminTab.Jobs -> "career"
+        AdminTab.Reports -> "reports"
         AdminTab.Create,
         AdminTab.Profile -> null
     }
+
+private fun hasModulePermission(user: StaffUser?, module: String?, action: String = "view"): Boolean {
+    if (module.isNullOrBlank()) {
+        return true
+    }
+    if (user?.role == "Admin") {
+        return true
+    }
+    return user?.permissions.orEmpty().any { permission ->
+        permission.module == module && when (action) {
+            "add" -> permission.add
+            "edit" -> permission.edit
+            else -> permission.view
+        }
+    }
+}
+
+private fun canAddAdminTab(user: StaffUser?, tab: AdminTab): Boolean =
+    hasModulePermission(user, adminTabPermissionKey(tab), "add")
 
 private fun canOpenAdminTab(user: StaffUser?, tab: AdminTab): Boolean {
     if (tab == AdminTab.Profile) {
@@ -11157,10 +11477,7 @@ private fun canOpenAdminTab(user: StaffUser?, tab: AdminTab): Boolean {
         return true
     }
 
-    val permissionKey = adminTabPermissionKey(tab) ?: return true
-    return user?.permissions.orEmpty().any { permission ->
-        permission.module == permissionKey && permission.view
-    }
+    return hasModulePermission(user, adminTabPermissionKey(tab), "view")
 }
 
 private fun moduleErrorsForTab(tab: AdminTab, state: DashboardUiState): List<String> {

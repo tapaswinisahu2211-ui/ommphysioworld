@@ -1,4 +1,6 @@
 const { verifySessionToken } = require("../utils/sessionToken");
+const User = require("../models/User");
+const { normalizePermissions } = require("../utils/userHelpers");
 
 const getBearerToken = (req) => {
   const authorization = String(req.headers.authorization || "").trim();
@@ -55,6 +57,47 @@ const requireStaffAuth = (req, res, next) => {
   return next();
 };
 
+const requireStaffPermission = (moduleKey, action = "view") => async (req, res, next) => {
+  try {
+    if (req.authError) {
+      return res.status(401).json({ message: req.authError });
+    }
+
+    if (!req.auth || req.auth.type !== "staff") {
+      return res.status(401).json({ message: "Staff authentication is required." });
+    }
+
+    const user = await User.findById(String(req.auth.sub || "").trim());
+
+    if (!user) {
+      return res.status(401).json({ message: "Staff account not found." });
+    }
+
+    if (user.status === "Inactive") {
+      return res.status(403).json({ message: "This staff account is inactive." });
+    }
+
+    req.staffUser = user;
+
+    if (user.role === "Admin") {
+      return next();
+    }
+
+    const permissions = normalizePermissions(user.permissions || [], user.role);
+    const permission = permissions.find((item) => item.module === moduleKey);
+
+    if (!permission || !permission[action]) {
+      return res.status(403).json({
+        message: "You do not have permission to access this module.",
+      });
+    }
+
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const requireAdminAuth = (req, res, next) => {
   if (req.authError) {
     return res.status(401).json({ message: req.authError });
@@ -91,28 +134,56 @@ const requirePatientOrStaffAuth = (req, res, next) => {
   return next();
 };
 
-const requirePatientRecordAccess = (req, res, next) => {
-  if (req.authError) {
-    return res.status(401).json({ message: req.authError });
-  }
+const requirePatientRecordAccess = async (req, res, next) => {
+  try {
+    if (req.authError) {
+      return res.status(401).json({ message: req.authError });
+    }
 
-  if (!req.auth) {
-    return res.status(401).json({ message: "Authentication is required." });
-  }
+    if (!req.auth) {
+      return res.status(401).json({ message: "Authentication is required." });
+    }
 
-  if (req.auth.type === "staff") {
-    return next();
-  }
+    if (req.auth.type === "staff") {
+      const user = await User.findById(String(req.auth.sub || "").trim());
 
-  if (
-    req.auth.type === "patient" &&
-    req.auth.patientId &&
-    req.auth.patientId === String(req.params.id || "").trim()
-  ) {
-    return next();
-  }
+      if (!user) {
+        return res.status(401).json({ message: "Staff account not found." });
+      }
 
-  return res.status(403).json({ message: "You do not have access to this patient record." });
+      if (user.status === "Inactive") {
+        return res.status(403).json({ message: "This staff account is inactive." });
+      }
+
+      if (user.role === "Admin") {
+        req.staffUser = user;
+        return next();
+      }
+
+      const action = req.method === "GET" ? "view" : "edit";
+      const permissions = normalizePermissions(user.permissions || [], user.role);
+      const permission = permissions.find((item) => item.module === "patients");
+
+      if (permission?.[action]) {
+        req.staffUser = user;
+        return next();
+      }
+
+      return res.status(403).json({ message: "You do not have access to this patient record." });
+    }
+
+    if (
+      req.auth.type === "patient" &&
+      req.auth.patientId &&
+      req.auth.patientId === String(req.params.id || "").trim()
+    ) {
+      return next();
+    }
+
+    return res.status(403).json({ message: "You do not have access to this patient record." });
+  } catch (error) {
+    return next(error);
+  }
 };
 
 module.exports = {
@@ -123,4 +194,5 @@ module.exports = {
   requirePatientOrStaffAuth,
   requirePatientRecordAccess,
   requireStaffAuth,
+  requireStaffPermission,
 };

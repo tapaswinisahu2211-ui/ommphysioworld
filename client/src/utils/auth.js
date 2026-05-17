@@ -54,16 +54,26 @@ export const getFirstAccessiblePath = (user = getStoredUser()) => {
   const orderedModules = [
     { key: "dashboard", path: "/dashboard" },
     { key: "patients", path: "/patients" },
+    { key: "archived_patients", path: "/patients/archive" },
     { key: "appointments", path: "/patients" },
+    { key: "treatment_plans", path: "/patients" },
+    { key: "clinical_notes", path: "/patients" },
+    { key: "therapy_recommendations", path: "/patients" },
+    { key: "payments", path: "/patients" },
     { key: "documents", path: "/patients" },
     { key: "chat", path: "/dashboard" },
     { key: "services", path: "/services" },
     { key: "therapy", path: "/therapy" },
     { key: "shop", path: "/shop-admin" },
     { key: "marketing", path: "/marketing" },
+    { key: "feedback", path: "/feedback" },
+    { key: "career", path: "/job-requirements" },
+    { key: "reports", path: "/reports" },
+    { key: "notifications", path: "/notifications" },
     { key: "mailbox", path: "/mailbox" },
     { key: "treatment_tracker", path: "/treatment-tracker" },
     { key: "staff", path: "/staff" },
+    { key: "staff_applications", path: "/mailbox" },
   ];
 
   return orderedModules.find(({ key }) => canViewModule(key, user))?.path || "/admin";

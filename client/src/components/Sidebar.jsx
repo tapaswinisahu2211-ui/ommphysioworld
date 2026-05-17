@@ -14,11 +14,13 @@ import {
   Users,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { canViewModule, getStoredUser, isAdminUser } from "../utils/auth";
+import API from "../services/api";
 
 export default function Sidebar({ collapsed, onNavigate }) {
   const location = useLocation();
-  const currentUser = getStoredUser();
+  const [currentUser, setCurrentUser] = useState(getStoredUser());
   const adminUser = isAdminUser(currentUser);
   const isMenuActive = (menuPath) => {
     if (location.pathname === menuPath) {
@@ -49,21 +51,42 @@ export default function Sidebar({ collapsed, onNavigate }) {
     { name: "Therapy", path: "/therapy", icon: FolderOpen, hint: "Media", moduleKey: "therapy" },
     { name: "Shop", path: "/shop-admin", icon: ShoppingBag, hint: "Products", moduleKey: "shop" },
     { name: "Marketing", path: "/marketing", icon: Megaphone, hint: "Sources", moduleKey: "marketing" },
-    ...(adminUser
-      ? [
-          { name: "Feedback", path: "/feedback", icon: MessageSquareQuote, hint: "Reviews", moduleKey: "" },
-          { name: "Job Requirements", path: "/job-requirements", icon: BriefcaseMedical, hint: "Careers", moduleKey: "" },
-        ]
-      : []),
-    ...(adminUser
-      ? [
-          { name: "Report", path: "/reports", icon: BarChart3, hint: "Date-wise", moduleKey: "" },
-        ]
-      : []),
+    { name: "Feedback", path: "/feedback", icon: MessageSquareQuote, hint: "Reviews", moduleKey: "feedback" },
+    { name: "Career", path: "/job-requirements", icon: BriefcaseMedical, hint: "Careers", moduleKey: "career" },
+    { name: "Report", path: "/reports", icon: BarChart3, hint: "Date-wise", moduleKey: "reports" },
     { name: "Staff", path: "/staff", icon: UserCog, hint: "Team", moduleKey: "staff" },
     { name: "Mailbox", path: "/mailbox", icon: Mail, hint: "Inbox", moduleKey: "mailbox" },
-    { name: "Notifications", path: "/notifications", icon: Bell, hint: "Custom sends", moduleKey: "" },
+    { name: "Notifications", path: "/notifications", icon: Bell, hint: "Custom sends", moduleKey: "notifications" },
   ].filter((menu) => canViewModule(menu.moduleKey, currentUser));
+
+  useEffect(() => {
+    let active = true;
+
+    const refreshCurrentUser = async () => {
+      if (!localStorage.getItem("token")) {
+        return;
+      }
+
+      try {
+        const response = await API.get("/admin/profile");
+        if (!active) {
+          return;
+        }
+        localStorage.setItem("adminUser", JSON.stringify(response.data || {}));
+        setCurrentUser(response.data || {});
+      } catch (_) {
+        // The API interceptor handles expired sessions. Permission refresh is best-effort.
+      }
+    };
+
+    refreshCurrentUser();
+    const intervalId = window.setInterval(refreshCurrentUser, 15000);
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   return (
     <aside

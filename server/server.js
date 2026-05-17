@@ -16,6 +16,7 @@ const {
   requirePatientOrStaffAuth,
   requirePatientRecordAccess,
   requireStaffAuth,
+  requireStaffPermission,
 } = require("./middleware/auth");
 const { createRateLimiter, securityHeaders } = require("./middleware/security");
 
@@ -1511,7 +1512,7 @@ const autoCompleteOverdueAppointments = async (filter = {}) => {
   return updatedCount;
 };
 
-app.get("/api/dashboard", requireStaffAuth, async (req, res) => {
+app.get("/api/dashboard", requireStaffPermission("dashboard", "view"), async (req, res) => {
   try {
     await autoCompleteOverdueAppointments();
 
@@ -1802,7 +1803,7 @@ app.get("/api/dashboard", requireStaffAuth, async (req, res) => {
   }
 });
 
-app.get("/api/reports", requireAdminAuth, async (req, res) => {
+app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, res) => {
   try {
     await autoCompleteOverdueAppointments();
 
@@ -1967,7 +1968,7 @@ app.get("/api/reports", requireAdminAuth, async (req, res) => {
   }
 });
 
-app.get("/api/treatment-tracker", requireStaffAuth, async (req, res) => {
+app.get("/api/treatment-tracker", requireStaffPermission("treatment_tracker", "view"), async (req, res) => {
   try {
     await autoCompleteOverdueAppointments();
 
@@ -2148,7 +2149,7 @@ app.get("/api/treatment-tracker", requireStaffAuth, async (req, res) => {
   }
 });
 
-app.get("/api/appointments", requireStaffAuth, async (req, res) => {
+app.get("/api/appointments", requireStaffPermission("appointments", "view"), async (req, res) => {
   try {
     await autoCompleteOverdueAppointments();
 
@@ -2160,7 +2161,7 @@ app.get("/api/appointments", requireStaffAuth, async (req, res) => {
   }
 });
 
-app.patch("/api/appointments/:id/approve", requireStaffAuth, async (req, res) => {
+app.patch("/api/appointments/:id/approve", requireStaffPermission("appointments", "edit"), async (req, res) => {
   try {
     const appointment = await Appointment.findById(req.params.id);
 
@@ -2197,7 +2198,7 @@ app.patch("/api/appointments/:id/approve", requireStaffAuth, async (req, res) =>
   }
 });
 
-app.patch("/api/appointments/:id/reschedule", requireStaffAuth, async (req, res) => {
+app.patch("/api/appointments/:id/reschedule", requireStaffPermission("appointments", "edit"), async (req, res) => {
   try {
     const appointment = await Appointment.findById(req.params.id);
 
@@ -2232,7 +2233,7 @@ app.patch("/api/appointments/:id/reschedule", requireStaffAuth, async (req, res)
   }
 });
 
-app.patch("/api/appointments/:id/status", requireStaffAuth, async (req, res) => {
+app.patch("/api/appointments/:id/status", requireStaffPermission("appointments", "edit"), async (req, res) => {
   try {
     const appointment = await Appointment.findById(req.params.id);
 
@@ -2445,7 +2446,7 @@ app.patch("/api/patients/:id/notifications/read-all", requirePatientRecordAccess
   }
 });
 
-app.get("/api/notifications/admin", requireStaffAuth, async (req, res) => {
+app.get("/api/notifications/admin", requireStaffPermission("notifications", "view"), async (req, res) => {
   try {
     await cleanupOldPatientNotifications();
 
@@ -2473,7 +2474,7 @@ app.get("/api/notifications/admin", requireStaffAuth, async (req, res) => {
   }
 });
 
-app.delete("/api/notifications/admin/:id", requireStaffAuth, async (req, res) => {
+app.delete("/api/notifications/admin/:id", requireStaffPermission("notifications", "edit"), async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ message: "Invalid notification id." });
@@ -2492,7 +2493,7 @@ app.delete("/api/notifications/admin/:id", requireStaffAuth, async (req, res) =>
   }
 });
 
-app.post("/api/notifications/admin/delete", requireStaffAuth, async (req, res) => {
+app.post("/api/notifications/admin/delete", requireStaffPermission("notifications", "edit"), async (req, res) => {
   try {
     const notificationIds = Array.isArray(req.body.notificationIds)
       ? req.body.notificationIds.map((id) => cleanText(id)).filter(Boolean)
@@ -2517,7 +2518,7 @@ app.post("/api/notifications/admin/delete", requireStaffAuth, async (req, res) =
   }
 });
 
-app.post("/api/notifications/custom", requireStaffAuth, async (req, res) => {
+app.post("/api/notifications/custom", requireStaffPermission("notifications", "add"), async (req, res) => {
   try {
     const title = cleanText(req.body.title);
     const body = cleanText(req.body.body || req.body.message);
@@ -2586,7 +2587,7 @@ app.post("/api/notifications/custom", requireStaffAuth, async (req, res) => {
   }
 });
 
-app.get("/api/mailbox", requireStaffAuth, async (req, res) => {
+app.get("/api/mailbox", requireStaffPermission("mailbox", "view"), async (req, res) => {
   try {
     const [applications, contactMessages] = await Promise.all([
       StaffApplication.find().sort({ createdAt: -1 }),
@@ -2609,7 +2610,7 @@ app.get("/api/mailbox", requireStaffAuth, async (req, res) => {
   }
 });
 
-app.patch("/api/mailbox/:type/:id/read", requireStaffAuth, async (req, res) => {
+app.patch("/api/mailbox/:type/:id/read", requireStaffPermission("mailbox", "edit"), async (req, res) => {
   try {
     const { type, id } = req.params;
     const isRead = req.body.isRead !== false;
@@ -2641,7 +2642,7 @@ app.patch("/api/mailbox/:type/:id/read", requireStaffAuth, async (req, res) => {
   }
 });
 
-app.delete("/api/mailbox/:type/:id", requireStaffAuth, async (req, res) => {
+app.delete("/api/mailbox/:type/:id", requireStaffPermission("mailbox", "edit"), async (req, res) => {
   try {
     const { type, id } = req.params;
     const Model =
@@ -2668,7 +2669,7 @@ app.delete("/api/mailbox/:type/:id", requireStaffAuth, async (req, res) => {
   }
 });
 
-app.get("/api/mailbox/:type/:id/attachment", requireStaffAuth, async (req, res) => {
+app.get("/api/mailbox/:type/:id/attachment", requireStaffPermission("mailbox", "view"), async (req, res) => {
   try {
     const { type, id } = req.params;
     const Model = type === "career" ? StaffApplication : null;
@@ -2703,7 +2704,7 @@ app.get("/api/mailbox/:type/:id/attachment", requireStaffAuth, async (req, res) 
   }
 });
 
-app.get("/api/patients", requireStaffAuth, async (req, res) => {
+app.get("/api/patients", requireStaffPermission("patients", "view"), async (req, res) => {
   try {
     await autoCompleteOverdueAppointments();
 
@@ -2715,7 +2716,7 @@ app.get("/api/patients", requireStaffAuth, async (req, res) => {
   }
 });
 
-app.get("/api/patients/archive", requireAdminAuth, async (_req, res) => {
+app.get("/api/patients/archive", requireStaffPermission("archived_patients", "view"), async (_req, res) => {
   try {
     const patients = await getArchivedPatients();
     res.json(patients.map(serializePatient));
@@ -2746,7 +2747,7 @@ app.get("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
   }
 });
 
-app.post("/api/patients", requireStaffAuth, async (req, res) => {
+app.post("/api/patients", requireStaffPermission("patients", "add"), async (req, res) => {
   try {
     const name = cleanText(req.body.name);
     const email = cleanEmail(req.body.email);
@@ -2901,7 +2902,7 @@ app.post("/api/patients/:id/profile-image", requirePatientRecordAccess, upload.s
   }
 });
 
-app.delete("/api/patients/:id", requireStaffAuth, async (req, res) => {
+app.delete("/api/patients/:id", requireStaffPermission("patients", "edit"), async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
 
@@ -2930,7 +2931,7 @@ app.delete("/api/patients/:id", requireStaffAuth, async (req, res) => {
   }
 });
 
-app.patch("/api/patients/:id/restore", requireAdminAuth, async (req, res) => {
+app.patch("/api/patients/:id/restore", requireStaffPermission("archived_patients", "edit"), async (req, res) => {
   try {
     const patient = await findArchivedPatientById(req.params.id);
 
@@ -2965,7 +2966,7 @@ app.patch("/api/patients/:id/restore", requireAdminAuth, async (req, res) => {
   }
 });
 
-app.delete("/api/patients/:id/permanent", requireAdminAuth, async (req, res) => {
+app.delete("/api/patients/:id/permanent", requireStaffPermission("archived_patients", "edit"), async (req, res) => {
   try {
     const patient = await findArchivedPatientById(req.params.id);
 
@@ -2986,7 +2987,7 @@ app.delete("/api/patients/:id/permanent", requireAdminAuth, async (req, res) => 
   }
 });
 
-app.post("/api/patients/:id/treatment-plans", requireStaffAuth, async (req, res) => {
+app.post("/api/patients/:id/treatment-plans", requireStaffPermission("treatment_plans", "add"), async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
 
@@ -3072,7 +3073,7 @@ app.post("/api/patients/:id/treatment-plans", requireStaffAuth, async (req, res)
   }
 });
 
-app.patch("/api/patients/:id/treatment-plans/:planId/status", requireStaffAuth, async (req, res) => {
+app.patch("/api/patients/:id/treatment-plans/:planId/status", requireStaffPermission("treatment_plans", "edit"), async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
 
@@ -3114,7 +3115,7 @@ app.patch("/api/patients/:id/treatment-plans/:planId/status", requireStaffAuth, 
   }
 });
 
-app.put("/api/patients/:id/treatment-plans/:planId", requireStaffAuth, async (req, res) => {
+app.put("/api/patients/:id/treatment-plans/:planId", requireStaffPermission("treatment_plans", "edit"), async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
 
@@ -3179,7 +3180,7 @@ app.put("/api/patients/:id/treatment-plans/:planId", requireStaffAuth, async (re
   }
 });
 
-app.patch("/api/patients/:id/treatment-plans/:planId/session-days/:dayId", requireStaffAuth, async (req, res) => {
+app.patch("/api/patients/:id/treatment-plans/:planId/session-days/:dayId", requireStaffPermission("treatment_plans", "edit"), async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
 
@@ -3245,7 +3246,7 @@ app.patch("/api/patients/:id/treatment-plans/:planId/session-days/:dayId", requi
   }
 });
 
-app.post("/api/patients/:id/treatment-plans/:planId/payments", requireStaffAuth, async (req, res) => {
+app.post("/api/patients/:id/treatment-plans/:planId/payments", requireStaffPermission("payments", "add"), async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
 
@@ -3319,7 +3320,7 @@ app.post("/api/patients/:id/treatment-plans/:planId/payments", requireStaffAuth,
   }
 });
 
-app.delete("/api/patients/:id/treatment-plans/:planId", requireStaffAuth, async (req, res) => {
+app.delete("/api/patients/:id/treatment-plans/:planId", requireStaffPermission("treatment_plans", "edit"), async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
 
@@ -3390,7 +3391,7 @@ app.post("/api/patients/:id/clinical-notes", requirePatientRecordAccess, upload.
   }
 });
 
-app.delete("/api/patients/:id/clinical-notes/:noteId", requireStaffAuth, async (req, res) => {
+app.delete("/api/patients/:id/clinical-notes/:noteId", requireStaffPermission("clinical_notes", "edit"), async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
 
@@ -3410,7 +3411,7 @@ app.delete("/api/patients/:id/clinical-notes/:noteId", requireStaffAuth, async (
   }
 });
 
-app.post("/api/patients/:id/therapy-recommendations", requireStaffAuth, async (req, res) => {
+app.post("/api/patients/:id/therapy-recommendations", requireStaffPermission("therapy_recommendations", "add"), async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
     const serviceId = cleanText(req.body.serviceId);
@@ -3501,7 +3502,7 @@ app.post("/api/patients/:id/therapy-recommendations", requireStaffAuth, async (r
   }
 });
 
-app.delete("/api/patients/:id/therapy-recommendations/:recommendationId", requireStaffAuth, async (req, res) => {
+app.delete("/api/patients/:id/therapy-recommendations/:recommendationId", requireStaffPermission("therapy_recommendations", "edit"), async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
 
@@ -3630,7 +3631,7 @@ app.get("/api/patients/:id/clinical-notes/:noteId/documents/:documentId", requir
   }
 });
 
-app.post("/api/patients/:id/appointments", requireStaffAuth, async (req, res) => {
+app.post("/api/patients/:id/appointments", requireStaffPermission("appointments", "add"), async (req, res) => {
   try {
     const date = cleanText(req.body.date);
     const time = cleanText(req.body.time);
@@ -3693,7 +3694,7 @@ app.post("/api/patients/:id/appointments", requireStaffAuth, async (req, res) =>
   }
 });
 
-app.delete("/api/patients/:id/appointments/:appointmentId", requireStaffAuth, async (req, res) => {
+app.delete("/api/patients/:id/appointments/:appointmentId", requireStaffPermission("appointments", "edit"), async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
 
@@ -3735,7 +3736,7 @@ app.delete("/api/patients/:id/appointments/:appointmentId", requireStaffAuth, as
   }
 });
 
-app.patch("/api/patients/:id/appointments/:appointmentId", requireStaffAuth, async (req, res) => {
+app.patch("/api/patients/:id/appointments/:appointmentId", requireStaffPermission("appointments", "edit"), async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
 
@@ -3849,7 +3850,7 @@ app.patch("/api/patients/:id/appointments/:appointmentId", requireStaffAuth, asy
   }
 });
 
-app.post("/api/patients/:id/payments", requireStaffAuth, async (req, res) => {
+app.post("/api/patients/:id/payments", requireStaffPermission("payments", "add"), async (req, res) => {
   try {
     const amount = Number(req.body.amount || 0);
     const method = cleanText(req.body.method);
@@ -3890,7 +3891,7 @@ app.post("/api/patients/:id/payments", requireStaffAuth, async (req, res) => {
   }
 });
 
-app.delete("/api/patients/:id/payments/:paymentId", requireStaffAuth, async (req, res) => {
+app.delete("/api/patients/:id/payments/:paymentId", requireStaffPermission("payments", "edit"), async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
 
@@ -3911,7 +3912,7 @@ app.delete("/api/patients/:id/payments/:paymentId", requireStaffAuth, async (req
   }
 });
 
-app.get("/api/marketing/sources", requireStaffAuth, async (_req, res) => {
+app.get("/api/marketing/sources", requireStaffPermission("marketing", "view"), async (_req, res) => {
   try {
     const sources = await MarketingSource.find().sort({ updatedAt: -1, createdAt: -1 });
     res.json(sources.map(serializeMarketingSource));
@@ -3921,7 +3922,7 @@ app.get("/api/marketing/sources", requireStaffAuth, async (_req, res) => {
   }
 });
 
-app.get("/api/marketing/sources/:id", requireStaffAuth, async (req, res) => {
+app.get("/api/marketing/sources/:id", requireStaffPermission("marketing", "view"), async (req, res) => {
   try {
     const source = await MarketingSource.findById(req.params.id);
 
@@ -3936,7 +3937,7 @@ app.get("/api/marketing/sources/:id", requireStaffAuth, async (req, res) => {
   }
 });
 
-app.get("/api/marketing/sources/:id/photos/:photoId", requireStaffAuth, async (req, res) => {
+app.get("/api/marketing/sources/:id/photos/:photoId", requireStaffPermission("marketing", "view"), async (req, res) => {
   try {
     const source = await MarketingSource.findById(req.params.id);
     const photo = source?.photos?.id(req.params.photoId);
@@ -3956,7 +3957,7 @@ app.get("/api/marketing/sources/:id/photos/:photoId", requireStaffAuth, async (r
 
 app.post(
   "/api/marketing/sources",
-  requireStaffAuth,
+  requireStaffPermission("marketing", "add"),
   upload.array("photos", 6),
   async (req, res) => {
     try {
@@ -3988,7 +3989,7 @@ app.post(
 
 app.put(
   "/api/marketing/sources/:id",
-  requireStaffAuth,
+  requireStaffPermission("marketing", "edit"),
   upload.array("photos", 6),
   async (req, res) => {
     try {
@@ -4031,7 +4032,7 @@ app.put(
   }
 );
 
-app.post("/api/marketing/sources/:id/referrals", requireStaffAuth, async (req, res) => {
+app.post("/api/marketing/sources/:id/referrals", requireStaffPermission("marketing", "add"), async (req, res) => {
   try {
     const source = await MarketingSource.findById(req.params.id);
 
@@ -4072,7 +4073,7 @@ app.post("/api/marketing/sources/:id/referrals", requireStaffAuth, async (req, r
 
 app.delete(
   "/api/marketing/sources/:id/referrals/:referralId",
-  requireStaffAuth,
+  requireStaffPermission("marketing", "edit"),
   async (req, res) => {
     try {
       const source = await MarketingSource.findById(req.params.id);
@@ -4095,7 +4096,7 @@ app.delete(
   }
 );
 
-app.delete("/api/marketing/sources/:id", requireStaffAuth, async (req, res) => {
+app.delete("/api/marketing/sources/:id", requireStaffPermission("marketing", "edit"), async (req, res) => {
   try {
     const source = await MarketingSource.findByIdAndDelete(req.params.id);
 
@@ -4278,7 +4279,7 @@ app.post("/api/shop/orders", requirePatientAuth, async (req, res) => {
   }
 });
 
-app.get("/api/therapy-resources", requireStaffAuth, async (req, res) => {
+app.get("/api/therapy-resources", requireStaffPermission("therapy", "view"), async (req, res) => {
   try {
     const serviceId = cleanText(req.query.serviceId);
     const filters = {};
@@ -4298,7 +4299,7 @@ app.get("/api/therapy-resources", requireStaffAuth, async (req, res) => {
   }
 });
 
-app.get("/api/feedback", requireAdminAuth, async (req, res) => {
+app.get("/api/feedback", requireStaffPermission("feedback", "view"), async (req, res) => {
   try {
     const feedback = await Feedback.find().sort({ createdAt: -1 });
     res.json(feedback.map(serializeFeedback));
@@ -4359,7 +4360,7 @@ app.post("/api/contact", publicFormRateLimiter, async (req, res) => {
   }
 });
 
-app.get("/api/contact", requireStaffAuth, async (req, res) => {
+app.get("/api/contact", requireStaffPermission("mailbox", "view"), async (req, res) => {
   try {
     const messages = await ContactMessage.find().sort({ createdAt: -1 });
 
@@ -4417,7 +4418,7 @@ app.post("/api/feedback", publicFormRateLimiter, async (req, res) => {
   }
 });
 
-app.patch("/api/feedback/:id/approve", requireAdminAuth, async (req, res) => {
+app.patch("/api/feedback/:id/approve", requireStaffPermission("feedback", "edit"), async (req, res) => {
   try {
     const feedback = await Feedback.findById(req.params.id);
 
@@ -4437,7 +4438,7 @@ app.patch("/api/feedback/:id/approve", requireAdminAuth, async (req, res) => {
   }
 });
 
-app.delete("/api/feedback/:id", requireAdminAuth, async (req, res) => {
+app.delete("/api/feedback/:id", requireStaffPermission("feedback", "edit"), async (req, res) => {
   try {
     const feedback = await Feedback.findById(req.params.id);
 
@@ -4453,7 +4454,7 @@ app.delete("/api/feedback/:id", requireAdminAuth, async (req, res) => {
   }
 });
 
-app.get("/api/job-requirements", requireAdminAuth, async (req, res) => {
+app.get("/api/job-requirements", requireStaffPermission("career", "view"), async (req, res) => {
   try {
     const requirements = await JobRequirement.find().sort({ updatedAt: -1, createdAt: -1 });
     res.json(requirements.map(serializeJobRequirement));
@@ -4479,7 +4480,7 @@ app.get("/api/public-job-requirements", async (req, res) => {
   }
 });
 
-app.post("/api/job-requirements", requireAdminAuth, async (req, res) => {
+app.post("/api/job-requirements", requireStaffPermission("career", "add"), async (req, res) => {
   try {
     const title = cleanText(req.body.title);
     const openings = Number(req.body.openings || 1);
@@ -4518,7 +4519,7 @@ app.post("/api/job-requirements", requireAdminAuth, async (req, res) => {
   }
 });
 
-app.put("/api/job-requirements/:id", requireAdminAuth, async (req, res) => {
+app.put("/api/job-requirements/:id", requireStaffPermission("career", "edit"), async (req, res) => {
   try {
     const requirement = await JobRequirement.findById(req.params.id);
 
@@ -4563,7 +4564,7 @@ app.put("/api/job-requirements/:id", requireAdminAuth, async (req, res) => {
   }
 });
 
-app.delete("/api/job-requirements/:id", requireAdminAuth, async (req, res) => {
+app.delete("/api/job-requirements/:id", requireStaffPermission("career", "edit"), async (req, res) => {
   try {
     const requirement = await JobRequirement.findById(req.params.id);
 
@@ -4579,7 +4580,7 @@ app.delete("/api/job-requirements/:id", requireAdminAuth, async (req, res) => {
   }
 });
 
-app.post("/api/services", requireStaffAuth, async (req, res) => {
+app.post("/api/services", requireStaffPermission("services", "add"), async (req, res) => {
   try {
     const name = cleanText(req.body.name);
 
@@ -4599,7 +4600,7 @@ app.post("/api/services", requireStaffAuth, async (req, res) => {
   }
 });
 
-app.get("/api/admin/shop/products", requireStaffAuth, async (_req, res) => {
+app.get("/api/admin/shop/products", requireStaffPermission("shop", "view"), async (_req, res) => {
   try {
     const products = await ShopProduct.find().sort({ updatedAt: -1, createdAt: -1 });
     res.json(products.map(serializeShopProduct));
@@ -4609,7 +4610,7 @@ app.get("/api/admin/shop/products", requireStaffAuth, async (_req, res) => {
   }
 });
 
-app.get("/api/admin/shop/orders", requireStaffAuth, async (_req, res) => {
+app.get("/api/admin/shop/orders", requireStaffPermission("shop", "view"), async (_req, res) => {
   try {
     const orders = await ShopOrder.find().sort({ createdAt: -1 });
     res.json(orders.map(serializeShopOrder));
@@ -4621,7 +4622,7 @@ app.get("/api/admin/shop/orders", requireStaffAuth, async (_req, res) => {
 
 app.post(
   "/api/admin/shop/products",
-  requireStaffAuth,
+  requireStaffPermission("shop", "add"),
   shopUpload.single("image"),
   async (req, res) => {
     try {
@@ -4664,7 +4665,7 @@ app.post(
   }
 );
 
-app.post("/api/therapy-resources", requireStaffAuth, therapyUpload.single("file"), async (req, res) => {
+app.post("/api/therapy-resources", requireStaffPermission("therapy", "add"), therapyUpload.single("file"), async (req, res) => {
   try {
     const serviceId = cleanText(req.body.serviceId);
     const title = cleanText(req.body.title);
@@ -4708,7 +4709,7 @@ app.post("/api/therapy-resources", requireStaffAuth, therapyUpload.single("file"
   }
 });
 
-app.put("/api/services/:id", requireStaffAuth, async (req, res) => {
+app.put("/api/services/:id", requireStaffPermission("services", "edit"), async (req, res) => {
   try {
     const name = cleanText(req.body.name);
     const service = await Service.findById(req.params.id);
@@ -4733,7 +4734,7 @@ app.put("/api/services/:id", requireStaffAuth, async (req, res) => {
 
 app.put(
   "/api/admin/shop/products/:id",
-  requireStaffAuth,
+  requireStaffPermission("shop", "edit"),
   shopUpload.single("image"),
   async (req, res) => {
     try {
@@ -4790,7 +4791,7 @@ app.put(
   }
 );
 
-app.put("/api/therapy-resources/:id", requireStaffAuth, therapyUpload.single("file"), async (req, res) => {
+app.put("/api/therapy-resources/:id", requireStaffPermission("therapy", "edit"), therapyUpload.single("file"), async (req, res) => {
   try {
     const serviceId = cleanText(req.body.serviceId);
     const title = cleanText(req.body.title);
@@ -4836,7 +4837,7 @@ app.put("/api/therapy-resources/:id", requireStaffAuth, therapyUpload.single("fi
   }
 });
 
-app.delete("/api/services/:id", requireStaffAuth, async (req, res) => {
+app.delete("/api/services/:id", requireStaffPermission("services", "edit"), async (req, res) => {
   try {
     const linkedTherapyResources = await TherapyResource.countDocuments({
       serviceId: req.params.id,
@@ -4861,7 +4862,7 @@ app.delete("/api/services/:id", requireStaffAuth, async (req, res) => {
   }
 });
 
-app.patch("/api/admin/shop/orders/:id/status", requireStaffAuth, async (req, res) => {
+app.patch("/api/admin/shop/orders/:id/status", requireStaffPermission("shop", "edit"), async (req, res) => {
   try {
     const order = await ShopOrder.findById(req.params.id);
     const nextStatus = cleanText(req.body.status).toLowerCase();
@@ -4921,7 +4922,7 @@ app.patch("/api/admin/shop/orders/:id/status", requireStaffAuth, async (req, res
   }
 });
 
-app.delete("/api/admin/shop/products/:id", requireStaffAuth, async (req, res) => {
+app.delete("/api/admin/shop/products/:id", requireStaffPermission("shop", "edit"), async (req, res) => {
   try {
     const product = await ShopProduct.findById(req.params.id);
 
@@ -4937,7 +4938,7 @@ app.delete("/api/admin/shop/products/:id", requireStaffAuth, async (req, res) =>
   }
 });
 
-app.delete("/api/therapy-resources/:id", requireStaffAuth, async (req, res) => {
+app.delete("/api/therapy-resources/:id", requireStaffPermission("therapy", "edit"), async (req, res) => {
   try {
     const resource = await TherapyResource.findById(req.params.id);
 
@@ -4963,7 +4964,7 @@ app.delete("/api/therapy-resources/:id", requireStaffAuth, async (req, res) => {
   }
 });
 
-app.get("/api/therapy-resources/:id/file", requireStaffAuth, async (req, res) => {
+app.get("/api/therapy-resources/:id/file", requireStaffPermission("therapy", "view"), async (req, res) => {
   try {
     const resource = await TherapyResource.findById(req.params.id);
 
@@ -4984,7 +4985,7 @@ app.get("/api/therapy-resources/:id/file", requireStaffAuth, async (req, res) =>
   }
 });
 
-app.get("/api/therapy-resources/:id/download", requireStaffAuth, async (req, res) => {
+app.get("/api/therapy-resources/:id/download", requireStaffPermission("therapy", "view"), async (req, res) => {
   try {
     const resource = await TherapyResource.findById(req.params.id);
 
@@ -5004,7 +5005,7 @@ app.get("/api/therapy-resources/:id/download", requireStaffAuth, async (req, res
   }
 });
 
-app.get("/api/users", requireStaffAuth, async (req, res) => {
+app.get("/api/users", requireStaffPermission("staff", "view"), async (req, res) => {
   try {
     const users = await User.find().sort({ createdAt: -1 });
     res.json(users.map(serializeUser));
@@ -5016,6 +5017,18 @@ app.get("/api/users", requireStaffAuth, async (req, res) => {
 
 app.get("/api/users/:id", requireStaffAuth, async (req, res) => {
   try {
+    const requester = await User.findById(String(req.auth?.sub || "").trim());
+    const isSelf = String(req.params.id || "") === String(req.auth?.sub || "");
+    const canViewStaff =
+      requester?.role === "Admin" ||
+      normalizePermissions(requester?.permissions || [], requester?.role).some(
+        (permission) => permission.module === "staff" && permission.view
+      );
+
+    if (!isSelf && !canViewStaff) {
+      return res.status(403).json({ message: "You do not have permission to access this staff profile." });
+    }
+
     const user = await User.findById(req.params.id);
 
     if (!user) {
@@ -5196,7 +5209,7 @@ app.get("/api/public-chat/conversations/:id/messages/:messageId/attachments/:att
   }
 });
 
-app.get("/api/chat/conversations", requireStaffAuth, async (req, res) => {
+app.get("/api/chat/conversations", requireStaffPermission("chat", "view"), async (req, res) => {
   try {
     const agentId = String(req.auth?.sub || "").trim();
 
@@ -5215,7 +5228,7 @@ app.get("/api/chat/conversations", requireStaffAuth, async (req, res) => {
   }
 });
 
-app.post("/api/chat/conversations/:id/messages", requireStaffAuth, upload.array("attachments", 5), async (req, res) => {
+app.post("/api/chat/conversations/:id/messages", requireStaffPermission("chat", "add"), upload.array("attachments", 5), async (req, res) => {
   try {
     const conversation = await ChatConversation.findById(req.params.id).populate("assignedTo");
     const senderUserId = String(req.auth?.sub || "").trim();
@@ -5251,7 +5264,7 @@ app.post("/api/chat/conversations/:id/messages", requireStaffAuth, upload.array(
   }
 });
 
-app.patch("/api/chat/conversations/:id/read", requireStaffAuth, async (req, res) => {
+app.patch("/api/chat/conversations/:id/read", requireStaffPermission("chat", "edit"), async (req, res) => {
   try {
     const conversation = await ChatConversation.findById(req.params.id).populate("assignedTo");
     const agentId = String(req.auth?.sub || "").trim();
@@ -5274,20 +5287,8 @@ app.patch("/api/chat/conversations/:id/read", requireStaffAuth, async (req, res)
   }
 });
 
-app.delete("/api/chat/conversations/:id", requireAdminAuth, async (req, res) => {
+app.delete("/api/chat/conversations/:id", requireStaffPermission("chat", "edit"), async (req, res) => {
   try {
-    const requesterUserId = String(req.auth?.sub || "").trim();
-
-    if (!requesterUserId) {
-      return res.status(400).json({ message: "Requester user ID is required." });
-    }
-
-    const requester = await User.findById(requesterUserId);
-
-    if (!requester || requester.role !== "Admin") {
-      return res.status(403).json({ message: "Only admin can delete chat conversations." });
-    }
-
     const conversation = await ChatConversation.findById(req.params.id);
 
     if (!conversation) {
@@ -5304,6 +5305,18 @@ app.delete("/api/chat/conversations/:id", requireAdminAuth, async (req, res) => 
 
 app.get("/api/users/:id/profile-image", requireStaffAuth, async (req, res) => {
   try {
+    const requester = await User.findById(String(req.auth?.sub || "").trim());
+    const isSelf = String(req.params.id || "") === String(req.auth?.sub || "");
+    const canViewStaff =
+      requester?.role === "Admin" ||
+      normalizePermissions(requester?.permissions || [], requester?.role).some(
+        (permission) => permission.module === "staff" && permission.view
+      );
+
+    if (!isSelf && !canViewStaff) {
+      return res.status(403).json({ message: "You do not have permission to access this staff profile." });
+    }
+
     const user = await User.findById(req.params.id);
 
     if (!user || !user.profileImageData) {
@@ -5321,6 +5334,18 @@ app.get("/api/users/:id/profile-image", requireStaffAuth, async (req, res) => {
 
 app.get("/api/users/:id/joining-documents/:documentId", requireStaffAuth, async (req, res) => {
   try {
+    const requester = await User.findById(String(req.auth?.sub || "").trim());
+    const isSelf = String(req.params.id || "") === String(req.auth?.sub || "");
+    const canViewStaff =
+      requester?.role === "Admin" ||
+      normalizePermissions(requester?.permissions || [], requester?.role).some(
+        (permission) => permission.module === "staff" && permission.view
+      );
+
+    if (!isSelf && !canViewStaff) {
+      return res.status(403).json({ message: "You do not have permission to access this staff profile." });
+    }
+
     const user = await User.findById(req.params.id);
 
     if (!user) {
@@ -5345,7 +5370,7 @@ app.get("/api/users/:id/joining-documents/:documentId", requireStaffAuth, async 
   }
 });
 
-app.post("/api/users", requireAdminAuth, async (req, res) => {
+app.post("/api/users", requireStaffPermission("staff", "add"), async (req, res) => {
   try {
     const {
       name,
@@ -5419,7 +5444,7 @@ app.post("/api/users", requireAdminAuth, async (req, res) => {
   }
 });
 
-app.put("/api/users/:id", requireAdminAuth, async (req, res) => {
+app.put("/api/users/:id", requireStaffPermission("staff", "edit"), async (req, res) => {
   try {
     const {
       name,
@@ -5489,7 +5514,7 @@ app.put("/api/users/:id", requireAdminAuth, async (req, res) => {
   }
 });
 
-app.post("/api/users/:id/joining-documents", requireAdminAuth, upload.array("documents", 10), async (req, res) => {
+app.post("/api/users/:id/joining-documents", requireStaffPermission("staff", "add"), upload.array("documents", 10), async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
 
@@ -5517,7 +5542,7 @@ app.post("/api/users/:id/joining-documents", requireAdminAuth, upload.array("doc
   }
 });
 
-app.post("/api/users/:id/profile-image", requireAdminAuth, upload.single("image"), async (req, res) => {
+app.post("/api/users/:id/profile-image", requireStaffPermission("staff", "edit"), upload.single("image"), async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
 
@@ -5541,7 +5566,7 @@ app.post("/api/users/:id/profile-image", requireAdminAuth, upload.single("image"
   }
 });
 
-app.delete("/api/users/:id/joining-documents/:documentId", requireAdminAuth, async (req, res) => {
+app.delete("/api/users/:id/joining-documents/:documentId", requireStaffPermission("staff", "edit"), async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
 
@@ -5561,7 +5586,7 @@ app.delete("/api/users/:id/joining-documents/:documentId", requireAdminAuth, asy
   }
 });
 
-app.delete("/api/users/:id", requireAdminAuth, async (req, res) => {
+app.delete("/api/users/:id", requireStaffPermission("staff", "edit"), async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
 
@@ -5584,13 +5609,27 @@ app.delete("/api/users/:id", requireAdminAuth, async (req, res) => {
   }
 });
 
-app.get("/api/admin/profile", requireAdminAuth, async (req, res) => {
+app.get("/api/admin/profile", requireStaffAuth, async (req, res) => {
   try {
-    const admin = await ensureDefaultAdmin();
-    res.json(serializeUser(admin));
+    if (req.auth?.role === "Admin") {
+      const admin = await ensureDefaultAdmin();
+      return res.json(serializeUser(admin));
+    }
+
+    const user = await User.findById(String(req.auth?.sub || "").trim());
+
+    if (!user) {
+      return res.status(404).json({ message: "Staff profile not found." });
+    }
+
+    if (user.status === "Inactive") {
+      return res.status(403).json({ message: "This staff account is inactive." });
+    }
+
+    return res.json(serializeUser(user));
   } catch (error) {
     console.log(error);
-    res.status(500).json({ message: "Failed to load admin profile." });
+    res.status(500).json({ message: "Failed to load staff profile." });
   }
 });
 
@@ -5634,7 +5673,7 @@ app.put("/api/admin/profile/:id", requireAdminAuth, async (req, res) => {
   }
 });
 
-app.get("/api/staff-applications", requireStaffAuth, async (req, res) => {
+app.get("/api/staff-applications", requireStaffPermission("staff_applications", "view"), async (req, res) => {
   try {
     const applications = await StaffApplication.find().sort({ createdAt: -1 });
     res.json(applications.map((application) => serializeMailboxItem("career", application)));

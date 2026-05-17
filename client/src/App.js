@@ -94,7 +94,7 @@ function App() {
         <Route
           path="/patients/archive"
           element={
-            <ProtectedRoute adminOnly>
+            <ProtectedRoute moduleKey="archived_patients">
               <PatientsArchive />
             </ProtectedRoute>
           }
@@ -134,7 +134,7 @@ function App() {
         <Route
           path="/feedback"
           element={
-            <ProtectedRoute adminOnly>
+            <ProtectedRoute moduleKey="feedback">
               <FeedbackManagement />
             </ProtectedRoute>
           }
@@ -142,7 +142,7 @@ function App() {
         <Route
           path="/job-requirements"
           element={
-            <ProtectedRoute adminOnly>
+            <ProtectedRoute moduleKey="career">
               <JobRequirementsManagement />
             </ProtectedRoute>
           }
@@ -182,7 +182,7 @@ function App() {
         <Route
           path="/notifications"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute moduleKey="notifications">
               <Notifications />
             </ProtectedRoute>
           }
@@ -198,7 +198,7 @@ function App() {
         <Route
           path="/reports"
           element={
-            <ProtectedRoute adminOnly>
+            <ProtectedRoute moduleKey="reports">
               <ReportsPage />
             </ProtectedRoute>
           }

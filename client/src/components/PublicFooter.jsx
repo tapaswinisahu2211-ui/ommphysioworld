@@ -59,6 +59,7 @@ const copy = {
   services: "Services",
   faq: "FAQ",
   career: "Career",
+  privacy: "Privacy Policy",
   followUs: "Follow us",
 };
 
@@ -175,6 +176,9 @@ export default function PublicFooter() {
               </Link>
               <Link to="/contact" className="hover:text-white">
                 {t.contact}
+              </Link>
+              <Link to="/privacy-policy" className="hover:text-white">
+                {t.privacy}
               </Link>
             </div>
           </div>

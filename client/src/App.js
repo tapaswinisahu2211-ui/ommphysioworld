@@ -32,6 +32,7 @@ import ProtectedRoute from "./utils/ProtectedRoute";
 import Mailbox from "./pages/Mailbox";
 import Marketing from "./pages/Marketing";
 import Notifications from "./pages/Notifications";
+import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import ReportsPage from "./pages/ReportsPage";
 import TreatmentTracker from "./pages/TreatmentTracker";
 
@@ -69,6 +70,7 @@ function App() {
         <Route path="/patient-dashboard" element={<PatientDashboardPage />} />
         <Route path="/patient-profile" element={<PatientProfilePage />} />
         <Route path="/contact" element={<ContactPage />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
 
         {/* LOGIN */}
         <Route path="/admin" element={<Login />} />

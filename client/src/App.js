@@ -14,6 +14,7 @@ import PatientDashboardPage from "./pages/PatientDashboardPage";
 import PatientProfilePage from "./pages/PatientProfilePage";
 import Dashboard from "./pages/Dashboard";
 import FeedbackManagement from "./pages/FeedbackManagement";
+import Finance from "./pages/Finance";
 import FaqPage from "./pages/FaqPage";
 import Patients from "./pages/Patients";
 import PatientsArchive from "./pages/PatientsArchive";
@@ -200,6 +201,14 @@ function App() {
           element={
             <ProtectedRoute moduleKey="reports">
               <ReportsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/finance"
+          element={
+            <ProtectedRoute moduleKey="finance">
+              <Finance />
             </ProtectedRoute>
           }
         />

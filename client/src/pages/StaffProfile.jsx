@@ -34,6 +34,7 @@ const MODULE_LABELS = {
   feedback: "Feedback",
   career: "Career",
   reports: "Reports",
+  finance: "Finance",
   notifications: "Notifications",
   staff: "Staff",
   staff_applications: "Staff Applications",

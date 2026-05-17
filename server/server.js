@@ -66,6 +66,7 @@ const Appointment = require("./models/Appointment");
 const ChatConversation = require("./models/ChatConversation");
 const ContactMessage = require("./models/ContactMessage");
 const Feedback = require("./models/Feedback");
+const FinanceEntry = require("./models/FinanceEntry");
 const JobRequirement = require("./models/JobRequirement");
 const MarketingSource = require("./models/MarketingSource");
 const PatientNotification = require("./models/PatientNotification");
@@ -75,6 +76,7 @@ const Service = require("./models/Service");
 const ShopOrder = require("./models/ShopOrder");
 const ShopProduct = require("./models/ShopProduct");
 const StaffApplication = require("./models/StaffApplication");
+const StaffCompensation = require("./models/StaffCompensation");
 const TherapyResource = require("./models/TherapyResource");
 const User = require("./models/User");
 const shopUpload = require("./middleware/shopUpload");
@@ -561,6 +563,156 @@ const ensureTreatmentPlanSessionDays = (patient) => {
   });
 
   return changed;
+};
+
+const getDateRangeFromQuery = (query = {}) => {
+  const todayKey = getTodayKey();
+  const requestedFrom = String(query.from || "").slice(0, 10);
+  const requestedTo = String(query.to || "").slice(0, 10);
+  const fromKey = requestedFrom || `${todayKey.slice(0, 7)}-01`;
+  const toKey = requestedTo || todayKey;
+  const fromDate = parseDateKey(fromKey);
+  const toDate = parseDateKey(toKey);
+
+  if (!fromDate || !toDate) {
+    const error = new Error("Please provide a valid from and to date.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (fromDate > toDate) {
+    const error = new Error("From date cannot be after to date.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return { todayKey, fromKey, toKey, fromDate, toDate };
+};
+
+const collectPatientPaymentIncome = (patients = [], fromKey, toKey) => {
+  const isInRange = (dateKey) => Boolean(dateKey) && dateKey >= fromKey && dateKey <= toKey;
+  const payments = [];
+  const paidPatients = new Set();
+
+  patients.forEach((patient) => {
+    const patientId = patient._id.toString();
+    const patientName = patient.name || "Patient";
+    const patientEmail = patient.email || "";
+    const patientMobile = patient.mobile || "";
+
+    (patient.treatmentPlans || []).forEach((plan) => {
+      const treatmentTypes = (plan.treatmentTypes || []).join(", ") || "Treatment Session";
+
+      (plan.payments || []).forEach((payment) => {
+        const dateKey = payment.createdAt ? formatDateKey(new Date(payment.createdAt)) : "";
+        if (!isInRange(dateKey)) {
+          return;
+        }
+
+        paidPatients.add(patientId);
+        payments.push({
+          id: `${patientId}-${plan._id.toString()}-${payment._id.toString()}`,
+          type: "income",
+          source: "patient_payment",
+          title: "Session Payment",
+          category: "Patient Payment",
+          patientId,
+          patientName,
+          patientEmail,
+          patientMobile,
+          date: dateKey,
+          amount: Number(payment.amount || 0),
+          method: payment.method || "",
+          treatmentTypes,
+          createdAt: payment.createdAt || null,
+        });
+      });
+    });
+
+    (patient.payments || []).forEach((payment) => {
+      const dateKey = payment.createdAt ? formatDateKey(new Date(payment.createdAt)) : "";
+      if (!isInRange(dateKey)) {
+        return;
+      }
+
+      paidPatients.add(patientId);
+      payments.push({
+        id: `${patientId}-direct-${payment._id.toString()}`,
+        type: "income",
+        source: "patient_payment",
+        title: "Direct Payment",
+        category: "Patient Payment",
+        patientId,
+        patientName,
+        patientEmail,
+        patientMobile,
+        date: dateKey,
+        amount: Number(payment.amount || 0),
+        method: payment.method || "",
+        treatmentTypes: "",
+        createdAt: payment.createdAt || null,
+      });
+    });
+  });
+
+  return { payments, paidPatients };
+};
+
+const countMonthsInRange = (fromDate, toDate) => {
+  const start = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
+  const end = new Date(toDate.getFullYear(), toDate.getMonth(), 1);
+  let count = 0;
+  const cursor = new Date(start);
+
+  while (cursor <= end) {
+    count += 1;
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  return Math.max(count, 1);
+};
+
+const serializeFinanceEntry = (entry) => ({
+  id: entry._id.toString(),
+  type: entry.type,
+  source: entry.source || "manual",
+  title: entry.title,
+  category: entry.category || "",
+  amount: Number(entry.amount || 0),
+  date: entry.date,
+  method: entry.method || "",
+  notes: entry.notes || "",
+  staffId: entry.staffId?._id ? entry.staffId._id.toString() : entry.staffId ? entry.staffId.toString() : "",
+  staffName: entry.staffId?.name || "",
+  patientId: entry.patientId ? entry.patientId.toString() : "",
+  createdAt: entry.createdAt,
+  updatedAt: entry.updatedAt,
+});
+
+const serializeStaffCompensation = (compensation, staff, months, paidPatientCount) => {
+  const monthlySalary = Number(compensation?.monthlySalary || 0);
+  const monthlyBonus = Number(compensation?.monthlyBonus || 0);
+  const commissionPerPatient = Number(compensation?.commissionPerPatient || 0);
+  const salaryPayable = monthlySalary * months;
+  const bonusPayable = monthlyBonus * months;
+  const commissionPayable = commissionPerPatient * paidPatientCount;
+
+  return {
+    staffId: staff._id.toString(),
+    staffName: staff.name || "Staff",
+    mobile: staff.mobile || "",
+    role: staff.role || "Staff",
+    status: staff.status || "Active",
+    monthlySalary,
+    monthlyBonus,
+    commissionPerPatient,
+    notes: compensation?.notes || "",
+    salaryPayable,
+    bonusPayable,
+    commissionPayable,
+    totalPayable: salaryPayable + bonusPayable + commissionPayable,
+    updatedAt: compensation?.updatedAt || null,
+  };
 };
 
 const hasStartedActiveTreatment = (patient) => {
@@ -1965,6 +2117,212 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to load reports." });
+  }
+});
+
+app.get("/api/finance", requireStaffPermission("finance", "view"), async (req, res) => {
+  try {
+    const { fromKey, toKey, fromDate, toDate } = getDateRangeFromQuery(req.query);
+    const [patients, entries, staff, compensations] = await Promise.all([
+      Patient.find().sort({ name: 1 }),
+      FinanceEntry.find({ date: { $gte: fromKey, $lte: toKey } })
+        .populate("staffId", "name mobile role status")
+        .sort({ date: -1, createdAt: -1 }),
+      User.find().sort({ name: 1 }),
+      StaffCompensation.find(),
+    ]);
+
+    const { payments: patientIncome, paidPatients } = collectPatientPaymentIncome(
+      patients,
+      fromKey,
+      toKey
+    );
+    const manualEntries = entries.map(serializeFinanceEntry);
+    const manualIncome = manualEntries.filter((entry) => entry.type === "income");
+    const expenses = manualEntries.filter((entry) => entry.type === "expense");
+    const months = countMonthsInRange(fromDate, toDate);
+    const compensationByStaff = new Map(
+      compensations.map((item) => [item.staffId.toString(), item])
+    );
+    const salary = staff.map((member) =>
+      serializeStaffCompensation(
+        compensationByStaff.get(member._id.toString()),
+        member,
+        months,
+        paidPatients.size
+      )
+    );
+    const salaryPayable = salary.reduce((sum, item) => sum + item.salaryPayable, 0);
+    const bonusPayable = salary.reduce((sum, item) => sum + item.bonusPayable, 0);
+    const commissionPayable = salary.reduce((sum, item) => sum + item.commissionPayable, 0);
+    const manualIncomeAmount = manualIncome.reduce((sum, entry) => sum + entry.amount, 0);
+    const patientIncomeAmount = patientIncome.reduce((sum, entry) => sum + entry.amount, 0);
+    const expenseAmount = expenses.reduce((sum, entry) => sum + entry.amount, 0);
+    const payrollPayable = salaryPayable + bonusPayable + commissionPayable;
+    const totalIncome = patientIncomeAmount + manualIncomeAmount;
+    const totalExpense = expenseAmount + payrollPayable;
+
+    res.json({
+      range: { from: fromKey, to: toKey, months },
+      summary: {
+        patientIncome: patientIncomeAmount,
+        manualIncome: manualIncomeAmount,
+        totalIncome,
+        manualExpense: expenseAmount,
+        salaryPayable,
+        bonusPayable,
+        commissionPayable,
+        payrollPayable,
+        totalExpense,
+        netBalance: totalIncome - totalExpense,
+        paidPatientCount: paidPatients.size,
+      },
+      patientIncome,
+      manualIncome,
+      expenses,
+      salary,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(error.statusCode || 500).json({ message: error.message || "Failed to load finance data." });
+  }
+});
+
+app.post("/api/finance/entries", requireStaffPermission("finance", "add"), async (req, res) => {
+  try {
+    const type = cleanText(req.body.type).toLowerCase();
+    const title = cleanText(req.body.title);
+    const category = cleanText(req.body.category);
+    const amount = Number(req.body.amount || 0);
+    const date = cleanText(req.body.date).slice(0, 10) || getTodayKey();
+
+    if (!["income", "expense"].includes(type)) {
+      return res.status(400).json({ message: "Entry type must be income or expense." });
+    }
+
+    if (!title || title.length < 2) {
+      return res.status(400).json({ message: "Please enter a title." });
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ message: "Please enter a valid amount." });
+    }
+
+    if (!parseDateKey(date)) {
+      return res.status(400).json({ message: "Please enter a valid date." });
+    }
+
+    const entry = await FinanceEntry.create({
+      type,
+      source: cleanText(req.body.source) || "manual",
+      title,
+      category,
+      amount,
+      date,
+      method: cleanText(req.body.method),
+      notes: cleanText(req.body.notes),
+      staffId: req.body.staffId || null,
+      patientId: req.body.patientId || null,
+      createdBy: req.auth?.type === "staff" ? req.auth.sub : null,
+    });
+
+    await entry.populate("staffId", "name mobile role status");
+    res.status(201).json(serializeFinanceEntry(entry));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to save finance entry." });
+  }
+});
+
+app.put("/api/finance/entries/:id", requireStaffPermission("finance", "edit"), async (req, res) => {
+  try {
+    const entry = await FinanceEntry.findById(req.params.id);
+
+    if (!entry) {
+      return res.status(404).json({ message: "Finance entry not found." });
+    }
+
+    const type = cleanText(req.body.type).toLowerCase();
+    const title = cleanText(req.body.title);
+    const amount = Number(req.body.amount || 0);
+    const date = cleanText(req.body.date).slice(0, 10) || entry.date;
+
+    if (!["income", "expense"].includes(type)) {
+      return res.status(400).json({ message: "Entry type must be income or expense." });
+    }
+
+    if (!title || title.length < 2) {
+      return res.status(400).json({ message: "Please enter a title." });
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return res.status(400).json({ message: "Please enter a valid amount." });
+    }
+
+    if (!parseDateKey(date)) {
+      return res.status(400).json({ message: "Please enter a valid date." });
+    }
+
+    entry.type = type;
+    entry.source = cleanText(req.body.source) || "manual";
+    entry.title = title;
+    entry.category = cleanText(req.body.category);
+    entry.amount = amount;
+    entry.date = date;
+    entry.method = cleanText(req.body.method);
+    entry.notes = cleanText(req.body.notes);
+    entry.staffId = req.body.staffId || null;
+    entry.patientId = req.body.patientId || null;
+    await entry.save();
+    await entry.populate("staffId", "name mobile role status");
+
+    res.json(serializeFinanceEntry(entry));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to update finance entry." });
+  }
+});
+
+app.delete("/api/finance/entries/:id", requireStaffPermission("finance", "edit"), async (req, res) => {
+  try {
+    const entry = await FinanceEntry.findByIdAndDelete(req.params.id);
+
+    if (!entry) {
+      return res.status(404).json({ message: "Finance entry not found." });
+    }
+
+    res.json({ message: "Finance entry deleted." });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to delete finance entry." });
+  }
+});
+
+app.put("/api/finance/staff/:staffId/compensation", requireStaffPermission("finance", "edit"), async (req, res) => {
+  try {
+    const staff = await User.findById(req.params.staffId);
+
+    if (!staff) {
+      return res.status(404).json({ message: "Staff member not found." });
+    }
+
+    const compensation = await StaffCompensation.findOneAndUpdate(
+      { staffId: staff._id },
+      {
+        staffId: staff._id,
+        monthlySalary: Math.max(Number(req.body.monthlySalary || 0), 0),
+        monthlyBonus: Math.max(Number(req.body.monthlyBonus || 0), 0),
+        commissionPerPatient: Math.max(Number(req.body.commissionPerPatient || 0), 0),
+        notes: cleanText(req.body.notes),
+        updatedBy: req.auth?.type === "staff" ? req.auth.sub : null,
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    res.json(serializeStaffCompensation(compensation, staff, 1, 0));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to save staff compensation." });
   }
 });
 

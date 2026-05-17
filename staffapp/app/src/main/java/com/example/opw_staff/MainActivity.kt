@@ -184,6 +184,7 @@ private enum class AdminTab(val label: String, val adminOnly: Boolean = false) {
     Feedback("Feedback"),
     Jobs("Career"),
     Reports("Report"),
+    Finance("Finance"),
     Mailbox("Mailbox"),
     Notifications("Notifications"),
     Chat("Chat"),
@@ -210,6 +211,7 @@ private data class DashboardUiState(
     val feedbackItems: List<JSONObject> = emptyList(),
     val jobRequirements: List<JSONObject> = emptyList(),
     val reports: JSONObject? = null,
+    val finance: JSONObject? = null,
     val chatConversations: List<JSONObject> = emptyList(),
     val treatmentTracker: JSONObject? = null,
     val moduleErrors: Map<String, String> = emptyMap(),
@@ -310,6 +312,7 @@ private fun moduleAccent(tab: AdminTab): Color =
         AdminTab.Feedback -> Color(0xFFEAB308)
         AdminTab.Jobs -> Color(0xFF16A34A)
         AdminTab.Reports -> Color(0xFF4F46E5)
+        AdminTab.Finance -> Color(0xFF059669)
         AdminTab.Mailbox -> Color(0xFFE11D48)
         AdminTab.Notifications -> Color(0xFF0F766E)
         AdminTab.Chat -> Color(0xFF10B981)
@@ -331,6 +334,7 @@ private fun moduleCaption(tab: AdminTab): String =
         AdminTab.Feedback -> "Approve public testimonials"
         AdminTab.Jobs -> "Career openings published to the website"
         AdminTab.Reports -> "Date-wise patients, sessions, and payments"
+        AdminTab.Finance -> "Income, expenses, salary, bonus, and commission"
         AdminTab.Mailbox -> "Career and contact inbox"
         AdminTab.Notifications -> "Custom patient notification center"
         AdminTab.Chat -> "Website visitor conversations"
@@ -590,6 +594,13 @@ private fun StaffAdminApp() {
                 } else {
                     null
                 },
+                finance = if (canView(AdminTab.Finance)) {
+                    loadOptional("finance", null) {
+                        api.getFinance(activeSession.token, reportFromDate, reportToDate)
+                    }
+                } else {
+                    null
+                },
                 chatConversations = if (canView(AdminTab.Chat)) loadOptional("chat", emptyList()) {
                     api.getChatConversations(activeSession.token)
                 } else emptyList(),
@@ -619,6 +630,7 @@ private fun StaffAdminApp() {
                 feedbackItems = snapshot.feedbackItems,
                 jobRequirements = snapshot.jobRequirements,
                 reports = snapshot.reports,
+                finance = snapshot.finance,
                 chatConversations = snapshot.chatConversations,
                 treatmentTracker = snapshot.treatmentTracker,
                 moduleErrors = snapshot.moduleErrors,
@@ -872,6 +884,50 @@ private fun StaffAdminApp() {
                 reportError = networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error)
             } finally {
                 reportLoading = false
+            }
+        }
+    }
+
+    fun reloadFinance() {
+        val activeSession = session ?: return
+        scope.launch {
+            try {
+                val finance = api.getFinance(activeSession.token, reportFromDate, reportToDate)
+                dashboardState = dashboardState.copy(finance = finance)
+            } catch (error: Exception) {
+                showMessage(networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error))
+            }
+        }
+    }
+
+    fun saveFinanceEntry(id: String?, payload: JSONObject) {
+        val activeSession = session ?: return
+        scope.launch {
+            try {
+                api.saveFinanceEntry(activeSession.token, id, payload)
+                reloadFinance()
+                showMessage("Finance entry saved.")
+            } catch (error: ApiException) {
+                showMessage(error.message)
+            } catch (error: Exception) {
+                showMessage(networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error))
+            }
+        }
+    }
+
+    fun deleteFinanceEntry(item: JSONObject) {
+        val activeSession = session ?: return
+        val id = item.text("id")
+        if (id.isBlank()) return
+        scope.launch {
+            try {
+                api.deleteFinanceEntry(activeSession.token, id)
+                reloadFinance()
+                showMessage("Finance entry deleted.")
+            } catch (error: ApiException) {
+                showMessage(error.message)
+            } catch (error: Exception) {
+                showMessage(networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error))
             }
         }
     }
@@ -1989,6 +2045,9 @@ private fun StaffAdminApp() {
                         reportError = ""
                     },
                     onReportApply = ::applyReportFilter,
+                    onFinanceApply = ::reloadFinance,
+                    onFinanceSave = ::saveFinanceEntry,
+                    onFinanceDelete = ::deleteFinanceEntry,
                     onPatientSave = ::savePatient,
                     onPatientArchive = ::archivePatient,
                     onPatientRestore = ::restorePatient,
@@ -2192,6 +2251,9 @@ private fun DashboardScreen(
     onJobDelete: (JSONObject) -> Unit,
     onReportRangeChange: (String, String) -> Unit,
     onReportApply: () -> Unit,
+    onFinanceApply: () -> Unit,
+    onFinanceSave: (String?, JSONObject) -> Unit,
+    onFinanceDelete: (JSONObject) -> Unit,
     onPatientSave: (String?, JSONObject) -> Unit,
     onPatientArchive: (JSONObject) -> Unit,
     onPatientRestore: (JSONObject) -> Unit,
@@ -2257,6 +2319,7 @@ private fun DashboardScreen(
         AdminTab.Marketing,
         AdminTab.Feedback,
         AdminTab.Jobs,
+        AdminTab.Finance,
         AdminTab.Chat,
         AdminTab.Team,
     )
@@ -2267,6 +2330,7 @@ private fun DashboardScreen(
         AdminTab.Shop,
         AdminTab.Marketing,
         AdminTab.Jobs,
+        AdminTab.Finance,
         AdminTab.Team,
     ) && canAddAdminTab(currentUser, activeTab)
     val activeAdmins = state.users.count { it.role == "Admin" }
@@ -2671,6 +2735,18 @@ private fun DashboardScreen(
                         error = reportError,
                         onRangeChange = onReportRangeChange,
                         onApply = onReportApply,
+                    )
+                    AdminTab.Finance -> FinanceTab(
+                        finance = state.finance,
+                        users = state.users,
+                        fromDate = reportFromDate,
+                        toDate = reportToDate,
+                        onRangeChange = onReportRangeChange,
+                        onApply = onFinanceApply,
+                        onSave = onFinanceSave,
+                        onDelete = onFinanceDelete,
+                        canEdit = canEditAdminTab(currentUser, AdminTab.Finance),
+                        addRequest = headerAddRequest,
                     )
                     AdminTab.Chat -> ChatTab(
                         conversations = state.chatConversations,
@@ -10080,6 +10156,285 @@ private fun ReportsTab(
 }
 
 @Composable
+private fun FinanceTab(
+    finance: JSONObject?,
+    users: List<StaffUser>,
+    fromDate: String,
+    toDate: String,
+    onRangeChange: (String, String) -> Unit,
+    onApply: () -> Unit,
+    onSave: (String?, JSONObject) -> Unit,
+    onDelete: (JSONObject) -> Unit,
+    canEdit: Boolean,
+    addRequest: Int,
+) {
+    val summary = finance?.objectValue("summary") ?: JSONObject()
+    val patientIncome = finance?.array("patientIncome")?.toJsonObjects().orEmpty()
+    val manualIncome = finance?.array("manualIncome")?.toJsonObjects().orEmpty()
+    val expenses = finance?.array("expenses")?.toJsonObjects().orEmpty()
+    val salary = finance?.array("salary")?.toJsonObjects().orEmpty()
+    var showFromDatePicker by rememberSaveable { mutableStateOf(false) }
+    var showToDatePicker by rememberSaveable { mutableStateOf(false) }
+    var editingEntry by remember { mutableStateOf<JSONObject?>(null) }
+    var showEntryDialog by rememberSaveable { mutableStateOf(false) }
+
+    if (showFromDatePicker) {
+        AppointmentDatePickerDialog(
+            selectedDate = fromDate,
+            onDismiss = { showFromDatePicker = false },
+            onDateSelected = { selected ->
+                onRangeChange(selected, toDate)
+                showFromDatePicker = false
+            },
+        )
+    }
+
+    if (showToDatePicker) {
+        AppointmentDatePickerDialog(
+            selectedDate = toDate,
+            onDismiss = { showToDatePicker = false },
+            onDateSelected = { selected ->
+                onRangeChange(fromDate, selected)
+                showToDatePicker = false
+            },
+        )
+    }
+
+    if (showEntryDialog) {
+        FinanceEntryDialog(
+            entry = editingEntry,
+            users = users,
+            onDismiss = {
+                showEntryDialog = false
+                editingEntry = null
+            },
+            onSave = { id, payload ->
+                onSave(id, payload)
+                showEntryDialog = false
+                editingEntry = null
+            },
+        )
+    }
+
+    LaunchedEffect(addRequest) {
+        if (addRequest > 0) {
+            editingEntry = null
+            showEntryDialog = true
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        ReportFilterCard(
+            fromDate = fromDate,
+            toDate = toDate,
+            loading = false,
+            onFromClick = { showFromDatePicker = true },
+            onToClick = { showToDatePicker = true },
+            onApply = onApply,
+        )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            MetricCard(
+                modifier = Modifier.weight(1f),
+                label = "Income",
+                value = formatMoney(summary.opt("totalIncome")),
+                accent = OpwSuccess,
+            )
+            MetricCard(
+                modifier = Modifier.weight(1f),
+                label = "Expense",
+                value = formatMoney(summary.opt("totalExpense")),
+                accent = OpwDanger,
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            MetricCard(
+                modifier = Modifier.weight(1f),
+                label = "Payroll",
+                value = formatMoney(summary.opt("payrollPayable")),
+                accent = OpwBlue,
+            )
+            MetricCard(
+                modifier = Modifier.weight(1f),
+                label = "Balance",
+                value = formatMoney(summary.opt("netBalance")),
+                accent = OpwWarning,
+            )
+        }
+
+        FinanceRecordsSection(
+            title = "Patient Income",
+            emptyMessage = "No patient payment income in this range.",
+            items = patientIncome,
+            accent = OpwSuccess,
+        )
+        FinanceRecordsSection(
+            title = "Manual Income",
+            emptyMessage = "No manual income added yet.",
+            items = manualIncome,
+            accent = OpwAqua,
+            canEdit = canEdit,
+            onEdit = { item ->
+                editingEntry = item
+                showEntryDialog = true
+            },
+            onDelete = onDelete,
+        )
+        FinanceRecordsSection(
+            title = "Expenses",
+            emptyMessage = "No expense added yet.",
+            items = expenses,
+            accent = OpwDanger,
+            canEdit = canEdit,
+            onEdit = { item ->
+                editingEntry = item
+                showEntryDialog = true
+            },
+            onDelete = onDelete,
+        )
+
+        SectionCard(title = "Salary, Bonus and Commission") {
+            if (salary.isEmpty()) {
+                InlineEmpty("No staff salary data available.")
+            } else {
+                salary.forEach { item ->
+                    ReportRecordCard(
+                        title = item.text("staffName", fallback = "Staff"),
+                        subtitle = item.text("role", fallback = "Staff"),
+                        status = formatMoney(item.opt("totalPayable")),
+                        statusColor = OpwBlue,
+                        rows = listOf(
+                            "Monthly Salary" to formatMoney(item.opt("monthlySalary")),
+                            "Monthly Bonus" to formatMoney(item.opt("monthlyBonus")),
+                            "Commission / Patient" to formatMoney(item.opt("commissionPerPatient")),
+                            "Commission Payable" to formatMoney(item.opt("commissionPayable")),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FinanceRecordsSection(
+    title: String,
+    emptyMessage: String,
+    items: List<JSONObject>,
+    accent: Color,
+    canEdit: Boolean = false,
+    onEdit: ((JSONObject) -> Unit)? = null,
+    onDelete: ((JSONObject) -> Unit)? = null,
+) {
+    SectionCard(title = title) {
+        if (items.isEmpty()) {
+            InlineEmpty(emptyMessage)
+        } else {
+            items.forEach { item ->
+                ReportRecordCard(
+                    title = item.text("title", fallback = "Finance entry"),
+                    subtitle = item.text("category", fallback = item.text("method", fallback = "Finance")),
+                    status = formatMoney(item.opt("amount")),
+                    statusColor = accent,
+                    rows = listOf(
+                        "Date" to item.text("date", fallback = "Not set"),
+                        "Staff / Patient" to item.text("staffName", "patientName", fallback = "-"),
+                        "Method" to item.text("method", fallback = "-"),
+                        "Notes" to item.text("notes", fallback = "-"),
+                    ),
+                    actions = if (canEdit && onEdit != null && onDelete != null) {
+                        {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                ModuleIconButton(color = OpwBlue, onClick = { onEdit(item) }) {
+                                    EditGlyph(OpwBlue)
+                                }
+                                ModuleIconButton(color = OpwDanger, onClick = { onDelete(item) }) {
+                                    TrashGlyph(OpwDanger)
+                                }
+                            }
+                        }
+                    } else null,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FinanceEntryDialog(
+    entry: JSONObject?,
+    users: List<StaffUser>,
+    onDismiss: () -> Unit,
+    onSave: (String?, JSONObject) -> Unit,
+) {
+    var type by rememberSaveable(entry?.text("id").orEmpty()) { mutableStateOf(entry?.text("type") ?: "income") }
+    var title by rememberSaveable(entry?.text("id").orEmpty()) { mutableStateOf(entry?.text("title").orEmpty()) }
+    var category by rememberSaveable(entry?.text("id").orEmpty()) { mutableStateOf(entry?.text("category").orEmpty()) }
+    var amount by rememberSaveable(entry?.text("id").orEmpty()) { mutableStateOf(entry?.optDouble("amount", 0.0)?.takeIf { it > 0.0 }?.toString().orEmpty()) }
+    var date by rememberSaveable(entry?.text("id").orEmpty()) { mutableStateOf(entry?.text("date").orEmpty().ifBlank { todayDateKey() }) }
+    var method by rememberSaveable(entry?.text("id").orEmpty()) { mutableStateOf(entry?.text("method").orEmpty()) }
+    var notes by rememberSaveable(entry?.text("id").orEmpty()) { mutableStateOf(entry?.text("notes").orEmpty()) }
+    var staffId by rememberSaveable(entry?.text("id").orEmpty()) { mutableStateOf(entry?.text("staffId").orEmpty()) }
+    var error by rememberSaveable { mutableStateOf("") }
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
+
+    OpwBottomSheetDialog(
+        title = if (entry == null) "Add Finance Entry" else "Edit Finance Entry",
+        primaryLabel = if (entry == null) "Save Entry" else "Update Entry",
+        onDismiss = onDismiss,
+        onPrimary = {
+            val value = amount.toDoubleOrNull() ?: 0.0
+            when {
+                title.trim().length < 2 -> error = "Enter a title."
+                value <= 0.0 -> error = "Enter a valid amount."
+                date.isBlank() -> error = "Choose a date."
+                else -> onSave(
+                    entry?.text("id"),
+                    JSONObject()
+                        .put("type", type)
+                        .put("title", title.trim())
+                        .put("category", category.trim())
+                        .put("amount", value)
+                        .put("date", date)
+                        .put("method", method.trim())
+                        .put("notes", notes.trim())
+                        .put("staffId", staffId),
+                )
+            }
+        },
+    ) {
+        if (error.isNotBlank()) {
+            StatusBanner(message = error, tone = BannerTone.Error)
+        }
+        ChoiceChipRow(listOf("income", "expense"), type) { selected -> type = selected }
+        SheetPatientField("Title", title, { title = it; error = "" })
+        SheetPatientField("Category", category, { category = it })
+        SheetPatientField("Amount", amount, { amount = it.filter { char -> char.isDigit() || char == '.' }; error = "" }, KeyboardType.Number)
+        SheetPickerField("Date", appointmentDateLabel(date), "Pick date", onClick = { showDatePicker = true })
+        SheetPatientField("Method", method, { method = it })
+        SheetPatientField("Notes", notes, { notes = it }, minLines = 2)
+        if (users.isNotEmpty()) {
+            Text("Staff Link", fontWeight = FontWeight.Bold, color = OpwInk)
+            ChoiceChipRow(listOf("None") + users.map { it.name.ifBlank { it.email } }, users.firstOrNull { it.id == staffId }?.name ?: "None") { selected ->
+                staffId = users.firstOrNull { (it.name.ifBlank { it.email }) == selected }?.id.orEmpty()
+            }
+        }
+    }
+
+    if (showDatePicker) {
+        AppointmentDatePickerDialog(
+            selectedDate = date,
+            onDismiss = { showDatePicker = false },
+            onDateSelected = {
+                date = it
+                error = ""
+                showDatePicker = false
+            },
+        )
+    }
+}
+
+@Composable
 private fun ReportFilterCard(
     fromDate: String,
     toDate: String,
@@ -10223,6 +10578,7 @@ private fun ReportRecordCard(
     status: String,
     statusColor: Color,
     rows: List<Pair<String, String>>,
+    actions: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     Card(
         modifier = Modifier
@@ -10261,6 +10617,7 @@ private fun ReportRecordCard(
             rows.filter { it.second.isNotBlank() }.forEach { row ->
                 DetailRow(row.first, row.second)
             }
+            actions?.invoke(this)
         }
     }
 }
@@ -11589,6 +11946,7 @@ private fun moduleCount(tab: AdminTab, state: DashboardUiState): Int =
             it.text("status", fallback = "Active") == "Active" && it.optBoolean("isPublished", true)
         }
         AdminTab.Reports -> state.reports?.objectValue("summary")?.optInt("paymentCount", 0) ?: 0
+        AdminTab.Finance -> state.finance?.objectValue("summary")?.optInt("paidPatientCount", 0) ?: 0
         AdminTab.Chat -> state.chatConversations.count { it.optBoolean("unreadForAgent") }
         AdminTab.Team -> state.users.size
         AdminTab.Create -> 0
@@ -11612,6 +11970,7 @@ private fun adminTabPermissionKey(tab: AdminTab): String? =
         AdminTab.Feedback -> "feedback"
         AdminTab.Jobs -> "career"
         AdminTab.Reports -> "reports"
+        AdminTab.Finance -> "finance"
         AdminTab.Create,
         AdminTab.Profile -> null
     }
@@ -11672,6 +12031,7 @@ private fun moduleErrorsForTab(tab: AdminTab, state: DashboardUiState): List<Str
         AdminTab.Feedback -> listOf("feedback")
         AdminTab.Jobs -> listOf("job requirements")
         AdminTab.Reports -> listOf("reports")
+        AdminTab.Finance -> listOf("finance")
         AdminTab.Chat -> listOf("chat")
         AdminTab.Team -> listOf("staff")
         AdminTab.Create -> emptyList()

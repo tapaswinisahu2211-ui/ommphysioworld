@@ -488,6 +488,28 @@ class StaffApiService(
             JSONObject(request("GET", "/reports?from=$from&to=$to", token = token))
         }
 
+    suspend fun getFinance(token: String, fromDate: String, toDate: String): JSONObject =
+        withContext(Dispatchers.IO) {
+            val from = java.net.URLEncoder.encode(fromDate.trim(), "UTF-8")
+            val to = java.net.URLEncoder.encode(toDate.trim(), "UTF-8")
+            JSONObject(request("GET", "/finance?from=$from&to=$to", token = token))
+        }
+
+    suspend fun saveFinanceEntry(token: String, id: String?, payload: JSONObject): JSONObject =
+        withContext(Dispatchers.IO) {
+            if (id.isNullOrBlank()) {
+                JSONObject(request("POST", "/finance/entries", token = token, body = payload))
+            } else {
+                JSONObject(request("PUT", "/finance/entries/$id", token = token, body = payload))
+            }
+        }
+
+    suspend fun deleteFinanceEntry(token: String, id: String) {
+        withContext(Dispatchers.IO) {
+            request("DELETE", "/finance/entries/$id", token = token)
+        }
+    }
+
     suspend fun getChatConversations(token: String): List<JSONObject> =
         getJsonArray(token, "/chat/conversations")
 

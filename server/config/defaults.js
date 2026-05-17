@@ -17,6 +17,7 @@ const DEFAULT_STAFF_PERMISSIONS = [
   { module: "clinical_notes", view: true, add: true, edit: true },
   { module: "therapy_recommendations", view: true, add: true, edit: true },
   { module: "payments", view: true, add: true, edit: true },
+  { module: "finance", view: false, add: false, edit: false },
   { module: "documents", view: true, add: true, edit: false },
   { module: "chat", view: false, add: true, edit: true },
   { module: "services", view: false, add: false, edit: false },

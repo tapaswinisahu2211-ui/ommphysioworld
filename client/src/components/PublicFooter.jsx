@@ -8,6 +8,9 @@ import instagramIcon from "../assets/social/instagram.png";
 import facebookIcon from "../assets/social/facebook.png";
 import { getPatientUser } from "../utils/patientAuth";
 
+const playStoreUrl =
+  "https://play.google.com/store/apps/details?id=com.ommphysioworld.userapp";
+
 const followLinks = [
   {
     label: "Facebook",
@@ -96,10 +99,11 @@ export default function PublicFooter() {
               </Link>
             ) : null}
             <a
-              href="#download-app"
-              onClick={(event) => event.preventDefault()}
+              href={playStoreUrl}
+              target="_blank"
+              rel="noreferrer"
               className="inline-flex items-center justify-center gap-2 rounded-full border border-cyan-300/30 bg-cyan-300/15 px-6 py-3.5 text-sm font-semibold text-cyan-50 hover:bg-cyan-200 hover:text-cyan-950"
-              title="Download app"
+              title="Download Omm Physio World on Google Play"
             >
               <Download size={17} />
               {t.downloadApp}

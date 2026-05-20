@@ -7,6 +7,13 @@ mobileapp/node_modules/
 client/.env
 server/.env
 mobileapp/.env
+*.jks
+*.keystore
+*.p12
+keystore.properties
+local.properties
+ommphysioworld_key*
+opw-staff-upload*
 
 build/
 dist/
@@ -18,4 +25,3 @@ mongosh -u opwadmin -p --authenticationDatabase admin
 use myapp
 show collections
 db.users.find().pretty()
-

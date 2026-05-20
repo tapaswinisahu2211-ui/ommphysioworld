@@ -5,6 +5,9 @@ import logoImage from "../assets/opw.png";
 import { clearPatientUser, getPatientUser } from "../utils/patientAuth";
 import { getShopCartEventName, getShopCartItemCount } from "../utils/shopCart";
 
+const playStoreUrl =
+  "https://play.google.com/store/apps/details?id=com.ommphysioworld.userapp";
+
 const copy = {
   nav: [
     { label: "Home", path: "/" },
@@ -88,10 +91,11 @@ export default function PublicNavbar() {
 
           <div className="flex flex-wrap items-center gap-3">
             <a
-              href="#download-app"
-              onClick={(event) => event.preventDefault()}
+              href={playStoreUrl}
+              target="_blank"
+              rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/95 transition hover:bg-white hover:text-slate-950"
-              title="Download app"
+              title="Download Omm Physio World on Google Play"
             >
               <Download size={14} />
               {t.downloadApp}

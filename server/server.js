@@ -76,7 +76,6 @@ const Service = require("./models/Service");
 const ShopOrder = require("./models/ShopOrder");
 const ShopProduct = require("./models/ShopProduct");
 const StaffApplication = require("./models/StaffApplication");
-const StaffCompensation = require("./models/StaffCompensation");
 const TherapyResource = require("./models/TherapyResource");
 const User = require("./models/User");
 const shopUpload = require("./middleware/shopUpload");
@@ -658,20 +657,6 @@ const collectPatientPaymentIncome = (patients = [], fromKey, toKey) => {
   return { payments, paidPatients };
 };
 
-const countMonthsInRange = (fromDate, toDate) => {
-  const start = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
-  const end = new Date(toDate.getFullYear(), toDate.getMonth(), 1);
-  let count = 0;
-  const cursor = new Date(start);
-
-  while (cursor <= end) {
-    count += 1;
-    cursor.setMonth(cursor.getMonth() + 1);
-  }
-
-  return Math.max(count, 1);
-};
-
 const serializeFinanceEntry = (entry) => ({
   id: entry._id.toString(),
   type: entry.type,
@@ -688,32 +673,6 @@ const serializeFinanceEntry = (entry) => ({
   createdAt: entry.createdAt,
   updatedAt: entry.updatedAt,
 });
-
-const serializeStaffCompensation = (compensation, staff, months, paidPatientCount) => {
-  const monthlySalary = Number(compensation?.monthlySalary || 0);
-  const monthlyBonus = Number(compensation?.monthlyBonus || 0);
-  const commissionPerPatient = Number(compensation?.commissionPerPatient || 0);
-  const salaryPayable = monthlySalary * months;
-  const bonusPayable = monthlyBonus * months;
-  const commissionPayable = commissionPerPatient * paidPatientCount;
-
-  return {
-    staffId: staff._id.toString(),
-    staffName: staff.name || "Staff",
-    mobile: staff.mobile || "",
-    role: staff.role || "Staff",
-    status: staff.status || "Active",
-    monthlySalary,
-    monthlyBonus,
-    commissionPerPatient,
-    notes: compensation?.notes || "",
-    salaryPayable,
-    bonusPayable,
-    commissionPayable,
-    totalPayable: salaryPayable + bonusPayable + commissionPayable,
-    updatedAt: compensation?.updatedAt || null,
-  };
-};
 
 const hasStartedActiveTreatment = (patient) => {
   if (!patient) {
@@ -2122,14 +2081,12 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
 
 app.get("/api/finance", requireStaffPermission("finance", "view"), async (req, res) => {
   try {
-    const { fromKey, toKey, fromDate, toDate } = getDateRangeFromQuery(req.query);
-    const [patients, entries, staff, compensations] = await Promise.all([
+    const { fromKey, toKey } = getDateRangeFromQuery(req.query);
+    const [patients, entries] = await Promise.all([
       Patient.find().sort({ name: 1 }),
       FinanceEntry.find({ date: { $gte: fromKey, $lte: toKey } })
         .populate("staffId", "name mobile role status")
         .sort({ date: -1, createdAt: -1 }),
-      User.find().sort({ name: 1 }),
-      StaffCompensation.find(),
     ]);
 
     const { payments: patientIncome, paidPatients } = collectPatientPaymentIncome(
@@ -2140,39 +2097,19 @@ app.get("/api/finance", requireStaffPermission("finance", "view"), async (req, r
     const manualEntries = entries.map(serializeFinanceEntry);
     const manualIncome = manualEntries.filter((entry) => entry.type === "income");
     const expenses = manualEntries.filter((entry) => entry.type === "expense");
-    const months = countMonthsInRange(fromDate, toDate);
-    const compensationByStaff = new Map(
-      compensations.map((item) => [item.staffId.toString(), item])
-    );
-    const salary = staff.map((member) =>
-      serializeStaffCompensation(
-        compensationByStaff.get(member._id.toString()),
-        member,
-        months,
-        paidPatients.size
-      )
-    );
-    const salaryPayable = salary.reduce((sum, item) => sum + item.salaryPayable, 0);
-    const bonusPayable = salary.reduce((sum, item) => sum + item.bonusPayable, 0);
-    const commissionPayable = salary.reduce((sum, item) => sum + item.commissionPayable, 0);
     const manualIncomeAmount = manualIncome.reduce((sum, entry) => sum + entry.amount, 0);
     const patientIncomeAmount = patientIncome.reduce((sum, entry) => sum + entry.amount, 0);
     const expenseAmount = expenses.reduce((sum, entry) => sum + entry.amount, 0);
-    const payrollPayable = salaryPayable + bonusPayable + commissionPayable;
     const totalIncome = patientIncomeAmount + manualIncomeAmount;
-    const totalExpense = expenseAmount + payrollPayable;
+    const totalExpense = expenseAmount;
 
     res.json({
-      range: { from: fromKey, to: toKey, months },
+      range: { from: fromKey, to: toKey },
       summary: {
         patientIncome: patientIncomeAmount,
         manualIncome: manualIncomeAmount,
         totalIncome,
         manualExpense: expenseAmount,
-        salaryPayable,
-        bonusPayable,
-        commissionPayable,
-        payrollPayable,
         totalExpense,
         netBalance: totalIncome - totalExpense,
         paidPatientCount: paidPatients.size,
@@ -2180,7 +2117,6 @@ app.get("/api/finance", requireStaffPermission("finance", "view"), async (req, r
       patientIncome,
       manualIncome,
       expenses,
-      salary,
     });
   } catch (error) {
     console.log(error);
@@ -2295,34 +2231,6 @@ app.delete("/api/finance/entries/:id", requireStaffPermission("finance", "edit")
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to delete finance entry." });
-  }
-});
-
-app.put("/api/finance/staff/:staffId/compensation", requireStaffPermission("finance", "edit"), async (req, res) => {
-  try {
-    const staff = await User.findById(req.params.staffId);
-
-    if (!staff) {
-      return res.status(404).json({ message: "Staff member not found." });
-    }
-
-    const compensation = await StaffCompensation.findOneAndUpdate(
-      { staffId: staff._id },
-      {
-        staffId: staff._id,
-        monthlySalary: Math.max(Number(req.body.monthlySalary || 0), 0),
-        monthlyBonus: Math.max(Number(req.body.monthlyBonus || 0), 0),
-        commissionPerPatient: Math.max(Number(req.body.commissionPerPatient || 0), 0),
-        notes: cleanText(req.body.notes),
-        updatedBy: req.auth?.type === "staff" ? req.auth.sub : null,
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-
-    res.json(serializeStaffCompensation(compensation, staff, 1, 0));
-  } catch (error) {
-    console.log(error);
-    res.status(500).json({ message: "Failed to save staff compensation." });
   }
 });
 

@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Banknote,
-  BriefcaseBusiness,
-  CalendarRange,
   Pencil,
   Plus,
   Trash2,
@@ -129,7 +127,6 @@ export default function Finance() {
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState("");
-  const [compensationDrafts, setCompensationDrafts] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -157,24 +154,10 @@ export default function Finance() {
     loadFinance();
   }, [loadFinance]);
 
-  useEffect(() => {
-    const nextDrafts = {};
-    (data?.salary || []).forEach((item) => {
-      nextDrafts[item.staffId] = {
-        monthlySalary: item.monthlySalary || "",
-        monthlyBonus: item.monthlyBonus || "",
-        commissionPerPatient: item.commissionPerPatient || "",
-        notes: item.notes || "",
-      };
-    });
-    setCompensationDrafts(nextDrafts);
-  }, [data?.salary]);
-
   const summary = data?.summary || {};
   const manualIncome = data?.manualIncome || [];
   const patientIncome = data?.patientIncome || [];
   const expenses = data?.expenses || [];
-  const salary = data?.salary || [];
 
   const staffOptions = useMemo(
     () => users.filter((user) => user.role !== "Admin" || user.status === "Active"),
@@ -221,18 +204,6 @@ export default function Finance() {
     await loadFinance();
   };
 
-  const saveCompensation = async (staffId) => {
-    setSaving(true);
-    try {
-      await API.put(`/finance/staff/${staffId}/compensation`, compensationDrafts[staffId] || {});
-      await loadFinance();
-    } catch (saveError) {
-      setError(saveError.response?.data?.message || "Failed to save salary details.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -242,7 +213,7 @@ export default function Finance() {
               <p className="text-sm uppercase tracking-[0.22em] text-white/60">Finance Desk</p>
               <h1 className="mt-2 text-3xl font-semibold">Income and Expense</h1>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-white/75">
-                Patient payments are pulled automatically. Add manual income, expenses, and staff salary settings here.
+                Patient payments are pulled automatically. Add manual income and expenses here.
               </p>
             </div>
             <div className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm">
@@ -271,8 +242,8 @@ export default function Finance() {
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Total Income" value={formatMoney(summary.totalIncome)} note="Patient + manual income" icon={TrendingUp} tone="bg-emerald-50 text-emerald-700" />
-          <StatCard label="Total Expense" value={formatMoney(summary.totalExpense)} note="Manual expense + payroll payable" icon={TrendingDown} tone="bg-rose-50 text-rose-700" />
-          <StatCard label="Payroll Payable" value={formatMoney(summary.payrollPayable)} note="Salary, bonus, commission" icon={BriefcaseBusiness} tone="bg-violet-50 text-violet-700" />
+          <StatCard label="Total Expense" value={formatMoney(summary.totalExpense)} note="Manual expenses" icon={TrendingDown} tone="bg-rose-50 text-rose-700" />
+          <StatCard label="Manual Income" value={formatMoney(summary.manualIncome)} note="Added by admin or staff" icon={Plus} tone="bg-violet-50 text-violet-700" />
           <StatCard label="Net Balance" value={formatMoney(summary.netBalance)} note={`${summary.paidPatientCount || 0} paid patients`} icon={Banknote} tone="bg-cyan-50 text-cyan-700" />
         </div>
 
@@ -318,71 +289,6 @@ export default function Finance() {
           <FinanceTable title="Manual Income" items={manualIncome} emptyText="No manual income added yet." canEdit={canEdit} onEdit={editEntry} onDelete={deleteEntry} income />
           <FinanceTable title="Expenses" items={expenses} emptyText="No expense entry added yet." canEdit={canEdit} onEdit={editEntry} onDelete={deleteEntry} />
         </div>
-
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center gap-2">
-            <CalendarRange size={18} className="text-violet-600" />
-            <h2 className="text-lg font-semibold text-slate-950">Staff Salary, Bonus and Commission</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-wide text-slate-400">
-                <tr>
-                  <th className="px-3 py-3">Staff</th>
-                  <th className="px-3 py-3">Monthly Salary</th>
-                  <th className="px-3 py-3">Bonus</th>
-                  <th className="px-3 py-3">Commission / Patient</th>
-                  <th className="px-3 py-3 text-right">Payable</th>
-                  {canEdit ? <th className="px-3 py-3 text-right">Save</th> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {salary.map((item) => {
-                  const draft = compensationDrafts[item.staffId] || {};
-                  return (
-                    <tr key={item.staffId} className="border-t border-slate-100">
-                      <td className="px-3 py-3">
-                        <p className="font-semibold text-slate-900">{item.staffName}</p>
-                        <p className="text-xs text-slate-500">{item.role} | {item.status}</p>
-                      </td>
-                      {["monthlySalary", "monthlyBonus", "commissionPerPatient"].map((field) => (
-                        <td key={field} className="px-3 py-3">
-                          {canEdit ? (
-                            <input
-                              type="number"
-                              min="0"
-                              value={draft[field] ?? ""}
-                              onChange={(event) => setCompensationDrafts((current) => ({
-                                ...current,
-                                [item.staffId]: { ...(current[item.staffId] || {}), [field]: event.target.value },
-                              }))}
-                              className="w-32 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
-                            />
-                          ) : (
-                            formatMoney(item[field])
-                          )}
-                        </td>
-                      ))}
-                      <td className="px-3 py-3 text-right font-semibold text-slate-950">
-                        {formatMoney(item.totalPayable)}
-                      </td>
-                      {canEdit ? (
-                        <td className="px-3 py-3 text-right">
-                          <button type="button" onClick={() => saveCompensation(item.staffId)} className="rounded-xl bg-slate-950 px-4 py-2 text-xs font-semibold text-white">
-                            Save
-                          </button>
-                        </td>
-                      ) : null}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-4 text-xs text-slate-500">
-            Commission is calculated from paid patient count in the selected range until patient-to-staff assignment is added.
-          </p>
-        </section>
       </div>
     </DashboardLayout>
   );

@@ -334,7 +334,7 @@ private fun moduleCaption(tab: AdminTab): String =
         AdminTab.Feedback -> "Approve public testimonials"
         AdminTab.Jobs -> "Career openings published to the website"
         AdminTab.Reports -> "Date-wise patients, sessions, and payments"
-        AdminTab.Finance -> "Income, expenses, salary, bonus, and commission"
+        AdminTab.Finance -> "Income and expense tracking"
         AdminTab.Mailbox -> "Career and contact inbox"
         AdminTab.Notifications -> "Custom patient notification center"
         AdminTab.Chat -> "Website visitor conversations"
@@ -2134,8 +2134,8 @@ private fun LoginScreen(
     onTestApi: () -> Unit,
     onLogin: (String, String) -> Unit,
 ) {
-    var email by rememberSaveable { mutableStateOf("contact@ommphysioworld.com") }
-    var password by rememberSaveable { mutableStateOf("123456") }
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
 
     Box(
         modifier = Modifier
@@ -10172,7 +10172,6 @@ private fun FinanceTab(
     val patientIncome = finance?.array("patientIncome")?.toJsonObjects().orEmpty()
     val manualIncome = finance?.array("manualIncome")?.toJsonObjects().orEmpty()
     val expenses = finance?.array("expenses")?.toJsonObjects().orEmpty()
-    val salary = finance?.array("salary")?.toJsonObjects().orEmpty()
     var showFromDatePicker by rememberSaveable { mutableStateOf(false) }
     var showToDatePicker by rememberSaveable { mutableStateOf(false) }
     var editingEntry by remember { mutableStateOf<JSONObject?>(null) }
@@ -10250,17 +10249,23 @@ private fun FinanceTab(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             MetricCard(
                 modifier = Modifier.weight(1f),
-                label = "Payroll",
-                value = formatMoney(summary.opt("payrollPayable")),
+                label = "Patient Income",
+                value = formatMoney(summary.opt("patientIncome")),
                 accent = OpwBlue,
             )
             MetricCard(
                 modifier = Modifier.weight(1f),
-                label = "Balance",
-                value = formatMoney(summary.opt("netBalance")),
-                accent = OpwWarning,
+                label = "Manual Income",
+                value = formatMoney(summary.opt("manualIncome")),
+                accent = OpwAqua,
             )
         }
+        MetricCard(
+            modifier = Modifier.fillMaxWidth(),
+            label = "Net Balance",
+            value = formatMoney(summary.opt("netBalance")),
+            accent = OpwWarning,
+        )
 
         FinanceRecordsSection(
             title = "Patient Income",
@@ -10293,26 +10298,6 @@ private fun FinanceTab(
             onDelete = onDelete,
         )
 
-        SectionCard(title = "Salary, Bonus and Commission") {
-            if (salary.isEmpty()) {
-                InlineEmpty("No staff salary data available.")
-            } else {
-                salary.forEach { item ->
-                    ReportRecordCard(
-                        title = item.text("staffName", fallback = "Staff"),
-                        subtitle = item.text("role", fallback = "Staff"),
-                        status = formatMoney(item.opt("totalPayable")),
-                        statusColor = OpwBlue,
-                        rows = listOf(
-                            "Monthly Salary" to formatMoney(item.opt("monthlySalary")),
-                            "Monthly Bonus" to formatMoney(item.opt("monthlyBonus")),
-                            "Commission / Patient" to formatMoney(item.opt("commissionPerPatient")),
-                            "Commission Payable" to formatMoney(item.opt("commissionPayable")),
-                        ),
-                    )
-                }
-            }
-        }
     }
 }
 
@@ -10331,30 +10316,44 @@ private fun FinanceRecordsSection(
             InlineEmpty(emptyMessage)
         } else {
             items.forEach { item ->
-                ReportRecordCard(
-                    title = item.text("title", fallback = "Finance entry"),
-                    subtitle = item.text("category", fallback = item.text("method", fallback = "Finance")),
-                    status = formatMoney(item.opt("amount")),
-                    statusColor = accent,
-                    rows = listOf(
-                        "Date" to item.text("date", fallback = "Not set"),
-                        "Staff / Patient" to item.text("staffName", "patientName", fallback = "-"),
-                        "Method" to item.text("method", fallback = "-"),
-                        "Notes" to item.text("notes", fallback = "-"),
-                    ),
-                    actions = if (canEdit && onEdit != null && onDelete != null) {
-                        {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                ModuleIconButton(color = OpwBlue, onClick = { onEdit(item) }) {
-                                    EditGlyph(OpwBlue)
-                                }
-                                ModuleIconButton(color = OpwDanger, onClick = { onDelete(item) }) {
-                                    TrashGlyph(OpwDanger)
-                                }
-                            }
-                        }
-                    } else null,
-                )
+                val itemTitle = item.text("title", fallback = item.text("patientName", fallback = "Finance entry"))
+                val contact = item.text("staffName", "patientName", fallback = "").ifBlank {
+                    item.text("method", fallback = "Manual")
+                }
+                val subtitle = listOf(
+                    item.text("category", fallback = item.text("method", fallback = "Finance")),
+                    appointmentDateLabel(item.text("date", fallback = "")),
+                    contact,
+                ).filter { it.isNotBlank() && it != "-" }.joinToString(" • ")
+
+                val content: @Composable RowScope.() -> Unit = {
+                    StatusChip(
+                        label = formatMoney(item.opt("amount")),
+                        background = accent.copy(alpha = 0.12f),
+                        foreground = accent,
+                    )
+                }
+
+                if (canEdit && onEdit != null && onDelete != null) {
+                    SwipeDeleteModuleCard(
+                        title = itemTitle,
+                        subtitle = subtitle,
+                        accent = accent,
+                        deleteTitle = "Delete finance entry?",
+                        deleteMessage = "This will remove ${itemTitle} from the finance list.",
+                        onClick = { onEdit(item) },
+                        onDelete = { onDelete(item) },
+                        swipeEnabled = true,
+                        actions = content,
+                    )
+                } else {
+                    SimpleModuleCard(
+                        title = itemTitle,
+                        subtitle = subtitle,
+                        accent = accent,
+                        actions = content,
+                    )
+                }
             }
         }
     }

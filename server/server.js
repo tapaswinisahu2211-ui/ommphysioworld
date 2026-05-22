@@ -71,6 +71,7 @@ const JobRequirement = require("./models/JobRequirement");
 const MarketingSource = require("./models/MarketingSource");
 const PatientNotification = require("./models/PatientNotification");
 const Patient = require("./models/Patient");
+const PayrollPayment = require("./models/PayrollPayment");
 const PublicUser = require("./models/PublicUser");
 const Service = require("./models/Service");
 const ShopOrder = require("./models/ShopOrder");
@@ -672,6 +673,73 @@ const serializeFinanceEntry = (entry) => ({
   patientId: entry.patientId ? entry.patientId.toString() : "",
   createdAt: entry.createdAt,
   updatedAt: entry.updatedAt,
+});
+
+const getPayrollMonthKey = (value) => {
+  const month = cleanText(value).slice(0, 7);
+  const [, monthNumber] = month.split("-").map(Number);
+  return /^\d{4}-\d{2}$/.test(month) && monthNumber >= 1 && monthNumber <= 12
+    ? month
+    : getTodayKey().slice(0, 7);
+};
+
+const formatPayrollMonthLabel = (month) => {
+  const parsed = new Date(`${month}-01T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) {
+    return month;
+  }
+
+  return parsed.toLocaleDateString("en-IN", { month: "long", year: "numeric", timeZone: "UTC" });
+};
+
+const cleanMoneyAmount = (value) => {
+  const amount = Number(value || 0);
+  return Number.isFinite(amount) && amount > 0 ? amount : 0;
+};
+
+const serializePayrollPayment = (payment) => ({
+  id: payment._id.toString(),
+  staffId: payment.staffId?._id ? payment.staffId._id.toString() : payment.staffId ? payment.staffId.toString() : "",
+  staffName: payment.staffId?.name || payment.staffNameSnapshot || "",
+  staffEmail: payment.staffId?.email || "",
+  staffMobile: payment.staffId?.mobile || "",
+  staffWorkType: payment.staffId?.workType || "",
+  staffStatus: payment.staffId?.status || payment.staffStatusSnapshot || "",
+  staffNameSnapshot: payment.staffNameSnapshot || "",
+  staffRoleSnapshot: payment.staffRoleSnapshot || "",
+  staffStatusSnapshot: payment.staffStatusSnapshot || "",
+  month: payment.month,
+  baseSalary: Number(payment.baseSalary || 0),
+  bonus: Number(payment.bonus || 0),
+  commission: Number(payment.commission || 0),
+  totalAmount: Number(payment.totalAmount || 0),
+  paidDate: payment.paidDate || "",
+  method: payment.method || "",
+  notes: payment.notes || "",
+  financeEntryId: payment.financeEntryId ? payment.financeEntryId.toString() : "",
+  createdAt: payment.createdAt,
+  updatedAt: payment.updatedAt,
+});
+
+const buildPayrollFinancePayload = (payment) => ({
+  type: "expense",
+  source: "payroll",
+  title: `Payroll - ${payment.staffNameSnapshot} - ${formatPayrollMonthLabel(payment.month)}`,
+  category: "Payroll",
+  amount: Number(payment.totalAmount || 0),
+  date: payment.paidDate || getTodayKey(),
+  method: payment.method || "",
+  notes: [
+    `Base salary: Rs. ${Number(payment.baseSalary || 0).toLocaleString("en-IN")}`,
+    `Bonus: Rs. ${Number(payment.bonus || 0).toLocaleString("en-IN")}`,
+    `Commission: Rs. ${Number(payment.commission || 0).toLocaleString("en-IN")}`,
+    payment.notes || "",
+  ]
+    .filter(Boolean)
+    .join(" | "),
+  staffId: payment.staffId || null,
+  patientId: null,
+  createdBy: payment.createdBy || null,
 });
 
 const hasStartedActiveTreatment = (patient) => {
@@ -2150,7 +2218,7 @@ app.post("/api/finance/entries", requireStaffPermission("finance", "add"), async
 
     const entry = await FinanceEntry.create({
       type,
-      source: cleanText(req.body.source) || "manual",
+      source: "manual",
       title,
       category,
       amount,
@@ -2178,6 +2246,10 @@ app.put("/api/finance/entries/:id", requireStaffPermission("finance", "edit"), a
       return res.status(404).json({ message: "Finance entry not found." });
     }
 
+    if (entry.source === "payroll") {
+      return res.status(400).json({ message: "Payroll expenses must be managed from the Payroll module." });
+    }
+
     const type = cleanText(req.body.type).toLowerCase();
     const title = cleanText(req.body.title);
     const amount = Number(req.body.amount || 0);
@@ -2200,7 +2272,7 @@ app.put("/api/finance/entries/:id", requireStaffPermission("finance", "edit"), a
     }
 
     entry.type = type;
-    entry.source = cleanText(req.body.source) || "manual";
+    entry.source = "manual";
     entry.title = title;
     entry.category = cleanText(req.body.category);
     entry.amount = amount;
@@ -2221,16 +2293,198 @@ app.put("/api/finance/entries/:id", requireStaffPermission("finance", "edit"), a
 
 app.delete("/api/finance/entries/:id", requireStaffPermission("finance", "edit"), async (req, res) => {
   try {
-    const entry = await FinanceEntry.findByIdAndDelete(req.params.id);
+    const entry = await FinanceEntry.findById(req.params.id);
 
     if (!entry) {
       return res.status(404).json({ message: "Finance entry not found." });
     }
 
+    if (entry.source === "payroll") {
+      return res.status(400).json({ message: "Payroll expenses must be managed from the Payroll module." });
+    }
+
+    await entry.deleteOne();
+
     res.json({ message: "Finance entry deleted." });
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to delete finance entry." });
+  }
+});
+
+app.get("/api/payroll", requireStaffPermission("payroll", "view"), async (req, res) => {
+  try {
+    const month = getPayrollMonthKey(req.query.month);
+    const [staff, payments] = await Promise.all([
+      User.find({ role: { $ne: "Admin" } }).sort({ status: 1, name: 1 }),
+      PayrollPayment.find({ month })
+        .populate("staffId", "name email mobile workType status role")
+        .sort({ paidDate: -1, createdAt: -1 }),
+    ]);
+
+    const paidStaffIds = new Set(
+      payments.map((payment) =>
+        payment.staffId?._id ? payment.staffId._id.toString() : String(payment.staffId || "")
+      )
+    );
+    const staffOptions = staff.map((item) => {
+      const serialized = serializeUser(item);
+      return {
+        ...serialized,
+        alreadyPaid: paidStaffIds.has(serialized.id),
+      };
+    });
+    const serializedPayments = payments.map(serializePayrollPayment);
+    const summary = serializedPayments.reduce(
+      (totals, payment) => ({
+        baseSalary: totals.baseSalary + payment.baseSalary,
+        bonus: totals.bonus + payment.bonus,
+        commission: totals.commission + payment.commission,
+        totalAmount: totals.totalAmount + payment.totalAmount,
+      }),
+      { baseSalary: 0, bonus: 0, commission: 0, totalAmount: 0 }
+    );
+
+    res.json({
+      month,
+      monthLabel: formatPayrollMonthLabel(month),
+      summary: {
+        ...summary,
+        paymentCount: serializedPayments.length,
+      },
+      staff: staffOptions,
+      payments: serializedPayments,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to load payroll." });
+  }
+});
+
+app.post("/api/payroll/payments", requireStaffPermission("payroll", "add"), async (req, res) => {
+  try {
+    const staffId = cleanText(req.body.staffId);
+    const month = getPayrollMonthKey(req.body.month);
+    const paidDate = cleanText(req.body.paidDate).slice(0, 10) || getTodayKey();
+
+    if (!mongoose.Types.ObjectId.isValid(staffId)) {
+      return res.status(400).json({ message: "Please select a valid staff member." });
+    }
+
+    if (!parseDateKey(paidDate)) {
+      return res.status(400).json({ message: "Please select a valid paid date." });
+    }
+
+    const staff = await User.findById(staffId);
+    if (!staff || staff.role === "Admin") {
+      return res.status(404).json({ message: "Staff member not found." });
+    }
+
+    const existing = await PayrollPayment.findOne({ staffId, month });
+    if (existing) {
+      return res.status(409).json({ message: "Payroll for this staff and month already exists. Please edit the existing payment." });
+    }
+
+    const baseSalary = cleanMoneyAmount(staff.monthlySalary);
+    const bonus = cleanMoneyAmount(req.body.bonus);
+    const commission = cleanMoneyAmount(req.body.commission);
+    const totalAmount = baseSalary + bonus + commission;
+
+    if (totalAmount <= 0) {
+      return res.status(400).json({ message: "Please set staff salary, bonus, or commission before saving payroll." });
+    }
+
+    const payment = await PayrollPayment.create({
+      staffId: staff._id,
+      staffNameSnapshot: staff.name,
+      staffRoleSnapshot: staff.role,
+      staffStatusSnapshot: staff.status || "Active",
+      month,
+      baseSalary,
+      bonus,
+      commission,
+      totalAmount,
+      paidDate,
+      method: cleanText(req.body.method),
+      notes: cleanText(req.body.notes),
+      createdBy: req.auth?.type === "staff" ? req.auth.sub : null,
+    });
+
+    const financeEntry = await FinanceEntry.create(buildPayrollFinancePayload(payment));
+    payment.financeEntryId = financeEntry._id;
+    await payment.save();
+    await payment.populate("staffId", "name email mobile workType status role");
+
+    res.status(201).json(serializePayrollPayment(payment));
+  } catch (error) {
+    console.log(error);
+    if (error?.code === 11000) {
+      return res.status(409).json({ message: "Payroll for this staff and month already exists." });
+    }
+    res.status(500).json({ message: "Failed to save payroll payment." });
+  }
+});
+
+app.put("/api/payroll/payments/:id", requireStaffPermission("payroll", "edit"), async (req, res) => {
+  try {
+    const payment = await PayrollPayment.findById(req.params.id);
+
+    if (!payment) {
+      return res.status(404).json({ message: "Payroll payment not found." });
+    }
+
+    const paidDate = cleanText(req.body.paidDate).slice(0, 10) || payment.paidDate || getTodayKey();
+    if (!parseDateKey(paidDate)) {
+      return res.status(400).json({ message: "Please select a valid paid date." });
+    }
+
+    payment.bonus = cleanMoneyAmount(req.body.bonus);
+    payment.commission = cleanMoneyAmount(req.body.commission);
+    payment.totalAmount = Number(payment.baseSalary || 0) + payment.bonus + payment.commission;
+    payment.paidDate = paidDate;
+    payment.method = cleanText(req.body.method);
+    payment.notes = cleanText(req.body.notes);
+    await payment.save();
+
+    const financePayload = buildPayrollFinancePayload(payment);
+    let financeEntry = payment.financeEntryId
+      ? await FinanceEntry.findById(payment.financeEntryId)
+      : null;
+
+    if (financeEntry) {
+      Object.assign(financeEntry, financePayload);
+      await financeEntry.save();
+    } else {
+      financeEntry = await FinanceEntry.create(financePayload);
+      payment.financeEntryId = financeEntry._id;
+      await payment.save();
+    }
+
+    await payment.populate("staffId", "name email mobile workType status role");
+    res.json(serializePayrollPayment(payment));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to update payroll payment." });
+  }
+});
+
+app.delete("/api/payroll/payments/:id", requireStaffPermission("payroll", "edit"), async (req, res) => {
+  try {
+    const payment = await PayrollPayment.findById(req.params.id);
+
+    if (!payment) {
+      return res.status(404).json({ message: "Payroll payment not found." });
+    }
+
+    if (payment.financeEntryId) {
+      await FinanceEntry.findByIdAndDelete(payment.financeEntryId);
+    }
+    await payment.deleteOne();
+
+    res.json({ message: "Payroll payment deleted." });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to delete payroll payment." });
   }
 });
 
@@ -5646,6 +5900,7 @@ app.post("/api/users", requireStaffPermission("staff", "add"), async (req, res) 
       status,
       chatEnabled,
       workType,
+      monthlySalary,
       permissions,
       joiningDate,
       joiningNotes,
@@ -5656,6 +5911,7 @@ app.post("/api/users", requireStaffPermission("staff", "add"), async (req, res) 
     const cleanUserEmail = cleanEmail(email);
     const cleanUserMobile = cleanPhone(mobile);
     const cleanPassword = cleanText(password);
+    const cleanMonthlySalary = cleanMoneyAmount(monthlySalary);
 
     if (!cleanName || !cleanUserEmail || !cleanUserMobile) {
       return res.status(400).json({ message: "Name, email, and mobile are required." });
@@ -5694,6 +5950,7 @@ app.post("/api/users", requireStaffPermission("staff", "add"), async (req, res) 
       status: status || "Active",
       chatEnabled: Boolean(chatEnabled),
       workType: String(workType || "").trim(),
+      monthlySalary: req.staffUser?.role === "Admin" ? cleanMonthlySalary : 0,
       joiningDate: joiningDate || "",
       joiningNotes: joiningNotes || "",
       permissions: normalizePermissions(permissions, resolvedRole),
@@ -5720,6 +5977,7 @@ app.put("/api/users/:id", requireStaffPermission("staff", "edit"), async (req, r
       status,
       chatEnabled,
       workType,
+      monthlySalary,
       permissions,
       joiningDate,
       joiningNotes,
@@ -5735,6 +5993,8 @@ app.put("/api/users/:id", requireStaffPermission("staff", "edit"), async (req, r
     const cleanUserEmail = email !== undefined ? cleanEmail(email) : undefined;
     const cleanUserMobile = mobile !== undefined ? cleanPhone(mobile) : undefined;
     const cleanPassword = password !== undefined ? cleanText(password) : undefined;
+    const cleanMonthlySalary =
+      monthlySalary !== undefined ? cleanMoneyAmount(monthlySalary) : undefined;
 
     if (cleanName !== undefined && !cleanName) {
       return res.status(400).json({ message: "Name is required." });
@@ -5761,6 +6021,9 @@ app.put("/api/users/:id", requireStaffPermission("staff", "edit"), async (req, r
       user.chatEnabled = Boolean(chatEnabled);
     }
     user.workType = workType !== undefined ? String(workType || "").trim() : user.workType;
+    if (cleanMonthlySalary !== undefined && req.staffUser?.role === "Admin") {
+      user.monthlySalary = cleanMonthlySalary;
+    }
     user.joiningDate = joiningDate ?? user.joiningDate;
     user.joiningNotes = joiningNotes ?? user.joiningNotes;
     if (password !== undefined) {

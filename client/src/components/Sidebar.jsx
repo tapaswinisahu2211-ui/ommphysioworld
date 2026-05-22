@@ -13,6 +13,7 @@ import {
   Stethoscope,
   UserCog,
   Users,
+  WalletCards,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -56,6 +57,7 @@ export default function Sidebar({ collapsed, onNavigate }) {
     { name: "Career", path: "/job-requirements", icon: BriefcaseMedical, hint: "Careers", moduleKey: "career" },
     { name: "Report", path: "/reports", icon: BarChart3, hint: "Date-wise", moduleKey: "reports" },
     { name: "Finance", path: "/finance", icon: Banknote, hint: "Income & expense", moduleKey: "finance" },
+    { name: "Payroll", path: "/payroll", icon: WalletCards, hint: "Staff pay", moduleKey: "payroll" },
     { name: "Staff", path: "/staff", icon: UserCog, hint: "Team", moduleKey: "staff" },
     { name: "Mailbox", path: "/mailbox", icon: Mail, hint: "Inbox", moduleKey: "mailbox" },
     { name: "Notifications", path: "/notifications", icon: Bell, hint: "Custom sends", moduleKey: "notifications" },

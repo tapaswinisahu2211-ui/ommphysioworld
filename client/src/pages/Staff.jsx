@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import API from "../services/api";
-import { canAddModule, canEditModule, getStoredUser } from "../utils/auth";
+import { canAddModule, canEditModule, getStoredUser, isAdminUser } from "../utils/auth";
 import {
   cleanEmail,
   cleanPhone,
@@ -39,6 +39,7 @@ export default function Staff() {
   const currentUser = getStoredUser();
   const canAddStaff = canAddModule("staff", currentUser);
   const canEditStaff = canEditModule("staff", currentUser);
+  const canManageSalary = isAdminUser(currentUser);
   const [staffList, setStaffList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -52,6 +53,7 @@ export default function Staff() {
     status: "Active",
     chatEnabled: false,
     workType: "",
+    monthlySalary: "",
     password: "",
   });
   const [showModal, setShowModal] = useState(false);
@@ -86,6 +88,7 @@ export default function Staff() {
       status: "Active",
       chatEnabled: false,
       workType: "",
+      monthlySalary: "",
       password: "",
     });
   };
@@ -134,6 +137,7 @@ export default function Staff() {
           status: form.status,
           chatEnabled: form.chatEnabled,
           workType: form.workType,
+          monthlySalary: form.monthlySalary,
           password: form.password,
         });
       } else {
@@ -145,6 +149,7 @@ export default function Staff() {
           status: form.status,
           chatEnabled: form.chatEnabled,
           workType: form.workType,
+          monthlySalary: form.monthlySalary,
           password: form.password,
         });
       }
@@ -556,6 +561,17 @@ export default function Staff() {
                     </option>
                   ))}
                 </select>
+
+                {canManageSalary ? (
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="Monthly salary"
+                    className="input"
+                    value={form.monthlySalary}
+                    onChange={(e) => setForm({ ...form, monthlySalary: e.target.value })}
+                  />
+                ) : null}
 
                 <select
                   className="input"

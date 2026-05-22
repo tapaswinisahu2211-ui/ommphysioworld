@@ -82,7 +82,9 @@ function FinanceTable({ title, items, emptyText, canEdit, onEdit, onDelete, inco
                 <tr key={item.id} className="border-t border-slate-100 align-top">
                   <td className="px-3 py-3">
                     <p className="font-semibold text-slate-900">{item.title}</p>
-                    <p className="text-xs text-slate-500">{item.method || item.source || "Manual"}</p>
+                    <p className="text-xs text-slate-500">
+                      {item.source === "payroll" ? "Managed from Payroll" : item.method || "Manual"}
+                    </p>
                   </td>
                   <td className="px-3 py-3 text-slate-600">{formatDate(item.date)}</td>
                   <td className="px-3 py-3 text-slate-600">{item.category || "-"}</td>
@@ -92,22 +94,26 @@ function FinanceTable({ title, items, emptyText, canEdit, onEdit, onDelete, inco
                   </td>
                   {canEdit ? (
                     <td className="px-3 py-3">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => onEdit(item)}
-                          className="rounded-xl border border-slate-200 p-2 text-slate-600 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
-                        >
-                          <Pencil size={15} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onDelete(item)}
-                          className="rounded-xl border border-rose-200 p-2 text-rose-600 hover:bg-rose-50"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
+                      {item.source === "payroll" ? (
+                        <p className="text-right text-xs font-medium text-slate-400">Payroll locked</p>
+                      ) : (
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onEdit(item)}
+                            className="rounded-xl border border-slate-200 p-2 text-slate-600 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
+                          >
+                            <Pencil size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDelete(item)}
+                            className="rounded-xl border border-rose-200 p-2 text-rose-600 hover:bg-rose-50"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      )}
                     </td>
                   ) : null}
                 </tr>
@@ -242,7 +248,7 @@ export default function Finance() {
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Total Income" value={formatMoney(summary.totalIncome)} note="Patient + manual income" icon={TrendingUp} tone="bg-emerald-50 text-emerald-700" />
-          <StatCard label="Total Expense" value={formatMoney(summary.totalExpense)} note="Manual expenses" icon={TrendingDown} tone="bg-rose-50 text-rose-700" />
+          <StatCard label="Total Expense" value={formatMoney(summary.totalExpense)} note="Manual + payroll expenses" icon={TrendingDown} tone="bg-rose-50 text-rose-700" />
           <StatCard label="Manual Income" value={formatMoney(summary.manualIncome)} note="Added by admin or staff" icon={Plus} tone="bg-violet-50 text-violet-700" />
           <StatCard label="Net Balance" value={formatMoney(summary.netBalance)} note={`${summary.paidPatientCount || 0} paid patients`} icon={Banknote} tone="bg-cyan-50 text-cyan-700" />
         </div>

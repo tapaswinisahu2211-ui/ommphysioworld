@@ -42,6 +42,7 @@ const userSchema = new mongoose.Schema({
   profileImageMimeType: { type: String, default: "" },
   profileImageUpdatedAt: { type: Date, default: null },
   workType: { type: String, default: "", trim: true },
+  monthlySalary: { type: Number, default: 0, min: 0 },
   joiningDate: { type: String, default: "" },
   joiningNotes: { type: String, default: "" },
   joiningDocuments: { type: [joiningDocumentSchema], default: [] },

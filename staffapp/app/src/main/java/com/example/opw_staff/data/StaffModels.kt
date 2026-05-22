@@ -21,6 +21,7 @@ data class StaffUser(
     val chatEnabled: Boolean,
     val profileImageUrl: String,
     val workType: String,
+    val monthlySalary: Double,
     val joiningDate: String,
     val joiningNotes: String,
     val permissions: List<StaffPermission>,
@@ -53,6 +54,7 @@ data class CreateStaffRequest(
     val status: String,
     val chatEnabled: Boolean,
     val workType: String,
+    val monthlySalary: Double,
     val password: String,
     val permissions: List<StaffPermission>,
 )
@@ -107,6 +109,7 @@ val staffModuleTemplates = listOf(
     ModuleTemplate("career", "Career", view = false, add = false, edit = false),
     ModuleTemplate("reports", "Reports", view = false, add = false, edit = false),
     ModuleTemplate("finance", "Finance", view = false, add = false, edit = false),
+    ModuleTemplate("payroll", "Payroll", view = false, add = false, edit = false),
     ModuleTemplate("notifications", "Notifications", view = false, add = false, edit = false),
     ModuleTemplate("staff", "Staff", view = false, add = false, edit = false),
     ModuleTemplate("staff_applications", "Staff Applications", view = false, add = false, edit = false),
@@ -155,6 +158,7 @@ fun JSONObject.toStaffUser(): StaffUser {
         chatEnabled = optBoolean("chatEnabled"),
         profileImageUrl = stringValue("profileImageUrl"),
         workType = stringValue("workType"),
+        monthlySalary = optDouble("monthlySalary", 0.0),
         joiningDate = stringValue("joiningDate"),
         joiningNotes = stringValue("joiningNotes"),
         permissions = List(permissionsJson.length()) { index ->
@@ -201,6 +205,7 @@ fun StaffUser.toJson(): JSONObject {
         .put("chatEnabled", chatEnabled)
         .put("profileImageUrl", profileImageUrl)
         .put("workType", workType)
+        .put("monthlySalary", monthlySalary)
         .put("joiningDate", joiningDate)
         .put("joiningNotes", joiningNotes)
         .put("permissions", permissionsJson)
@@ -222,6 +227,7 @@ fun CreateStaffRequest.toJson(): JSONObject {
         .put("status", status)
         .put("chatEnabled", chatEnabled)
         .put("workType", workType)
+        .put("monthlySalary", monthlySalary)
         .put("password", password)
         .put("permissions", permissionsJson)
 }

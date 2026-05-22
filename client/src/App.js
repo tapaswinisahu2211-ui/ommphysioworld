@@ -33,6 +33,7 @@ import ProtectedRoute from "./utils/ProtectedRoute";
 import Mailbox from "./pages/Mailbox";
 import Marketing from "./pages/Marketing";
 import Notifications from "./pages/Notifications";
+import Payroll from "./pages/Payroll";
 import PrivacyPolicyPage from "./pages/PrivacyPolicyPage";
 import ReportsPage from "./pages/ReportsPage";
 import TreatmentTracker from "./pages/TreatmentTracker";
@@ -213,6 +214,14 @@ function App() {
           element={
             <ProtectedRoute moduleKey="finance">
               <Finance />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/payroll"
+          element={
+            <ProtectedRoute moduleKey="payroll">
+              <Payroll />
             </ProtectedRoute>
           }
         />

@@ -241,6 +241,7 @@ private data class StaffFormState(
     val status: String = "Active",
     val chatEnabled: Boolean = false,
     val workType: String = "",
+    val monthlySalary: String = "",
     val password: String = "",
     val permissions: List<StaffPermission> = defaultStaffPermissions(),
 )
@@ -262,6 +263,7 @@ private fun StaffUser.toStaffFormState(): StaffFormState =
         status = status.ifBlank { "Active" },
         chatEnabled = chatEnabled,
         workType = workType,
+        monthlySalary = if (this.monthlySalary > 0.0) this.monthlySalary.toString().removeSuffix(".0") else "",
         password = "",
         permissions = if (role == "Admin") emptyList() else permissions.ifEmpty { defaultStaffPermissions() },
     )
@@ -275,6 +277,7 @@ private fun StaffFormState.toStaffRequest(): CreateStaffRequest =
         status = status,
         chatEnabled = chatEnabled,
         workType = workType.trim(),
+        monthlySalary = monthlySalary.toDoubleOrNull() ?: 0.0,
         password = password,
         permissions = if (role == "Admin") emptyList() else permissions,
     )
@@ -2768,6 +2771,7 @@ private fun DashboardScreen(
                         onStatusChange = onStaffStatusChange,
                         onDelete = onStaffDelete,
                         canEdit = canEditAdminTab(currentUser, AdminTab.Team),
+                        canManageSalary = currentUser?.role == "Admin",
                         searchOpen = headerSearchOpen,
                         onSearchOpenChange = { headerSearchOpen = it },
                         addRequest = headerAddRequest,
@@ -2779,6 +2783,7 @@ private fun DashboardScreen(
                         creationMessage = creationMessage,
                         onFormChange = onFormChange,
                         onSubmit = onCreateStaff,
+                        canManageSalary = currentUser?.role == "Admin",
                     )
 
                     AdminTab.Profile -> ProfileTab(
@@ -4114,6 +4119,7 @@ private fun TeamTab(
     onStatusChange: (StaffUser, String) -> Unit,
     onDelete: (StaffUser) -> Unit,
     canEdit: Boolean,
+    canManageSalary: Boolean,
     searchOpen: Boolean,
     onSearchOpenChange: (Boolean) -> Unit,
     addRequest: Int,
@@ -4166,6 +4172,7 @@ private fun TeamTab(
                     editingUserId = ""
                 }
             },
+            canManageSalary = canManageSalary,
         )
     }
 
@@ -4273,6 +4280,7 @@ private fun StaffFormDialog(
     onDraftChange: (StaffFormState) -> Unit,
     onDismiss: () -> Unit,
     onSave: (StaffFormState) -> Unit,
+    canManageSalary: Boolean,
 ) {
     var draft by remember(user?.id) { mutableStateOf(initialForm) }
     var localError by remember(user?.id) { mutableStateOf("") }
@@ -4328,6 +4336,17 @@ private fun StaffFormDialog(
             onValueChange = { update(draft.copy(workType = it)) },
         )
 
+        if (canManageSalary && draft.role == "Staff") {
+            SheetPatientField(
+                label = "Monthly Salary",
+                value = draft.monthlySalary,
+                onValueChange = { value ->
+                    update(draft.copy(monthlySalary = value.filter { it.isDigit() || it == '.' }))
+                },
+                keyboardType = KeyboardType.Decimal,
+            )
+        }
+
         Text("Role", fontWeight = FontWeight.Bold, color = OpwInk)
         ChoiceChipRow(
             options = listOf("Staff", "Admin"),
@@ -4336,6 +4355,7 @@ private fun StaffFormDialog(
                 update(
                     draft.copy(
                         role = role,
+                        monthlySalary = if (role == "Admin") "" else draft.monthlySalary,
                         permissions = if (role == "Admin") emptyList() else draft.permissions.ifEmpty { defaultStaffPermissions() },
                     ),
                 )
@@ -11023,6 +11043,7 @@ private fun CreateStaffTab(
     creationMessage: String,
     onFormChange: (StaffFormState) -> Unit,
     onSubmit: () -> Unit,
+    canManageSalary: Boolean,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         if (error.isNotBlank()) {
@@ -11091,6 +11112,22 @@ private fun CreateStaffTab(
                     singleLine = true,
                 )
 
+                if (canManageSalary && formState.role == "Staff") {
+                    OutlinedTextField(
+                        value = formState.monthlySalary,
+                        onValueChange = { value ->
+                            onFormChange(formState.copy(monthlySalary = value.filter { it.isDigit() || it == '.' }))
+                        },
+                        label = { Text("Monthly salary") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal,
+                            imeAction = ImeAction.Next,
+                        ),
+                    )
+                }
+
                 Text("Role", fontWeight = FontWeight.Bold, color = OpwInk)
                 ChoiceChipRow(
                     options = listOf("Staff", "Admin"),
@@ -11099,6 +11136,7 @@ private fun CreateStaffTab(
                         onFormChange(
                             formState.copy(
                                 role = role,
+                                monthlySalary = if (role == "Admin") "" else formState.monthlySalary,
                                 permissions = if (role == "Admin") emptyList() else {
                                     if (formState.permissions.isEmpty()) defaultStaffPermissions()
                                     else formState.permissions

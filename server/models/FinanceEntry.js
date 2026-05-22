@@ -8,7 +8,7 @@ const financeEntrySchema = new mongoose.Schema({
   },
   source: {
     type: String,
-    enum: ["manual"],
+    enum: ["manual", "payroll"],
     default: "manual",
   },
   title: { type: String, required: true, trim: true },

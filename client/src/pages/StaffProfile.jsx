@@ -35,6 +35,7 @@ const MODULE_LABELS = {
   career: "Career",
   reports: "Reports",
   finance: "Finance",
+  payroll: "Payroll",
   notifications: "Notifications",
   staff: "Staff",
   staff_applications: "Staff Applications",
@@ -50,6 +51,7 @@ export default function StaffProfile() {
   const isSelfProfile = !id || currentUser.id === id;
   const canEditStaff = canEditModule("staff", currentUser);
   const canAddStaff = canAddModule("staff", currentUser);
+  const canManageSalary = currentUser.role === "Admin";
   const [staff, setStaff] = useState(null);
   const [permissions, setPermissions] = useState([]);
   const [form, setForm] = useState({
@@ -60,6 +62,7 @@ export default function StaffProfile() {
     status: "Active",
     chatEnabled: false,
     workType: "",
+    monthlySalary: "",
     joiningDate: "",
     joiningNotes: "",
   });
@@ -93,6 +96,7 @@ export default function StaffProfile() {
         status: response.data.status || "Active",
         chatEnabled: Boolean(response.data.chatEnabled),
         workType: response.data.workType || "",
+        monthlySalary: response.data.monthlySalary || "",
         joiningDate: response.data.joiningDate || "",
         joiningNotes: response.data.joiningNotes || "",
       });
@@ -471,6 +475,19 @@ export default function StaffProfile() {
                   </option>
                 ))}
               </select>
+              {canManageSalary ? (
+                <input
+                  className="input"
+                  type="number"
+                  min="0"
+                  placeholder="Monthly salary"
+                  value={form.monthlySalary}
+                  disabled={!canEditStaff}
+                  onChange={(e) =>
+                    setForm((current) => ({ ...current, monthlySalary: e.target.value }))
+                  }
+                />
+              ) : null}
               <select
                 className="input"
                 value={form.role}

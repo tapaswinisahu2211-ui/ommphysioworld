@@ -44,6 +44,7 @@ const serializeUser = (user) => ({
     ? `/users/${user._id.toString()}/profile-image`
     : "",
   workType: user.workType || "",
+  monthlySalary: Number(user.monthlySalary || 0),
   joiningDate: user.joiningDate || "",
   joiningNotes: user.joiningNotes || "",
   joiningDocuments: (user.joiningDocuments || []).map((document) => ({

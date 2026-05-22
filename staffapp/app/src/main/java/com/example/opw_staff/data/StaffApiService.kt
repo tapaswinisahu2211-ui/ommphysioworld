@@ -510,6 +510,27 @@ class StaffApiService(
         }
     }
 
+    suspend fun getPayroll(token: String, month: String): JSONObject =
+        withContext(Dispatchers.IO) {
+            val encodedMonth = java.net.URLEncoder.encode(month.trim(), "UTF-8")
+            JSONObject(request("GET", "/payroll?month=$encodedMonth", token = token))
+        }
+
+    suspend fun savePayrollPayment(token: String, id: String?, payload: JSONObject): JSONObject =
+        withContext(Dispatchers.IO) {
+            if (id.isNullOrBlank()) {
+                JSONObject(request("POST", "/payroll/payments", token = token, body = payload))
+            } else {
+                JSONObject(request("PUT", "/payroll/payments/$id", token = token, body = payload))
+            }
+        }
+
+    suspend fun deletePayrollPayment(token: String, id: String) {
+        withContext(Dispatchers.IO) {
+            request("DELETE", "/payroll/payments/$id", token = token)
+        }
+    }
+
     suspend fun getChatConversations(token: String): List<JSONObject> =
         getJsonArray(token, "/chat/conversations")
 

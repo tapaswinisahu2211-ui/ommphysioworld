@@ -357,7 +357,7 @@ export default function HomePage() {
                         <MapPin size={16} />
                       </div>
                       <span>
-                        City clinic road, near davaindia, Baripada
+                        Ananda Bazar, K C. Circle, near Khuntia Medecine, Baripada, Odisha 757001
                       </span>
                     </div>
                   </div>

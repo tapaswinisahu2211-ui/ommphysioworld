@@ -185,6 +185,7 @@ private enum class AdminTab(val label: String, val adminOnly: Boolean = false) {
     Jobs("Career"),
     Reports("Report"),
     Finance("Finance"),
+    Payroll("Payroll"),
     Mailbox("Mailbox"),
     Notifications("Notifications"),
     Chat("Chat"),
@@ -212,6 +213,7 @@ private data class DashboardUiState(
     val jobRequirements: List<JSONObject> = emptyList(),
     val reports: JSONObject? = null,
     val finance: JSONObject? = null,
+    val payroll: JSONObject? = null,
     val chatConversations: List<JSONObject> = emptyList(),
     val treatmentTracker: JSONObject? = null,
     val moduleErrors: Map<String, String> = emptyMap(),
@@ -316,6 +318,7 @@ private fun moduleAccent(tab: AdminTab): Color =
         AdminTab.Jobs -> Color(0xFF16A34A)
         AdminTab.Reports -> Color(0xFF4F46E5)
         AdminTab.Finance -> Color(0xFF059669)
+        AdminTab.Payroll -> Color(0xFF0D9488)
         AdminTab.Mailbox -> Color(0xFFE11D48)
         AdminTab.Notifications -> Color(0xFF0F766E)
         AdminTab.Chat -> Color(0xFF10B981)
@@ -338,6 +341,7 @@ private fun moduleCaption(tab: AdminTab): String =
         AdminTab.Jobs -> "Career openings published to the website"
         AdminTab.Reports -> "Date-wise patients, sessions, and payments"
         AdminTab.Finance -> "Income and expense tracking"
+        AdminTab.Payroll -> "Monthly staff salary, bonus, and commission"
         AdminTab.Mailbox -> "Career and contact inbox"
         AdminTab.Notifications -> "Custom patient notification center"
         AdminTab.Chat -> "Website visitor conversations"
@@ -466,6 +470,7 @@ private fun StaffAdminApp() {
     var jobMessage by remember { mutableStateOf("") }
     var reportFromDate by remember { mutableStateOf(monthStartDateKey()) }
     var reportToDate by remember { mutableStateOf(todayDateKey()) }
+    var payrollMonth by remember { mutableStateOf(todayDateKey().take(7)) }
     var reportLoading by remember { mutableStateOf(false) }
     var reportError by remember { mutableStateOf("") }
     var loginLoading by remember { mutableStateOf(false) }
@@ -494,6 +499,7 @@ private fun StaffAdminApp() {
         jobMessage = ""
         reportFromDate = monthStartDateKey()
         reportToDate = todayDateKey()
+        payrollMonth = todayDateKey().take(7)
         reportLoading = false
         reportError = ""
         route = AppRoute.Login
@@ -604,6 +610,13 @@ private fun StaffAdminApp() {
                 } else {
                     null
                 },
+                payroll = if (canView(AdminTab.Payroll)) {
+                    loadOptional("payroll", null) {
+                        api.getPayroll(activeSession.token, payrollMonth)
+                    }
+                } else {
+                    null
+                },
                 chatConversations = if (canView(AdminTab.Chat)) loadOptional("chat", emptyList()) {
                     api.getChatConversations(activeSession.token)
                 } else emptyList(),
@@ -634,6 +647,7 @@ private fun StaffAdminApp() {
                 jobRequirements = snapshot.jobRequirements,
                 reports = snapshot.reports,
                 finance = snapshot.finance,
+                payroll = snapshot.payroll,
                 chatConversations = snapshot.chatConversations,
                 treatmentTracker = snapshot.treatmentTracker,
                 moduleErrors = snapshot.moduleErrors,
@@ -929,6 +943,99 @@ private fun StaffAdminApp() {
                 showMessage("Finance entry deleted.")
             } catch (error: ApiException) {
                 showMessage(error.message)
+            } catch (error: Exception) {
+                showMessage(networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error))
+            }
+        }
+    }
+
+    fun reloadPayroll(targetMonth: String = payrollMonth) {
+        val activeSession = session ?: return
+        val month = targetMonth.ifBlank { todayDateKey().take(7) }
+        payrollMonth = month
+        scope.launch {
+            try {
+                val payroll = api.getPayroll(activeSession.token, month)
+                dashboardState = dashboardState.copy(
+                    payroll = payroll,
+                    moduleErrors = dashboardState.moduleErrors - "payroll",
+                )
+            } catch (error: ApiException) {
+                if (error.statusCode == 401 || error.statusCode == 403) {
+                    clearToLogin("Your session ended. Please log in again.")
+                } else {
+                    dashboardState = dashboardState.copy(
+                        moduleErrors = dashboardState.moduleErrors + ("payroll" to error.message),
+                    )
+                }
+            } catch (error: Exception) {
+                dashboardState = dashboardState.copy(
+                    moduleErrors = dashboardState.moduleErrors + (
+                        "payroll" to networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error)
+                    ),
+                )
+            }
+        }
+    }
+
+    fun savePayrollPayment(id: String?, payload: JSONObject) {
+        val activeSession = session ?: return
+        scope.launch {
+            try {
+                api.savePayrollPayment(activeSession.token, id, payload)
+                val payroll = api.getPayroll(activeSession.token, payrollMonth)
+                val finance = if (canOpenAdminTab(dashboardState.admin ?: activeSession.user, AdminTab.Finance)) {
+                    runCatching {
+                        api.getFinance(activeSession.token, reportFromDate, reportToDate)
+                    }.getOrNull()
+                } else {
+                    dashboardState.finance
+                }
+                dashboardState = dashboardState.copy(
+                    payroll = payroll,
+                    finance = finance,
+                    moduleErrors = dashboardState.moduleErrors - "payroll",
+                )
+                showMessage("Payroll saved and added to finance expense.")
+            } catch (error: ApiException) {
+                if (error.statusCode == 401 || error.statusCode == 403) {
+                    clearToLogin("Your session ended. Please log in again.")
+                } else {
+                    showMessage(error.message)
+                }
+            } catch (error: Exception) {
+                showMessage(networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error))
+            }
+        }
+    }
+
+    fun deletePayrollPayment(item: JSONObject) {
+        val activeSession = session ?: return
+        val id = item.text("id")
+        if (id.isBlank()) return
+        scope.launch {
+            try {
+                api.deletePayrollPayment(activeSession.token, id)
+                val payroll = api.getPayroll(activeSession.token, payrollMonth)
+                val finance = if (canOpenAdminTab(dashboardState.admin ?: activeSession.user, AdminTab.Finance)) {
+                    runCatching {
+                        api.getFinance(activeSession.token, reportFromDate, reportToDate)
+                    }.getOrNull()
+                } else {
+                    dashboardState.finance
+                }
+                dashboardState = dashboardState.copy(
+                    payroll = payroll,
+                    finance = finance,
+                    moduleErrors = dashboardState.moduleErrors - "payroll",
+                )
+                showMessage("Payroll payment deleted.")
+            } catch (error: ApiException) {
+                if (error.statusCode == 401 || error.statusCode == 403) {
+                    clearToLogin("Your session ended. Please log in again.")
+                } else {
+                    showMessage(error.message)
+                }
             } catch (error: Exception) {
                 showMessage(networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error))
             }
@@ -2004,6 +2111,7 @@ private fun StaffAdminApp() {
                     jobMessage = jobMessage,
                     reportFromDate = reportFromDate,
                     reportToDate = reportToDate,
+                    payrollMonth = payrollMonth,
                     reportLoading = reportLoading,
                     reportError = reportError,
                     onTabSelected = { selectedTab = it },
@@ -2051,6 +2159,10 @@ private fun StaffAdminApp() {
                     onFinanceApply = ::reloadFinance,
                     onFinanceSave = ::saveFinanceEntry,
                     onFinanceDelete = ::deleteFinanceEntry,
+                    onPayrollMonthChange = { payrollMonth = it },
+                    onPayrollApply = ::reloadPayroll,
+                    onPayrollSave = ::savePayrollPayment,
+                    onPayrollDelete = ::deletePayrollPayment,
                     onPatientSave = ::savePatient,
                     onPatientArchive = ::archivePatient,
                     onPatientRestore = ::restorePatient,
@@ -2239,6 +2351,7 @@ private fun DashboardScreen(
     jobMessage: String,
     reportFromDate: String,
     reportToDate: String,
+    payrollMonth: String,
     reportLoading: Boolean,
     reportError: String,
     onTabSelected: (AdminTab) -> Unit,
@@ -2257,6 +2370,10 @@ private fun DashboardScreen(
     onFinanceApply: () -> Unit,
     onFinanceSave: (String?, JSONObject) -> Unit,
     onFinanceDelete: (JSONObject) -> Unit,
+    onPayrollMonthChange: (String) -> Unit,
+    onPayrollApply: (String) -> Unit,
+    onPayrollSave: (String?, JSONObject) -> Unit,
+    onPayrollDelete: (JSONObject) -> Unit,
     onPatientSave: (String?, JSONObject) -> Unit,
     onPatientArchive: (JSONObject) -> Unit,
     onPatientRestore: (JSONObject) -> Unit,
@@ -2323,6 +2440,7 @@ private fun DashboardScreen(
         AdminTab.Feedback,
         AdminTab.Jobs,
         AdminTab.Finance,
+        AdminTab.Payroll,
         AdminTab.Chat,
         AdminTab.Team,
     )
@@ -2334,6 +2452,7 @@ private fun DashboardScreen(
         AdminTab.Marketing,
         AdminTab.Jobs,
         AdminTab.Finance,
+        AdminTab.Payroll,
         AdminTab.Team,
     ) && canAddAdminTab(currentUser, activeTab)
     val activeAdmins = state.users.count { it.role == "Admin" }
@@ -2749,6 +2868,17 @@ private fun DashboardScreen(
                         onSave = onFinanceSave,
                         onDelete = onFinanceDelete,
                         canEdit = canEditAdminTab(currentUser, AdminTab.Finance),
+                        addRequest = headerAddRequest,
+                    )
+                    AdminTab.Payroll -> PayrollTab(
+                        payroll = state.payroll,
+                        month = payrollMonth,
+                        onMonthChange = onPayrollMonthChange,
+                        onApply = onPayrollApply,
+                        onSave = onPayrollSave,
+                        onDelete = onPayrollDelete,
+                        canAdd = canAddAdminTab(currentUser, AdminTab.Payroll),
+                        canEdit = canEditAdminTab(currentUser, AdminTab.Payroll),
                         addRequest = headerAddRequest,
                     )
                     AdminTab.Chat -> ChatTab(
@@ -10454,6 +10584,331 @@ private fun FinanceEntryDialog(
 }
 
 @Composable
+private fun PayrollTab(
+    payroll: JSONObject?,
+    month: String,
+    onMonthChange: (String) -> Unit,
+    onApply: (String) -> Unit,
+    onSave: (String?, JSONObject) -> Unit,
+    onDelete: (JSONObject) -> Unit,
+    canAdd: Boolean,
+    canEdit: Boolean,
+    addRequest: Int,
+) {
+    val summary = payroll?.objectValue("summary") ?: JSONObject()
+    val staff = payroll?.array("staff")?.toJsonObjects().orEmpty()
+    val payments = payroll?.array("payments")?.toJsonObjects().orEmpty()
+    val monthLabel = payroll?.text("monthLabel").orEmpty().ifBlank { month }
+    var editingPayment by remember { mutableStateOf<JSONObject?>(null) }
+    var showPaymentDialog by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(addRequest) {
+        if (addRequest > 0 && canAdd) {
+            editingPayment = null
+            showPaymentDialog = true
+        }
+    }
+
+    if (showPaymentDialog) {
+        PayrollPaymentDialog(
+            payment = editingPayment,
+            staff = staff,
+            month = payroll?.text("month").orEmpty().ifBlank { month },
+            onDismiss = {
+                showPaymentDialog = false
+                editingPayment = null
+            },
+            onSave = { id, payload ->
+                onSave(id, payload)
+                showPaymentDialog = false
+                editingPayment = null
+            },
+        )
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        PayrollMonthCard(
+            month = month,
+            monthLabel = monthLabel,
+            onMonthChange = onMonthChange,
+            onApply = { onApply(month) },
+        )
+
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            MetricCard(
+                modifier = Modifier.weight(1f),
+                label = "Paid Staff",
+                value = summary.optInt("paymentCount", 0).toString(),
+                accent = moduleAccent(AdminTab.Payroll),
+            )
+            MetricCard(
+                modifier = Modifier.weight(1f),
+                label = "Total Paid",
+                value = formatMoney(summary.opt("totalAmount")),
+                accent = OpwSuccess,
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            MetricCard(
+                modifier = Modifier.weight(1f),
+                label = "Base Salary",
+                value = formatMoney(summary.opt("baseSalary")),
+                accent = OpwBlue,
+            )
+            MetricCard(
+                modifier = Modifier.weight(1f),
+                label = "Bonus + Commission",
+                value = formatMoney(summary.optDouble("bonus", 0.0) + summary.optDouble("commission", 0.0)),
+                accent = OpwWarning,
+            )
+        }
+
+        if (canAdd) {
+            Button(
+                onClick = {
+                    editingPayment = null
+                    showPaymentDialog = true
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(18.dp),
+            ) {
+                Text("Add Payroll Payment", fontWeight = FontWeight.ExtraBold)
+            }
+        }
+
+        SectionCard(title = "Staff Salary Setup") {
+            if (staff.isEmpty()) {
+                InlineEmpty("No staff salary profiles available.")
+            } else {
+                staff.forEach { member ->
+                    val alreadyPaid = member.optBoolean("alreadyPaid")
+                    SimpleModuleCard(
+                        title = member.text("name", fallback = member.text("email", fallback = "Staff")),
+                        subtitle = listOf(
+                            member.text("workType", fallback = "Staff"),
+                            member.text("status", fallback = "Active"),
+                        ).filter { it.isNotBlank() }.joinToString(" | "),
+                        accent = if (alreadyPaid) OpwSuccess else moduleAccent(AdminTab.Payroll),
+                        actions = {
+                            StatusChip(
+                                label = if (alreadyPaid) "Paid" else formatMoney(member.opt("monthlySalary")),
+                                background = if (alreadyPaid) Color(0xFFDCFCE7) else Color(0xFFE0F2FE),
+                                foreground = if (alreadyPaid) OpwSuccess else OpwBlue,
+                            )
+                        },
+                    )
+                }
+            }
+        }
+
+        SectionCard(title = "Paid History") {
+            if (payments.isEmpty()) {
+                InlineEmpty("No payroll paid for this month yet.")
+            } else {
+                payments.forEach { payment ->
+                    val title = payment.text(
+                        "staffName",
+                        "staffNameSnapshot",
+                        fallback = "Staff payroll",
+                    )
+                    val subtitle = listOf(
+                        payment.text("staffStatus", "staffStatusSnapshot", fallback = "Staff"),
+                        appointmentDateLabel(payment.text("paidDate", fallback = "")),
+                        payment.text("method", fallback = "Method not set"),
+                    ).filter { it.isNotBlank() && it != "-" }.joinToString(" | ")
+                    val content: @Composable RowScope.() -> Unit = {
+                        StatusChip(
+                            label = formatMoney(payment.opt("totalAmount")),
+                            background = Color(0xFFDCFCE7),
+                            foreground = OpwSuccess,
+                        )
+                    }
+
+                    if (canEdit) {
+                        SwipeDeleteModuleCard(
+                            title = title,
+                            subtitle = subtitle,
+                            accent = moduleAccent(AdminTab.Payroll),
+                            deleteTitle = "Delete payroll payment?",
+                            deleteMessage = "This will remove the payroll record and linked finance expense.",
+                            onClick = {
+                                editingPayment = payment
+                                showPaymentDialog = true
+                            },
+                            onDelete = { onDelete(payment) },
+                            swipeEnabled = true,
+                            actions = content,
+                        )
+                    } else {
+                        SimpleModuleCard(
+                            title = title,
+                            subtitle = subtitle,
+                            accent = moduleAccent(AdminTab.Payroll),
+                            actions = content,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PayrollMonthCard(
+    month: String,
+    monthLabel: String,
+    onMonthChange: (String) -> Unit,
+    onApply: () -> Unit,
+) {
+    SectionCard(title = "Payroll Month") {
+        Text(
+            text = monthLabel,
+            color = OpwInk,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Black,
+        )
+        Text(
+            text = "Use YYYY-MM format. Example: ${todayDateKey().take(7)}",
+            color = OpwSlate,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        SheetPatientField(
+            label = "Month",
+            value = month,
+            onValueChange = { value ->
+                onMonthChange(value.filter { char -> char.isDigit() || char == '-' }.take(7))
+            },
+            keyboardType = KeyboardType.Text,
+        )
+        Button(
+            onClick = onApply,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            shape = RoundedCornerShape(16.dp),
+        ) {
+            Text("Load Payroll", fontWeight = FontWeight.ExtraBold)
+        }
+    }
+}
+
+@Composable
+private fun PayrollPaymentDialog(
+    payment: JSONObject?,
+    staff: List<JSONObject>,
+    month: String,
+    onDismiss: () -> Unit,
+    onSave: (String?, JSONObject) -> Unit,
+) {
+    val paymentId = payment?.text("id").orEmpty()
+    val initialStaffId = payment?.text("staffId").orEmpty()
+    var staffId by rememberSaveable(paymentId) {
+        mutableStateOf(initialStaffId.ifBlank { staff.firstOrNull { !it.optBoolean("alreadyPaid") }?.text("id").orEmpty() })
+    }
+    var bonus by rememberSaveable(paymentId) {
+        mutableStateOf(payment?.optDouble("bonus", 0.0)?.takeIf { it > 0.0 }?.toString().orEmpty())
+    }
+    var commission by rememberSaveable(paymentId) {
+        mutableStateOf(payment?.optDouble("commission", 0.0)?.takeIf { it > 0.0 }?.toString().orEmpty())
+    }
+    var paidDate by rememberSaveable(paymentId) {
+        mutableStateOf(payment?.text("paidDate").orEmpty().ifBlank { todayDateKey() })
+    }
+    var method by rememberSaveable(paymentId) { mutableStateOf(payment?.text("method").orEmpty()) }
+    var notes by rememberSaveable(paymentId) { mutableStateOf(payment?.text("notes").orEmpty()) }
+    var error by rememberSaveable { mutableStateOf("") }
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
+    val selectedStaff = staff.firstOrNull { it.text("id") == staffId }
+    val selectedStaffLabel = selectedStaff?.text("name", fallback = selectedStaff.text("email", fallback = "Staff"))
+        ?: payment?.text("staffName", "staffNameSnapshot", fallback = "Select staff").orEmpty()
+    val baseSalary = payment?.optDouble("baseSalary", 0.0)
+        ?: selectedStaff?.optDouble("monthlySalary", 0.0)
+        ?: 0.0
+    val totalAmount = baseSalary + (bonus.toDoubleOrNull() ?: 0.0) + (commission.toDoubleOrNull() ?: 0.0)
+
+    OpwBottomSheetDialog(
+        title = if (payment == null) "Add Payroll" else "Edit Payroll",
+        primaryLabel = if (payment == null) "Save Payroll" else "Update Payroll",
+        onDismiss = onDismiss,
+        onPrimary = {
+            when {
+                payment == null && staffId.isBlank() -> error = "Select staff member."
+                paidDate.isBlank() -> error = "Choose paid date."
+                totalAmount <= 0.0 -> error = "Set salary, bonus, or commission before saving."
+                else -> onSave(
+                    payment?.text("id"),
+                    JSONObject()
+                        .put("staffId", staffId)
+                        .put("month", month)
+                        .put("bonus", bonus.toDoubleOrNull() ?: 0.0)
+                        .put("commission", commission.toDoubleOrNull() ?: 0.0)
+                        .put("paidDate", paidDate)
+                        .put("method", method.trim())
+                        .put("notes", notes.trim()),
+                )
+            }
+        },
+    ) {
+        if (error.isNotBlank()) {
+            StatusBanner(message = error, tone = BannerTone.Error)
+        }
+
+        if (payment == null) {
+            Text("Staff", fontWeight = FontWeight.Black, color = OpwInk)
+            val availableStaff = staff.filter { !it.optBoolean("alreadyPaid") || it.text("id") == staffId }
+            if (availableStaff.isEmpty()) {
+                InlineEmpty("All staff are already paid for this month.")
+            } else {
+                ChoiceChipRow(
+                    options = availableStaff.map { it.text("name", fallback = it.text("email", fallback = "Staff")) },
+                    selected = selectedStaffLabel,
+                ) { selected ->
+                    staffId = availableStaff.firstOrNull {
+                        it.text("name", fallback = it.text("email", fallback = "Staff")) == selected
+                    }?.text("id").orEmpty()
+                    error = ""
+                }
+            }
+        } else {
+            DetailRow("Staff", selectedStaffLabel)
+        }
+
+        DetailRow("Salary snapshot", formatMoney(baseSalary))
+        DetailRow("Month", month)
+        SheetPatientField(
+            label = "Bonus",
+            value = bonus,
+            onValueChange = { bonus = it.filter { char -> char.isDigit() || char == '.' }; error = "" },
+            keyboardType = KeyboardType.Decimal,
+        )
+        SheetPatientField(
+            label = "Commission",
+            value = commission,
+            onValueChange = { commission = it.filter { char -> char.isDigit() || char == '.' }; error = "" },
+            keyboardType = KeyboardType.Decimal,
+        )
+        DetailRow("Total payable", formatMoney(totalAmount))
+        SheetPickerField("Paid Date", appointmentDateLabel(paidDate), "Pick date", onClick = { showDatePicker = true })
+        SheetPatientField("Payment Method", method, { method = it })
+        SheetPatientField("Notes", notes, { notes = it }, minLines = 2)
+    }
+
+    if (showDatePicker) {
+        AppointmentDatePickerDialog(
+            selectedDate = paidDate,
+            onDismiss = { showDatePicker = false },
+            onDateSelected = {
+                paidDate = it
+                error = ""
+                showDatePicker = false
+            },
+        )
+    }
+}
+
+@Composable
 private fun ReportFilterCard(
     fromDate: String,
     toDate: String,
@@ -11984,6 +12439,7 @@ private fun moduleCount(tab: AdminTab, state: DashboardUiState): Int =
         }
         AdminTab.Reports -> state.reports?.objectValue("summary")?.optInt("paymentCount", 0) ?: 0
         AdminTab.Finance -> state.finance?.objectValue("summary")?.optInt("paidPatientCount", 0) ?: 0
+        AdminTab.Payroll -> state.payroll?.objectValue("summary")?.optInt("paymentCount", 0) ?: 0
         AdminTab.Chat -> state.chatConversations.count { it.optBoolean("unreadForAgent") }
         AdminTab.Team -> state.users.size
         AdminTab.Create -> 0
@@ -12008,6 +12464,7 @@ private fun adminTabPermissionKey(tab: AdminTab): String? =
         AdminTab.Jobs -> "career"
         AdminTab.Reports -> "reports"
         AdminTab.Finance -> "finance"
+        AdminTab.Payroll -> "payroll"
         AdminTab.Create,
         AdminTab.Profile -> null
     }
@@ -12069,6 +12526,7 @@ private fun moduleErrorsForTab(tab: AdminTab, state: DashboardUiState): List<Str
         AdminTab.Jobs -> listOf("job requirements")
         AdminTab.Reports -> listOf("reports")
         AdminTab.Finance -> listOf("finance")
+        AdminTab.Payroll -> listOf("payroll")
         AdminTab.Chat -> listOf("chat")
         AdminTab.Team -> listOf("staff")
         AdminTab.Create -> emptyList()

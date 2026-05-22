@@ -38,7 +38,7 @@ const copy = {
   title: "Reach the clinic easily and plan your visit with confidence.",
   text: "Whether you need help choosing the right therapy service or want to confirm clinic timings, we are here to help.",
   cards: [
-    { title: "Clinic Address", detail: "City clinic road, near davaindia, Baripada" },
+    { title: "Clinic Address", detail: "Ananda Bazar, K C. Circle, near Khuntia Medecine, Baripada, Odisha 757001" },
     { title: "Contact Details", detail: "+91 88955 55519 / contact@ommphysioworld.com" },
     { title: "Doctor", detail: "Dr. Tapaswini Sahu" },
     { title: "Working Hours", detail: "Monday to Saturday, 9:00 AM to 7:00 PM" },
@@ -314,7 +314,7 @@ export default function ContactPage() {
 
               <iframe
                 title={t.iframeTitle}
-                src="https://www.google.com/maps?q=City%20clinic%20road%2C%20near%20davaindia%2C%20Baripada&z=16&output=embed"
+                src="https://www.google.com/maps?q=Ananda%20Bazar%2C%20K%20C.%20Circle%2C%20near%20Khuntia%20Medecine%2C%20Baripada%2C%20Odisha%20757001&z=16&output=embed"
                 className="h-[420px] w-full border-0"
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"

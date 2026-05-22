@@ -2911,13 +2911,13 @@ private fun AboutSection() {
         item {
             SectionCard(
                 title = "Clinic Details",
-                subtitle = "Baripada, Odisha\nMonday to Saturday\n9:00 AM to 7:00 PM",
+                subtitle = "Ananda Bazar, K C. Circle, near Khuntia Medecine, Baripada, Odisha 757001\nMonday to Saturday\n9:00 AM to 7:00 PM",
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(onClick = { context.dialPhone("+918895555519") }, modifier = Modifier.weight(1f)) {
                         Text("Call")
                     }
-                    OutlinedButton(onClick = { context.openUrl("https://maps.app.goo.gl/Ph78XSeNRtXFNKpE9") }, modifier = Modifier.weight(1f)) {
+                    OutlinedButton(onClick = { context.openUrl("https://www.google.com/maps/search/?api=1&query=Ananda%20Bazar%2C%20K%20C.%20Circle%2C%20near%20Khuntia%20Medecine%2C%20Baripada%2C%20Odisha%20757001") }, modifier = Modifier.weight(1f)) {
                         Text("Map")
                     }
                 }

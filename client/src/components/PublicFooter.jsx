@@ -192,7 +192,7 @@ export default function PublicFooter() {
               {t.contact}
             </p>
             <div className="mt-4 space-y-3 text-sm text-slate-300">
-              <p>City clinic road, near davaindia, Baripada</p>
+              <p>Ananda Bazar, K C. Circle, near Khuntia Medecine, Baripada, Odisha 757001</p>
               <p>+91 88955 55519</p>
               <p>contact@ommphysioworld.com</p>
             </div>

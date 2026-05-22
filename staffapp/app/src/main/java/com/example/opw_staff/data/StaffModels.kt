@@ -77,6 +77,7 @@ data class AdminDashboardSnapshot(
     val jobRequirements: List<JSONObject> = emptyList(),
     val reports: JSONObject? = null,
     val finance: JSONObject? = null,
+    val payroll: JSONObject? = null,
     val chatConversations: List<JSONObject> = emptyList(),
     val treatmentTracker: JSONObject? = null,
     val moduleErrors: Map<String, String> = emptyMap(),

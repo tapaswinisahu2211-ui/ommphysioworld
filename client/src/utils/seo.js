@@ -1,6 +1,6 @@
 ﻿const siteName = "Omm Physio World";
 const clinicAddress =
-  "City clinic road, near davaindia, Baripada";
+  "Ananda Bazar, K C. Circle, near Khuntia Medecine, Baripada, Odisha 757001";
 const clinicPhone = "+91 88955 55519";
 const clinicEmail = "contact@ommphysioworld.com";
 const siteLogoPath = "/logo512.png";

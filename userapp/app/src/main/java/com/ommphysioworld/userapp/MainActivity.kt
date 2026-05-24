@@ -1301,7 +1301,10 @@ private fun DashboardScreen(
     val unreadCount = activeNotifications.size
     val visiblePromotion = remember(snapshot.promotion, dismissedPromotionId) {
         snapshot.promotion
-            ?.takeIf { it.string("id").isNotBlank() && it.string("id") != dismissedPromotionId }
+            ?.takeIf { promotion ->
+                promotion.string("id").isNotBlank() &&
+                    promotionDismissKey(promotion) != dismissedPromotionId
+            }
     }
     val drawerProfileUrl = snapshot.patient
         .stringOrNull("profileImageUrl")
@@ -1365,9 +1368,9 @@ private fun DashboardScreen(
         PromotionDialog(
             promotion = visiblePromotion,
             imageUrl = visiblePromotion.stringOrNull("imageUrl")?.let(apiService::resolveResourceUrl).orEmpty(),
-            onDismiss = { dismissPromotion(visiblePromotion.string("id")) },
+            onDismiss = { dismissPromotion(promotionDismissKey(visiblePromotion)) },
             onOpenAction = { url ->
-                dismissPromotion(visiblePromotion.string("id"))
+                dismissPromotion(promotionDismissKey(visiblePromotion))
                 context.openUrl(normalizePromotionActionUrl(url))
             },
         )
@@ -2158,9 +2161,9 @@ private fun OverviewTab(
                 PromotionBannerCard(
                     promotion = promotion,
                     imageUrl = promotion.stringOrNull("imageUrl")?.let(apiService::resolveResourceUrl).orEmpty(),
-                    onDismiss = { onDismissPromotion(promotion.string("id")) },
+                    onDismiss = { onDismissPromotion(promotionDismissKey(promotion)) },
                     onOpenAction = { url ->
-                        onDismissPromotion(promotion.string("id"))
+                        onDismissPromotion(promotionDismissKey(promotion))
                         context.openUrl(normalizePromotionActionUrl(url))
                     },
                 )
@@ -6398,6 +6401,12 @@ private suspend fun loadDashboardSnapshot(apiService: AppApiService, patientId: 
     } catch (error: ApiException) {
         throw error
     }
+}
+
+private fun promotionDismissKey(promotion: JsonMap): String {
+    val id = promotion.string("id")
+    val version = promotion.stringOrNull("updatedAt") ?: promotion.stringOrNull("createdAt") ?: ""
+    return if (id.isBlank()) "" else "$id:$version"
 }
 
 private fun serverNotificationItem(item: JsonMap): NotificationItem =

@@ -4,6 +4,9 @@ import API from "../services/api";
 
 const DISMISSED_PROMOTION_KEY = "opwDismissedPromotionBannerId";
 
+const getPromotionVersionKey = (promotion) =>
+  promotion?.id ? `${promotion.id}:${promotion.updatedAt || ""}` : "";
+
 const resolveApiAssetUrl = (pathOrUrl = "") => {
   const value = pathOrUrl.trim();
   if (!value || value.startsWith("http://") || value.startsWith("https://")) {
@@ -35,7 +38,7 @@ export default function PublicPromotionPopup() {
         }
 
         const dismissedId = localStorage.getItem(DISMISSED_PROMOTION_KEY);
-        if (dismissedId !== nextPromotion.id) {
+        if (dismissedId !== getPromotionVersionKey(nextPromotion)) {
           setPromotion(nextPromotion);
           setVisible(true);
         }
@@ -53,7 +56,7 @@ export default function PublicPromotionPopup() {
 
   const closePromotion = () => {
     if (promotion?.id) {
-      localStorage.setItem(DISMISSED_PROMOTION_KEY, promotion.id);
+      localStorage.setItem(DISMISSED_PROMOTION_KEY, getPromotionVersionKey(promotion));
     }
     setVisible(false);
   };

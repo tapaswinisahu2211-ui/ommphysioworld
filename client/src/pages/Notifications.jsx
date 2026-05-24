@@ -4,6 +4,8 @@ import {
   CalendarClock,
   CheckCircle2,
   Loader2,
+  Megaphone,
+  Pencil,
   Search,
   Send,
   Trash2,
@@ -28,6 +30,32 @@ const formatDateTime = (value) => {
   });
 };
 
+const emptyPromotionForm = {
+  badge: "OPW Offer",
+  title: "",
+  message: "",
+  actionLabel: "",
+  actionUrl: "",
+  startsAt: "",
+  endsAt: "",
+  isActive: true,
+};
+
+const toDateTimeInputValue = (value) => {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 16);
+};
+
 export default function Notifications() {
   const [patients, setPatients] = useState([]);
   const [history, setHistory] = useState([]);
@@ -43,6 +71,10 @@ export default function Notifications() {
   const [historySort, setHistorySort] = useState("unread-first");
   const [selectedHistoryIds, setSelectedHistoryIds] = useState([]);
   const [deletingHistory, setDeletingHistory] = useState(false);
+  const [promotions, setPromotions] = useState([]);
+  const [promotionForm, setPromotionForm] = useState(emptyPromotionForm);
+  const [promotionEditingId, setPromotionEditingId] = useState("");
+  const [promotionSaving, setPromotionSaving] = useState(false);
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [scheduledFor, setScheduledFor] = useState("");
@@ -121,16 +153,91 @@ export default function Notifications() {
     setLoading(true);
     setError("");
     try {
-      const [patientsResponse, notificationsResponse] = await Promise.all([
+      const [patientsResponse, notificationsResponse, promotionsResponse] = await Promise.all([
         API.get("/patients"),
         API.get("/notifications/admin?limit=1000"),
+        API.get("/promotions/admin"),
       ]);
       setPatients(patientsResponse.data || []);
       setHistory(notificationsResponse.data || []);
+      setPromotions(promotionsResponse.data || []);
     } catch (loadError) {
       setError(loadError.response?.data?.message || "Failed to load notification data.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const updatePromotionForm = (key, value) => {
+    setPromotionForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const resetPromotionForm = () => {
+    setPromotionForm(emptyPromotionForm);
+    setPromotionEditingId("");
+  };
+
+  const submitPromotion = async (event) => {
+    event.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (!promotionForm.title.trim() || !promotionForm.message.trim()) {
+      setError("Banner title and message are required.");
+      return;
+    }
+
+    setPromotionSaving(true);
+    try {
+      const payload = {
+        ...promotionForm,
+        startsAt: promotionForm.startsAt ? new Date(promotionForm.startsAt).toISOString() : null,
+        endsAt: promotionForm.endsAt ? new Date(promotionForm.endsAt).toISOString() : null,
+      };
+      const response = promotionEditingId
+        ? await API.put(`/promotions/admin/${promotionEditingId}`, payload)
+        : await API.post("/promotions/admin", payload);
+
+      setSuccess(response.data?.message || "Promotion banner saved.");
+      resetPromotionForm();
+      await loadData();
+    } catch (saveError) {
+      setError(saveError.response?.data?.message || "Failed to save promotion banner.");
+    } finally {
+      setPromotionSaving(false);
+    }
+  };
+
+  const editPromotion = (promotion) => {
+    setPromotionEditingId(promotion.id);
+    setPromotionForm({
+      badge: promotion.badge || "OPW Offer",
+      title: promotion.title || "",
+      message: promotion.message || "",
+      actionLabel: promotion.actionLabel || "",
+      actionUrl: promotion.actionUrl || "",
+      startsAt: toDateTimeInputValue(promotion.startsAt),
+      endsAt: toDateTimeInputValue(promotion.endsAt),
+      isActive: Boolean(promotion.isActive),
+    });
+  };
+
+  const deletePromotion = async (promotionId) => {
+    if (!promotionId || !window.confirm("Delete this website and app banner?")) {
+      return;
+    }
+
+    setError("");
+    setSuccess("");
+    try {
+      await API.delete(`/promotions/admin/${promotionId}`);
+      setSuccess("Promotion banner deleted.");
+      if (promotionEditingId === promotionId) {
+        resetPromotionForm();
+      }
+      await loadData();
+    } catch (deleteError) {
+      setError(deleteError.response?.data?.message || "Failed to delete promotion banner.");
     }
   };
 
@@ -276,6 +383,183 @@ export default function Notifications() {
             {success}
           </div>
         ) : null}
+
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <form
+            onSubmit={submitPromotion}
+            className="overflow-hidden rounded-[2rem] border border-white bg-white shadow-sm"
+          >
+            <div className="relative p-5 sm:p-6">
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.12),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.12),_transparent_32%)]" />
+              <div className="relative flex items-start gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                  <Megaphone size={20} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.24em] text-emerald-600">
+                    Website & App Banner
+                  </p>
+                  <h2 className="mt-1 text-xl font-black text-slate-950">
+                    {promotionEditingId ? "Edit active offer" : "Create offer or festival popup"}
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    This appears on website load and inside the patient app dashboard.
+                  </p>
+                </div>
+              </div>
+
+              <div className="relative mt-6 grid gap-4 lg:grid-cols-2">
+                <label className="grid gap-2">
+                  <span className="text-sm font-bold text-slate-700">Badge</span>
+                  <input
+                    value={promotionForm.badge}
+                    onChange={(event) => updatePromotionForm("badge", event.target.value)}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                    placeholder="OPW Offer"
+                  />
+                </label>
+                <label className="grid gap-2">
+                  <span className="text-sm font-bold text-slate-700">Title</span>
+                  <input
+                    value={promotionForm.title}
+                    onChange={(event) => updatePromotionForm("title", event.target.value)}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                    placeholder="Festival physiotherapy offer"
+                  />
+                </label>
+                <label className="grid gap-2 lg:col-span-2">
+                  <span className="text-sm font-bold text-slate-700">Banner text</span>
+                  <textarea
+                    value={promotionForm.message}
+                    onChange={(event) => updatePromotionForm("message", event.target.value)}
+                    className="min-h-28 rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                    placeholder="Short message patients should see on first load."
+                  />
+                </label>
+                <label className="grid gap-2">
+                  <span className="text-sm font-bold text-slate-700">Button label</span>
+                  <input
+                    value={promotionForm.actionLabel}
+                    onChange={(event) => updatePromotionForm("actionLabel", event.target.value)}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                    placeholder="Book appointment"
+                  />
+                </label>
+                <label className="grid gap-2">
+                  <span className="text-sm font-bold text-slate-700">Button link</span>
+                  <input
+                    value={promotionForm.actionUrl}
+                    onChange={(event) => updatePromotionForm("actionUrl", event.target.value)}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                    placeholder="https://ommphysioworld.com/book-appointment"
+                  />
+                </label>
+                <label className="grid gap-2">
+                  <span className="text-sm font-bold text-slate-700">Start date</span>
+                  <input
+                    type="datetime-local"
+                    value={promotionForm.startsAt}
+                    onChange={(event) => updatePromotionForm("startsAt", event.target.value)}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                  />
+                </label>
+                <label className="grid gap-2">
+                  <span className="text-sm font-bold text-slate-700">End date</span>
+                  <input
+                    type="datetime-local"
+                    value={promotionForm.endsAt}
+                    onChange={(event) => updatePromotionForm("endsAt", event.target.value)}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+                  />
+                </label>
+              </div>
+
+              <div className="relative mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <label className="inline-flex items-center gap-3 text-sm font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={promotionForm.isActive}
+                    onChange={(event) => updatePromotionForm("isActive", event.target.checked)}
+                    className="h-5 w-5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-400"
+                  />
+                  Make this the active banner
+                </label>
+                <div className="flex gap-2">
+                  {promotionEditingId ? (
+                    <button
+                      type="button"
+                      onClick={resetPromotionForm}
+                      className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 hover:bg-slate-50"
+                    >
+                      Cancel edit
+                    </button>
+                  ) : null}
+                  <button
+                    type="submit"
+                    disabled={promotionSaving}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-lg transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {promotionSaving ? <Loader2 size={17} className="animate-spin" /> : <Megaphone size={17} />}
+                    {promotionEditingId ? "Update Banner" : "Save Banner"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </form>
+
+          <aside className="rounded-[2rem] border border-white bg-white p-5 shadow-sm sm:p-6">
+            <h2 className="text-xl font-black text-slate-950">Banner history</h2>
+            <p className="mt-2 text-sm text-slate-500">Only one banner can be active at a time.</p>
+            <div className="mt-5 space-y-3">
+              {promotions.length === 0 ? (
+                <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
+                  No banner created yet.
+                </p>
+              ) : (
+                promotions.slice(0, 6).map((promotion) => (
+                  <div key={promotion.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-black ${
+                            promotion.isActive
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-white text-slate-500"
+                          }`}
+                        >
+                          {promotion.isActive ? "Active" : "Inactive"}
+                        </span>
+                        <h3 className="mt-3 text-sm font-black text-slate-950">{promotion.title}</h3>
+                        <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{promotion.message}</p>
+                      </div>
+                      <div className="flex shrink-0 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => editPromotion(promotion)}
+                          className="rounded-full bg-white p-2 text-slate-600 shadow-sm hover:text-sky-700"
+                          aria-label="Edit banner"
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deletePromotion(promotion.id)}
+                          className="rounded-full bg-white p-2 text-rose-600 shadow-sm hover:text-rose-700"
+                          aria-label="Delete banner"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+                    <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                      Updated: {formatDateTime(promotion.updatedAt)}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </aside>
+        </section>
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_440px]">
           <form

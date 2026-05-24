@@ -100,6 +100,27 @@ class AppStorage(context: Context) {
             .apply()
     }
 
+    fun getDismissedPromotionId(patientId: String): String {
+        val normalizedId = patientId.trim()
+        if (normalizedId.isEmpty()) {
+            return ""
+        }
+
+        return preferences.getString("$KEY_DISMISSED_PROMOTION_PREFIX$normalizedId", "").orEmpty()
+    }
+
+    fun saveDismissedPromotionId(patientId: String, promotionId: String) {
+        val normalizedId = patientId.trim()
+        val normalizedPromotionId = promotionId.trim()
+        if (normalizedId.isEmpty() || normalizedPromotionId.isEmpty()) {
+            return
+        }
+
+        preferences.edit()
+            .putString("$KEY_DISMISSED_PROMOTION_PREFIX$normalizedId", normalizedPromotionId)
+            .apply()
+    }
+
     fun getCartItems(): List<JsonMap> {
         val raw = preferences.getString(KEY_CART_ITEMS, "").orEmpty().trim()
         return runCatching { JsonUtils.parseValue(raw).asJsonMapList() }.getOrDefault(emptyList())
@@ -132,6 +153,7 @@ class AppStorage(context: Context) {
         const val KEY_NOTIFICATIONS_SEEN_PREFIX = "patient_notifications_seen_at_"
         const val KEY_DISMISSED_NOTIFICATIONS_PREFIX = "patient_dismissed_notifications_"
         const val KEY_SHOWN_SYSTEM_NOTIFICATIONS_PREFIX = "patient_shown_system_notifications_"
+        const val KEY_DISMISSED_PROMOTION_PREFIX = "patient_dismissed_promotion_"
         const val KEY_CART_ITEMS = "shop_cart_items"
         const val KEY_CONVERSATION_ID = "public_chat_conversation_id"
     }

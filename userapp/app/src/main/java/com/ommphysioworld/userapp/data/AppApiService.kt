@@ -176,6 +176,8 @@ class AppApiService(
 
     suspend fun getShopProducts(): List<JsonMap> = extractList(getJson("/shop/products"))
 
+    suspend fun getActivePromotion(): JsonMap? = getJson("/public-promotion")["data"].asJsonMap()
+
     suspend fun getPatientAppointmentRequests(patientId: String): List<JsonMap> {
         return extractList(getJson("/patients/$patientId/appointment-requests"))
     }

@@ -1,6 +1,7 @@
 import PublicFooter from "../components/PublicFooter";
 import PublicChatWidget from "../components/PublicChatWidget";
 import PublicNavbar from "../components/PublicNavbar";
+import PublicPromotionPopup from "../components/PublicPromotionPopup";
 import ScrollToTopButton from "../components/ScrollToTopButton";
 
 export default function PublicLayout({ children }) {
@@ -15,6 +16,7 @@ export default function PublicLayout({ children }) {
         <ScrollToTopButton />
       </div>
       <PublicChatWidget />
+      <PublicPromotionPopup />
       <PublicFooter />
     </div>
   );

@@ -187,7 +187,7 @@ export default function ContactPage() {
                 {t.directionsText}
               </p>
               <a
-                href="https://maps.app.goo.gl/Ph78XSeNRtXFNKpE9"
+                href="https://www.google.com/maps/search/?api=1&query=Ananda%20Bazar%2C%20K%20C.%20Circle%2C%20near%20Khuntia%20Medecine%2C%20Baripada%2C%20Odisha%20757001"
                 target="_blank"
                 rel="noreferrer"
                 className="mt-5 inline-flex rounded-full bg-white px-5 py-3 text-sm font-medium text-slate-950 hover:bg-slate-100"

@@ -351,6 +351,7 @@ private data class DashboardSnapshot(
     val notifications: List<JsonMap> = emptyList(),
     val services: List<JsonMap> = emptyList(),
     val shopOrders: List<JsonMap> = emptyList(),
+    val promotion: JsonMap? = null,
     val loading: Boolean = true,
 )
 
@@ -1268,6 +1269,8 @@ private fun DashboardScreen(
     var publicSection by rememberSaveable { mutableStateOf(PublicSection.About) }
     var snapshot by remember(patientId) { mutableStateOf(DashboardSnapshot()) }
     var showNotifications by remember { mutableStateOf(false) }
+    var dismissedPromotionId by remember(patientId) { mutableStateOf(storage.getDismissedPromotionId(patientId)) }
+    var promotionPopupId by rememberSaveable(patientId) { mutableStateOf("") }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -1296,6 +1299,10 @@ private fun DashboardScreen(
     }
     val activeNotifications = notifications.filter { it.readAt == null }
     val unreadCount = activeNotifications.size
+    val visiblePromotion = remember(snapshot.promotion, dismissedPromotionId) {
+        snapshot.promotion
+            ?.takeIf { it.string("id").isNotBlank() && it.string("id") != dismissedPromotionId }
+    }
     val drawerProfileUrl = snapshot.patient
         .stringOrNull("profileImageUrl")
         ?.takeIf { it.isNotBlank() }
@@ -1342,6 +1349,27 @@ private fun DashboardScreen(
 
     LaunchedEffect(patientId, activeNotifications) {
         showSystemNotificationsForUnread(context, storage, patientId, activeNotifications, unreadCount)
+    }
+
+    LaunchedEffect(visiblePromotion?.string("id")) {
+        promotionPopupId = visiblePromotion?.string("id").orEmpty()
+    }
+
+    fun dismissPromotion(promotionId: String) {
+        storage.saveDismissedPromotionId(patientId, promotionId)
+        dismissedPromotionId = promotionId
+        promotionPopupId = ""
+    }
+
+    if (visiblePromotion != null && promotionPopupId == visiblePromotion.string("id")) {
+        PromotionDialog(
+            promotion = visiblePromotion,
+            onDismiss = { dismissPromotion(visiblePromotion.string("id")) },
+            onOpenAction = { url ->
+                dismissPromotion(visiblePromotion.string("id"))
+                context.openUrl(normalizePromotionActionUrl(url))
+            },
+        )
     }
 
     if (showNotifications) {
@@ -1665,6 +1693,8 @@ private fun DashboardScreen(
                 when (activeTab) {
                     DashboardTab.Overview -> OverviewTab(
                         snapshot = snapshot,
+                        promotion = visiblePromotion,
+                        onDismissPromotion = ::dismissPromotion,
                         onOpenTab = { activeTab = it },
                     )
                     DashboardTab.Appointments -> AppointmentsTab(
@@ -1999,8 +2029,11 @@ private fun PublicTab(
 @Composable
 private fun OverviewTab(
     snapshot: DashboardSnapshot,
+    promotion: JsonMap?,
+    onDismissPromotion: (String) -> Unit,
     onOpenTab: (DashboardTab) -> Unit,
 ) {
+    val context = LocalContext.current
     val patient = snapshot.patient
     val appointments = patient.listOfMaps("appointments")
     val visibleRequests = visibleAppointmentRequests(patient, snapshot.appointmentRequests)
@@ -2117,6 +2150,18 @@ private fun OverviewTab(
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        if (promotion != null) {
+            item {
+                PromotionBannerCard(
+                    promotion = promotion,
+                    onDismiss = { onDismissPromotion(promotion.string("id")) },
+                    onOpenAction = { url ->
+                        onDismissPromotion(promotion.string("id"))
+                        context.openUrl(normalizePromotionActionUrl(url))
+                    },
+                )
+            }
+        }
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -2238,6 +2283,144 @@ private fun OverviewTab(
                                 append("\n${formatNotificationTime(activity.third)}")
                             },
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PromotionDialog(
+    promotion: JsonMap,
+    onDismiss: () -> Unit,
+    onOpenAction: (String) -> Unit,
+) {
+    val actionLabel = promotion.stringOrNull("actionLabel").orEmpty()
+    val actionUrl = promotion.stringOrNull("actionUrl").orEmpty()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
+        confirmButton = {
+            if (actionLabel.isNotBlank() && actionUrl.isNotBlank()) {
+                Button(
+                    onClick = { onOpenAction(actionUrl) },
+                    colors = ButtonDefaults.buttonColors(containerColor = OpwBlue),
+                    shape = RoundedCornerShape(18.dp),
+                ) {
+                    Text(actionLabel, fontWeight = FontWeight.Black)
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close", color = OpwSlate, fontWeight = FontWeight.Bold)
+            }
+        },
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = promotion.stringOrNull("badge") ?: "OPW Update",
+                    color = OpwSuccess,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Black,
+                )
+                Text(
+                    text = promotion.stringOrNull("title") ?: "Omm Physio World",
+                    color = OpwInk,
+                    fontWeight = FontWeight.Black,
+                )
+            }
+        },
+        text = {
+            Text(
+                text = promotion.stringOrNull("message") ?: "",
+                color = OpwSlate,
+                lineHeight = MaterialTheme.typography.bodyLarge.lineHeight,
+            )
+        },
+    )
+}
+
+@Composable
+private fun PromotionBannerCard(
+    promotion: JsonMap,
+    onDismiss: () -> Unit,
+    onOpenAction: (String) -> Unit,
+) {
+    val actionLabel = promotion.stringOrNull("actionLabel").orEmpty()
+    val actionUrl = promotion.stringOrNull("actionUrl").orEmpty()
+
+    Surface(
+        color = Color.White,
+        shape = RoundedCornerShape(30.dp),
+        shadowElevation = 10.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Box(
+            modifier = Modifier
+                .border(1.dp, OpwBorder.copy(alpha = 0.55f), RoundedCornerShape(30.dp))
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFFE9FFF3),
+                            Color.White,
+                            Color(0xFFF4FFE3),
+                        ),
+                    ),
+                    RoundedCornerShape(30.dp),
+                )
+                .padding(18.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(128.dp)
+                    .align(Alignment.TopEnd)
+                    .offset(x = 46.dp, y = (-52).dp)
+                    .background(Color(0x5534D399), CircleShape),
+            )
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        color = OpwSuccess.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(999.dp),
+                    ) {
+                        Text(
+                            text = promotion.stringOrNull("badge") ?: "OPW Update",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            color = OpwSuccess,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Black,
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    TextButton(onClick = onDismiss) {
+                        Text("Close", color = OpwSlate, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Text(
+                    text = promotion.stringOrNull("title") ?: "Omm Physio World",
+                    color = OpwInk,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black,
+                )
+                Text(
+                    text = promotion.stringOrNull("message") ?: "",
+                    color = OpwSlate,
+                    style = MaterialTheme.typography.bodyMedium,
+                    lineHeight = MaterialTheme.typography.bodyMedium.lineHeight,
+                )
+                if (actionLabel.isNotBlank() && actionUrl.isNotBlank()) {
+                    Button(
+                        onClick = { onOpenAction(actionUrl) },
+                        colors = ButtonDefaults.buttonColors(containerColor = OpwBlue),
+                        shape = RoundedCornerShape(18.dp),
+                    ) {
+                        Text(actionLabel, fontWeight = FontWeight.Black)
                     }
                 }
             }
@@ -6159,12 +6342,14 @@ private suspend fun loadDashboardSnapshot(apiService: AppApiService, patientId: 
             val notifications = apiService.getPatientNotifications(patientId)
             val services = apiService.getServices()
             val shopOrders = apiService.getMyShopOrders()
+            val promotion = runCatching { apiService.getActivePromotion() }.getOrNull()
             DashboardSnapshot(
                 patient = patient,
                 appointmentRequests = appointmentRequests,
                 notifications = notifications,
                 services = services,
                 shopOrders = shopOrders,
+                promotion = promotion,
                 loading = false,
             )
         }
@@ -6581,6 +6766,15 @@ private fun showTimePicker(context: Context, initial: LocalTime, onSelected: (Lo
         initial.minute,
         false,
     ).show()
+}
+
+private fun normalizePromotionActionUrl(url: String): String {
+    val trimmed = url.trim()
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+        return trimmed
+    }
+
+    return "https://ommphysioworld.com/${trimmed.trimStart('/')}"
 }
 
 private fun Context.openUrl(url: String) {

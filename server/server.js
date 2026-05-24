@@ -72,6 +72,7 @@ const MarketingSource = require("./models/MarketingSource");
 const PatientNotification = require("./models/PatientNotification");
 const Patient = require("./models/Patient");
 const PayrollPayment = require("./models/PayrollPayment");
+const PromotionBanner = require("./models/PromotionBanner");
 const PublicUser = require("./models/PublicUser");
 const Service = require("./models/Service");
 const ShopOrder = require("./models/ShopOrder");
@@ -846,6 +847,76 @@ const serializePatientNotification = (notification, patient = null) => ({
   createdAt: notification.createdAt,
   updatedAt: notification.updatedAt,
 });
+
+const parseNullableDate = (value) => {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+};
+
+const serializePromotionBanner = (banner) => ({
+  id: banner._id.toString(),
+  badge: banner.badge || "OPW Update",
+  title: banner.title || "",
+  message: banner.message || "",
+  actionLabel: banner.actionLabel || "",
+  actionUrl: banner.actionUrl || "",
+  isActive: Boolean(banner.isActive),
+  startsAt: banner.startsAt || null,
+  endsAt: banner.endsAt || null,
+  createdAt: banner.createdAt,
+  updatedAt: banner.updatedAt,
+});
+
+const buildPromotionPayload = (body = {}) => {
+  const title = cleanText(body.title).slice(0, 90);
+  const message = cleanText(body.message || body.body).slice(0, 700);
+  const badge = cleanText(body.badge || "OPW Update").slice(0, 40);
+  const actionLabel = cleanText(body.actionLabel).slice(0, 40);
+  const actionUrl = cleanText(body.actionUrl).slice(0, 500);
+  const startsAt = parseNullableDate(body.startsAt);
+  const endsAt = parseNullableDate(body.endsAt);
+
+  if (!title || !message) {
+    return { error: "Banner title and message are required." };
+  }
+
+  if (startsAt === undefined || endsAt === undefined) {
+    return { error: "Please choose valid banner dates." };
+  }
+
+  if (startsAt && endsAt && endsAt < startsAt) {
+    return { error: "Banner end date must be after start date." };
+  }
+
+  return {
+    payload: {
+      badge,
+      title,
+      message,
+      actionLabel,
+      actionUrl,
+      startsAt,
+      endsAt,
+      isActive: body.isActive !== false,
+    },
+  };
+};
+
+const activePromotionFilter = () => {
+  const now = new Date();
+
+  return {
+    isActive: true,
+    $and: [
+      { $or: [{ startsAt: null }, { startsAt: { $lte: now } }] },
+      { $or: [{ endsAt: null }, { endsAt: { $gte: now } }] },
+    ],
+  };
+};
 
 const clinicDateTime = (dateKey, timeValue = "09:00") => {
   const date = String(dateKey || "").slice(0, 10);
@@ -2963,6 +3034,118 @@ app.patch("/api/patients/:id/notifications/read-all", requirePatientRecordAccess
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to mark notifications as read." });
+  }
+});
+
+app.get("/api/public-promotion", async (_req, res) => {
+  try {
+    const banner = await PromotionBanner.findOne(activePromotionFilter()).sort({
+      updatedAt: -1,
+      createdAt: -1,
+    });
+
+    res.json({ data: banner ? serializePromotionBanner(banner) : null });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to load promotion banner." });
+  }
+});
+
+app.get("/api/promotions/admin", requireStaffPermission("notifications", "view"), async (_req, res) => {
+  try {
+    const banners = await PromotionBanner.find()
+      .sort({ isActive: -1, updatedAt: -1, createdAt: -1 })
+      .limit(100);
+
+    res.json(banners.map(serializePromotionBanner));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to load promotion banners." });
+  }
+});
+
+app.post("/api/promotions/admin", requireStaffPermission("notifications", "add"), async (req, res) => {
+  try {
+    const { payload, error } = buildPromotionPayload(req.body);
+
+    if (error) {
+      return res.status(400).json({ message: error });
+    }
+
+    if (payload.isActive) {
+      await PromotionBanner.updateMany({ isActive: true }, { $set: { isActive: false } });
+    }
+
+    const banner = await PromotionBanner.create({
+      ...payload,
+      createdByUserId: req.staffUser?._id || req.auth?.sub || null,
+    });
+
+    res.status(201).json({
+      message: "Promotion banner saved.",
+      data: serializePromotionBanner(banner),
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to save promotion banner." });
+  }
+});
+
+app.put("/api/promotions/admin/:id", requireStaffPermission("notifications", "edit"), async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid banner id." });
+    }
+
+    const { payload, error } = buildPromotionPayload(req.body);
+
+    if (error) {
+      return res.status(400).json({ message: error });
+    }
+
+    if (payload.isActive) {
+      await PromotionBanner.updateMany(
+        { _id: { $ne: req.params.id }, isActive: true },
+        { $set: { isActive: false } }
+      );
+    }
+
+    const banner = await PromotionBanner.findByIdAndUpdate(
+      req.params.id,
+      { $set: payload },
+      { new: true }
+    );
+
+    if (!banner) {
+      return res.status(404).json({ message: "Promotion banner not found." });
+    }
+
+    res.json({
+      message: "Promotion banner updated.",
+      data: serializePromotionBanner(banner),
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to update promotion banner." });
+  }
+});
+
+app.delete("/api/promotions/admin/:id", requireStaffPermission("notifications", "edit"), async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid banner id." });
+    }
+
+    const banner = await PromotionBanner.findByIdAndDelete(req.params.id);
+
+    if (!banner) {
+      return res.status(404).json({ message: "Promotion banner not found." });
+    }
+
+    res.json({ message: "Promotion banner deleted." });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to delete promotion banner." });
   }
 });
 

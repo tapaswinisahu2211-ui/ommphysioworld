@@ -7,7 +7,7 @@
         android:top="18dp">
         <bitmap
             android:antialias="true"
-            android:gravity="center"
+            android:gravity="fill"
             android:src="@drawable/app_icon_512" />
     </item>
 </layer-list>

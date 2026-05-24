@@ -11,7 +11,7 @@
         android:right="24dp"
         android:top="24dp">
         <bitmap
-            android:gravity="center"
+            android:gravity="fill"
             android:src="@drawable/app_icon_512" />
     </item>
 </layer-list>

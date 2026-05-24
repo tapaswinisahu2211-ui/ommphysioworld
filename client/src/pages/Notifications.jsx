@@ -56,6 +56,20 @@ const toDateTimeInputValue = (value) => {
     .slice(0, 16);
 };
 
+const resolveApiAssetUrl = (pathOrUrl = "") => {
+  const value = pathOrUrl.trim();
+  if (!value || value.startsWith("http://") || value.startsWith("https://")) {
+    return value;
+  }
+
+  const baseUrl = API.defaults.baseURL || "/api";
+  if (baseUrl.startsWith("http")) {
+    return new URL(value.replace(/^\//, ""), `${baseUrl.replace(/\/api\/?$/, "")}/api/`).toString();
+  }
+
+  return `${baseUrl.replace(/\/$/, "")}/${value.replace(/^\//, "")}`;
+};
+
 export default function Notifications() {
   const [patients, setPatients] = useState([]);
   const [history, setHistory] = useState([]);
@@ -73,6 +87,8 @@ export default function Notifications() {
   const [deletingHistory, setDeletingHistory] = useState(false);
   const [promotions, setPromotions] = useState([]);
   const [promotionForm, setPromotionForm] = useState(emptyPromotionForm);
+  const [promotionImageFile, setPromotionImageFile] = useState(null);
+  const [removePromotionImage, setRemovePromotionImage] = useState(false);
   const [promotionEditingId, setPromotionEditingId] = useState("");
   const [promotionSaving, setPromotionSaving] = useState(false);
   const [title, setTitle] = useState("");
@@ -174,6 +190,8 @@ export default function Notifications() {
 
   const resetPromotionForm = () => {
     setPromotionForm(emptyPromotionForm);
+    setPromotionImageFile(null);
+    setRemovePromotionImage(false);
     setPromotionEditingId("");
   };
 
@@ -189,11 +207,18 @@ export default function Notifications() {
 
     setPromotionSaving(true);
     try {
-      const payload = {
+      const payload = new FormData();
+      Object.entries({
         ...promotionForm,
-        startsAt: promotionForm.startsAt ? new Date(promotionForm.startsAt).toISOString() : null,
-        endsAt: promotionForm.endsAt ? new Date(promotionForm.endsAt).toISOString() : null,
-      };
+        startsAt: promotionForm.startsAt ? new Date(promotionForm.startsAt).toISOString() : "",
+        endsAt: promotionForm.endsAt ? new Date(promotionForm.endsAt).toISOString() : "",
+        removeImage: removePromotionImage ? "true" : "false",
+      }).forEach(([key, value]) => payload.append(key, String(value ?? "")));
+
+      if (promotionImageFile) {
+        payload.append("image", promotionImageFile);
+      }
+
       const response = promotionEditingId
         ? await API.put(`/promotions/admin/${promotionEditingId}`, payload)
         : await API.post("/promotions/admin", payload);
@@ -220,6 +245,8 @@ export default function Notifications() {
       endsAt: toDateTimeInputValue(promotion.endsAt),
       isActive: Boolean(promotion.isActive),
     });
+    setPromotionImageFile(null);
+    setRemovePromotionImage(false);
   };
 
   const deletePromotion = async (promotionId) => {
@@ -436,6 +463,44 @@ export default function Notifications() {
                     placeholder="Short message patients should see on first load."
                   />
                 </label>
+                <label className="grid gap-2 lg:col-span-2">
+                  <span className="text-sm font-bold text-slate-700">Banner image</span>
+                  <div className="rounded-2xl border border-dashed border-emerald-200 bg-white p-4">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => {
+                        setPromotionImageFile(event.target.files?.[0] || null);
+                        setRemovePromotionImage(false);
+                      }}
+                      className="w-full text-sm text-slate-600 file:mr-4 file:rounded-full file:border-0 file:bg-emerald-100 file:px-4 file:py-2 file:text-sm file:font-black file:text-emerald-700"
+                    />
+                    {promotionImageFile ? (
+                      <p className="mt-2 text-xs font-semibold text-emerald-700">
+                        Selected: {promotionImageFile.name}
+                      </p>
+                    ) : promotionEditingId ? (
+                      <p className="mt-2 text-xs text-slate-400">
+                        Leave empty to keep the existing image.
+                      </p>
+                    ) : null}
+                    {promotionEditingId ? (
+                      <label className="mt-3 inline-flex items-center gap-2 text-xs font-bold text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={removePromotionImage}
+                          onChange={(event) => {
+                            setRemovePromotionImage(event.target.checked);
+                            if (event.target.checked) {
+                              setPromotionImageFile(null);
+                            }
+                          }}
+                        />
+                        Remove existing image
+                      </label>
+                    ) : null}
+                  </div>
+                </label>
                 <label className="grid gap-2">
                   <span className="text-sm font-bold text-slate-700">Button label</span>
                   <input
@@ -531,6 +596,13 @@ export default function Notifications() {
                         </span>
                         <h3 className="mt-3 text-sm font-black text-slate-950">{promotion.title}</h3>
                         <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{promotion.message}</p>
+                        {promotion.imageUrl ? (
+                          <img
+                            src={resolveApiAssetUrl(promotion.imageUrl)}
+                            alt=""
+                            className="mt-3 h-20 w-full rounded-2xl object-cover"
+                          />
+                        ) : null}
                       </div>
                       <div className="flex shrink-0 gap-1">
                         <button

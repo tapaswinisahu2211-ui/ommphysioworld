@@ -857,6 +857,18 @@ const parseNullableDate = (value) => {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 };
 
+const parseBooleanFlag = (value, defaultValue = false) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (value === undefined || value === null || value === "") {
+    return defaultValue;
+  }
+
+  return ["true", "1", "yes", "on"].includes(String(value).trim().toLowerCase());
+};
+
 const serializePromotionBanner = (banner) => ({
   id: banner._id.toString(),
   badge: banner.badge || "OPW Update",
@@ -864,6 +876,9 @@ const serializePromotionBanner = (banner) => ({
   message: banner.message || "",
   actionLabel: banner.actionLabel || "",
   actionUrl: banner.actionUrl || "",
+  imageUrl: banner.imageData
+    ? `/public-promotion/${banner._id.toString()}/image?v=${banner.imageUpdatedAt?.getTime?.() || banner.updatedAt?.getTime?.() || Date.now()}`
+    : "",
   isActive: Boolean(banner.isActive),
   startsAt: banner.startsAt || null,
   endsAt: banner.endsAt || null,
@@ -901,7 +916,7 @@ const buildPromotionPayload = (body = {}) => {
       actionUrl,
       startsAt,
       endsAt,
-      isActive: body.isActive !== false,
+      isActive: parseBooleanFlag(body.isActive, true),
     },
   };
 };
@@ -3051,6 +3066,29 @@ app.get("/api/public-promotion", async (_req, res) => {
   }
 });
 
+app.get("/api/public-promotion/:id/image", async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid banner id." });
+    }
+
+    const banner = await PromotionBanner.findById(req.params.id).select(
+      "imageData imageMimeType imageUpdatedAt updatedAt"
+    );
+
+    if (!banner?.imageData) {
+      return res.status(404).json({ message: "Promotion image not found." });
+    }
+
+    res.setHeader("Content-Type", banner.imageMimeType || "image/jpeg");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.send(banner.imageData);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to load promotion image." });
+  }
+});
+
 app.get("/api/promotions/admin", requireStaffPermission("notifications", "view"), async (_req, res) => {
   try {
     const banners = await PromotionBanner.find()
@@ -3064,7 +3102,7 @@ app.get("/api/promotions/admin", requireStaffPermission("notifications", "view")
   }
 });
 
-app.post("/api/promotions/admin", requireStaffPermission("notifications", "add"), async (req, res) => {
+app.post("/api/promotions/admin", requireStaffPermission("notifications", "add"), upload.single("image"), async (req, res) => {
   try {
     const { payload, error } = buildPromotionPayload(req.body);
 
@@ -3076,10 +3114,22 @@ app.post("/api/promotions/admin", requireStaffPermission("notifications", "add")
       await PromotionBanner.updateMany({ isActive: true }, { $set: { isActive: false } });
     }
 
-    const banner = await PromotionBanner.create({
+    const bannerPayload = {
       ...payload,
       createdByUserId: req.staffUser?._id || req.auth?.sub || null,
-    });
+    };
+
+    if (req.file) {
+      if (!req.file.mimetype?.startsWith("image/")) {
+        return res.status(400).json({ message: "Please upload a valid banner image." });
+      }
+
+      bannerPayload.imageData = req.file.buffer;
+      bannerPayload.imageMimeType = req.file.mimetype || "image/jpeg";
+      bannerPayload.imageUpdatedAt = new Date();
+    }
+
+    const banner = await PromotionBanner.create(bannerPayload);
 
     res.status(201).json({
       message: "Promotion banner saved.",
@@ -3091,7 +3141,7 @@ app.post("/api/promotions/admin", requireStaffPermission("notifications", "add")
   }
 });
 
-app.put("/api/promotions/admin/:id", requireStaffPermission("notifications", "edit"), async (req, res) => {
+app.put("/api/promotions/admin/:id", requireStaffPermission("notifications", "edit"), upload.single("image"), async (req, res) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({ message: "Invalid banner id." });
@@ -3110,11 +3160,21 @@ app.put("/api/promotions/admin/:id", requireStaffPermission("notifications", "ed
       );
     }
 
-    const banner = await PromotionBanner.findByIdAndUpdate(
-      req.params.id,
-      { $set: payload },
-      { new: true }
-    );
+    if (req.file) {
+      if (!req.file.mimetype?.startsWith("image/")) {
+        return res.status(400).json({ message: "Please upload a valid banner image." });
+      }
+
+      payload.imageData = req.file.buffer;
+      payload.imageMimeType = req.file.mimetype || "image/jpeg";
+      payload.imageUpdatedAt = new Date();
+    } else if (parseBooleanFlag(req.body.removeImage, false)) {
+      payload.imageData = null;
+      payload.imageMimeType = "";
+      payload.imageUpdatedAt = null;
+    }
+
+    const banner = await PromotionBanner.findByIdAndUpdate(req.params.id, { $set: payload }, { new: true });
 
     if (!banner) {
       return res.status(404).json({ message: "Promotion banner not found." });

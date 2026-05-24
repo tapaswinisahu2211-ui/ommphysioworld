@@ -1364,6 +1364,7 @@ private fun DashboardScreen(
     if (visiblePromotion != null && promotionPopupId == visiblePromotion.string("id")) {
         PromotionDialog(
             promotion = visiblePromotion,
+            imageUrl = visiblePromotion.stringOrNull("imageUrl")?.let(apiService::resolveResourceUrl).orEmpty(),
             onDismiss = { dismissPromotion(visiblePromotion.string("id")) },
             onOpenAction = { url ->
                 dismissPromotion(visiblePromotion.string("id"))
@@ -1694,6 +1695,7 @@ private fun DashboardScreen(
                     DashboardTab.Overview -> OverviewTab(
                         snapshot = snapshot,
                         promotion = visiblePromotion,
+                        apiService = apiService,
                         onDismissPromotion = ::dismissPromotion,
                         onOpenTab = { activeTab = it },
                     )
@@ -2030,6 +2032,7 @@ private fun PublicTab(
 private fun OverviewTab(
     snapshot: DashboardSnapshot,
     promotion: JsonMap?,
+    apiService: AppApiService,
     onDismissPromotion: (String) -> Unit,
     onOpenTab: (DashboardTab) -> Unit,
 ) {
@@ -2154,6 +2157,7 @@ private fun OverviewTab(
             item {
                 PromotionBannerCard(
                     promotion = promotion,
+                    imageUrl = promotion.stringOrNull("imageUrl")?.let(apiService::resolveResourceUrl).orEmpty(),
                     onDismiss = { onDismissPromotion(promotion.string("id")) },
                     onOpenAction = { url ->
                         onDismissPromotion(promotion.string("id"))
@@ -2293,6 +2297,7 @@ private fun OverviewTab(
 @Composable
 private fun PromotionDialog(
     promotion: JsonMap,
+    imageUrl: String,
     onDismiss: () -> Unit,
     onOpenAction: (String) -> Unit,
 ) {
@@ -2334,11 +2339,20 @@ private fun PromotionDialog(
             }
         },
         text = {
-            Text(
-                text = promotion.stringOrNull("message") ?: "",
-                color = OpwSlate,
-                lineHeight = MaterialTheme.typography.bodyLarge.lineHeight,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(
+                    text = promotion.stringOrNull("message") ?: "",
+                    color = OpwSlate,
+                    lineHeight = MaterialTheme.typography.bodyLarge.lineHeight,
+                )
+                PromotionImage(
+                    imageUrl = imageUrl,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 220.dp)
+                        .clip(RoundedCornerShape(20.dp)),
+                )
+            }
         },
     )
 }
@@ -2346,6 +2360,7 @@ private fun PromotionDialog(
 @Composable
 private fun PromotionBannerCard(
     promotion: JsonMap,
+    imageUrl: String,
     onDismiss: () -> Unit,
     onOpenAction: (String) -> Unit,
 ) {
@@ -2414,6 +2429,13 @@ private fun PromotionBannerCard(
                     style = MaterialTheme.typography.bodyMedium,
                     lineHeight = MaterialTheme.typography.bodyMedium.lineHeight,
                 )
+                PromotionImage(
+                    imageUrl = imageUrl,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 180.dp)
+                        .clip(RoundedCornerShape(22.dp)),
+                )
                 if (actionLabel.isNotBlank() && actionUrl.isNotBlank()) {
                     Button(
                         onClick = { onOpenAction(actionUrl) },
@@ -2425,6 +2447,26 @@ private fun PromotionBannerCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PromotionImage(imageUrl: String, modifier: Modifier = Modifier) {
+    if (imageUrl.isBlank()) {
+        return
+    }
+
+    val bitmap by produceState<Bitmap?>(initialValue = null, imageUrl) {
+        value = loadProtectedBitmap(imageUrl, "")
+    }
+
+    bitmap?.let { loadedBitmap ->
+        Image(
+            bitmap = loadedBitmap.asImageBitmap(),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = modifier,
+        )
     }
 }
 

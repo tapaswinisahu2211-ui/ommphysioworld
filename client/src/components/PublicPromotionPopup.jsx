@@ -4,6 +4,20 @@ import API from "../services/api";
 
 const DISMISSED_PROMOTION_KEY = "opwDismissedPromotionBannerId";
 
+const resolveApiAssetUrl = (pathOrUrl = "") => {
+  const value = pathOrUrl.trim();
+  if (!value || value.startsWith("http://") || value.startsWith("https://")) {
+    return value;
+  }
+
+  const baseUrl = API.defaults.baseURL || "/api";
+  if (baseUrl.startsWith("http")) {
+    return new URL(value.replace(/^\//, ""), `${baseUrl.replace(/\/api\/?$/, "")}/api/`).toString();
+  }
+
+  return `${baseUrl.replace(/\/$/, "")}/${value.replace(/^\//, "")}`;
+};
+
 export default function PublicPromotionPopup() {
   const [promotion, setPromotion] = useState(null);
   const [visible, setVisible] = useState(false);
@@ -75,6 +89,14 @@ export default function PublicPromotionPopup() {
           <p className="mt-3 text-base leading-7 text-slate-600">
             {promotion.message}
           </p>
+
+          {promotion.imageUrl ? (
+            <img
+              src={resolveApiAssetUrl(promotion.imageUrl)}
+              alt=""
+              className="mt-5 max-h-64 w-full rounded-[1.5rem] object-cover shadow-lg shadow-slate-200"
+            />
+          ) : null}
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             {promotion.actionLabel && promotion.actionUrl ? (

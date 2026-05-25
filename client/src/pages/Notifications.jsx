@@ -207,21 +207,27 @@ export default function Notifications() {
 
     setPromotionSaving(true);
     try {
-      const payload = new FormData();
-      Object.entries({
+      const basePayload = {
         ...promotionForm,
         startsAt: promotionForm.startsAt ? new Date(promotionForm.startsAt).toISOString() : "",
         endsAt: promotionForm.endsAt ? new Date(promotionForm.endsAt).toISOString() : "",
         removeImage: removePromotionImage ? "true" : "false",
-      }).forEach(([key, value]) => payload.append(key, String(value ?? "")));
+      };
+      let payload = basePayload;
+      let requestConfig = undefined;
 
-      if (promotionImageFile) {
-        payload.append("image", promotionImageFile);
+      if (promotionImageFile || removePromotionImage) {
+        payload = new FormData();
+        Object.entries(basePayload).forEach(([key, value]) => payload.append(key, String(value ?? "")));
+
+        if (promotionImageFile) {
+          payload.append("image", promotionImageFile);
+        }
       }
 
       const response = promotionEditingId
-        ? await API.put(`/promotions/admin/${promotionEditingId}`, payload)
-        : await API.post("/promotions/admin", payload);
+        ? await API.put(`/promotions/admin/${promotionEditingId}`, payload, requestConfig)
+        : await API.post("/promotions/admin", payload, requestConfig);
 
       setSuccess(response.data?.message || "Promotion banner saved.");
       resetPromotionForm();

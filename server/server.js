@@ -3137,7 +3137,9 @@ app.post("/api/promotions/admin", requireStaffPermission("notifications", "add")
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ message: "Failed to save promotion banner." });
+    res.status(500).json({
+      message: error.message || "Failed to save promotion banner.",
+    });
   }
 });
 
@@ -3186,7 +3188,9 @@ app.put("/api/promotions/admin/:id", requireStaffPermission("notifications", "ed
     });
   } catch (error) {
     console.log(error);
-    res.status(500).json({ message: "Failed to update promotion banner." });
+    res.status(500).json({
+      message: error.message || "Failed to update promotion banner.",
+    });
   }
 });
 

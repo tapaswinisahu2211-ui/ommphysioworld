@@ -1613,6 +1613,26 @@ private fun DashboardScreen(
                                 }
                                 HorizontalDivider(color = Color(0xFFD9E4D8))
                                 NavigationDrawerItem(
+                                    label = { Text("Share App", fontWeight = FontWeight.Bold) },
+                                    icon = {
+                                        ShareGlyph(tint = OpwBlue)
+                                    },
+                                    selected = false,
+                                    onClick = {
+                                        context.shareAppLink()
+                                        scope.launch { drawerState.close() }
+                                    },
+                                    shape = RoundedCornerShape(18.dp),
+                                    colors = NavigationDrawerItemDefaults.colors(
+                                        selectedContainerColor = Color(0xFFE2F8E8),
+                                        selectedIconColor = OpwBlue,
+                                        selectedTextColor = OpwBlue,
+                                        unselectedContainerColor = Color.Transparent,
+                                        unselectedIconColor = OpwSlate,
+                                        unselectedTextColor = OpwInk,
+                                    ),
+                                )
+                                NavigationDrawerItem(
                                     label = { Text("Logout", fontWeight = FontWeight.Bold, color = OpwDanger) },
                                     icon = {
                                         PowerGlyph(tint = OpwDanger)
@@ -4652,6 +4672,39 @@ private fun ChatGlyph(tint: Color) {
 }
 
 @Composable
+private fun ShareGlyph(tint: Color) {
+    GlyphFrame {
+        val points = listOf(
+            Offset(4f, 9f),
+            Offset(12f, 4f),
+            Offset(12f, 14f),
+        )
+        points.forEach { point ->
+            Box(
+                modifier = Modifier
+                    .offset(x = point.x.dp - 9.dp, y = point.y.dp - 9.dp)
+                    .size(5.dp)
+                    .background(tint, CircleShape),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .offset(x = (-1).dp, y = (-4).dp)
+                .size(width = 9.dp, height = 2.dp)
+                .rotate(-30f)
+                .background(tint, CircleShape),
+        )
+        Box(
+            modifier = Modifier
+                .offset(x = (-1).dp, y = 3.dp)
+                .size(width = 9.dp, height = 2.dp)
+                .rotate(30f)
+                .background(tint, CircleShape),
+        )
+    }
+}
+
+@Composable
 private fun PencilGlyph(tint: Color) {
     GlyphFrame {
         Box(
@@ -6826,6 +6879,18 @@ private fun normalizePromotionActionUrl(url: String): String {
     }
 
     return "https://ommphysioworld.com/${trimmed.trimStart('/')}"
+}
+
+private fun Context.shareAppLink() {
+    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, "Omm Physio World")
+        putExtra(
+            Intent.EXTRA_TEXT,
+            "Download Omm Physio World app: https://play.google.com/store/apps/details?id=com.ommphysioworld.userapp",
+        )
+    }
+    startActivity(Intent.createChooser(shareIntent, "Share Omm Physio World"))
 }
 
 private fun Context.openUrl(url: String) {

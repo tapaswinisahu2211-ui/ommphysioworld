@@ -103,6 +103,12 @@ const sessionDaySchema = new mongoose.Schema(
 const treatmentPlanSchema = new mongoose.Schema(
   {
     treatmentTypes: { type: [String], default: [] },
+    treatmentLocation: {
+      type: String,
+      enum: ["clinic", "home"],
+      default: "clinic",
+    },
+    assignedStaffId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     fromDate: { type: String, default: "" },
     toDate: { type: String, default: "" },
     totalAmount: { type: Number, default: 0 },
@@ -127,12 +133,6 @@ const patientSchema = new mongoose.Schema({
     enum: ["website", "mobile_app", "admin"],
     default: "admin",
   },
-  treatmentLocation: {
-    type: String,
-    enum: ["clinic", "home"],
-    default: "clinic",
-  },
-  assignedStaffId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
   disease: { type: String, default: "", trim: true },
   notes: { type: String, default: "", trim: true },
   profileImageData: { type: Buffer, default: null },

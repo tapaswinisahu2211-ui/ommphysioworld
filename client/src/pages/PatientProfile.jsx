@@ -82,8 +82,6 @@ export default function PatientProfile() {
     name: "",
     email: "",
     mobile: "",
-    treatmentLocation: "clinic",
-    assignedStaffId: "",
   });
   const [editBasic, setEditBasic] = useState(false);
   const [showClinicalNoteModal, setShowClinicalNoteModal] = useState(false);
@@ -115,6 +113,8 @@ export default function PatientProfile() {
   const [treatmentForm, setTreatmentForm] = useState({
     treatmentTypeInput: "",
     treatmentTypes: [],
+    treatmentLocation: "clinic",
+    assignedStaffId: "",
     fromDate: "",
     toDate: "",
     totalAmount: "",
@@ -169,8 +169,6 @@ export default function PatientProfile() {
         name: response.data.name,
         email: response.data.email,
         mobile: response.data.mobile,
-        treatmentLocation: response.data.treatmentLocation || "clinic",
-        assignedStaffId: response.data.assignedStaff?.id || response.data.assignedStaffId || "",
       });
       setError("");
     } catch (loadError) {
@@ -226,6 +224,18 @@ export default function PatientProfile() {
       note: "",
       itemIds: [],
     });
+    setTreatmentForm({
+      treatmentTypeInput: "",
+      treatmentTypes: [],
+      treatmentLocation: "clinic",
+      assignedStaffId: "",
+      fromDate: "",
+      toDate: "",
+      totalAmount: "",
+      advanceAmount: "",
+      paymentMethod: "",
+      paymentNotes: "",
+    });
   };
 
   const handleBasicUpdate = async (e) => {
@@ -236,8 +246,6 @@ export default function PatientProfile() {
         name: form.name,
         email: form.email,
         mobile: form.mobile,
-        treatmentLocation: form.treatmentLocation,
-        assignedStaffId: form.assignedStaffId,
       });
       setPatient(response.data);
       setForm((current) => ({ ...current, ...response.data }));
@@ -379,6 +387,8 @@ export default function PatientProfile() {
 
       const response = await API.post(`/patients/${id}/treatment-plans`, {
         treatmentTypes,
+        treatmentLocation: treatmentForm.treatmentLocation,
+        assignedStaffId: treatmentForm.assignedStaffId,
         fromDate: treatmentForm.fromDate,
         toDate: treatmentForm.toDate,
         totalAmount: Number(treatmentForm.totalAmount || 0),
@@ -391,6 +401,8 @@ export default function PatientProfile() {
       setTreatmentForm({
         treatmentTypeInput: "",
         treatmentTypes: [],
+        treatmentLocation: "clinic",
+        assignedStaffId: "",
         fromDate: "",
         toDate: "",
         totalAmount: "",
@@ -410,6 +422,8 @@ export default function PatientProfile() {
     setTreatmentForm({
       treatmentTypeInput: "",
       treatmentTypes: plan.treatmentTypes || [],
+      treatmentLocation: plan.treatmentLocation || "clinic",
+      assignedStaffId: plan.assignedStaffId || "",
       fromDate: plan.fromDate || "",
       toDate: plan.toDate || "",
       totalAmount: String(plan.totalAmount || ""),
@@ -431,6 +445,8 @@ export default function PatientProfile() {
 
       const response = await API.put(`/patients/${id}/treatment-plans/${editingPlanId}`, {
         treatmentTypes,
+        treatmentLocation: treatmentForm.treatmentLocation,
+        assignedStaffId: treatmentForm.assignedStaffId,
         fromDate: treatmentForm.fromDate,
         toDate: treatmentForm.toDate,
         totalAmount: Number(treatmentForm.totalAmount || 0),
@@ -442,6 +458,8 @@ export default function PatientProfile() {
       setTreatmentForm({
         treatmentTypeInput: "",
         treatmentTypes: [],
+        treatmentLocation: "clinic",
+        assignedStaffId: "",
         fromDate: "",
         toDate: "",
         totalAmount: "",
@@ -678,17 +696,17 @@ export default function PatientProfile() {
 
   const availableTherapyResources = therapyForm.serviceId
     ? therapyResources.filter((resource) => resource.serviceId === therapyForm.serviceId)
-    : [];
-  const assignedStaffDetails =
-    patient.assignedStaff ||
-    staffOptions.find((user) => user.id === (patient.assignedStaffId || form.assignedStaffId || ""));
-  const assignedStaffLabel = assignedStaffDetails
+    : []; /*
     ? `${assignedStaffDetails.name}${assignedStaffDetails.workType ? ` • ${assignedStaffDetails.workType}` : ""}`
-    : "Not assigned yet";
-  const treatmentLocationLabel =
-    String(patient.treatmentLocation || form.treatmentLocation || "").toLowerCase() === "home"
-      ? "Home Visit"
-      : "Clinic Visit";
+  */ const getStaffLabel = (staffId) => {
+    const staff = staffOptions.find((user) => user.id === staffId);
+
+    if (!staff) {
+      return "Not assigned yet";
+    }
+
+    return `${staff.name}${staff.workType ? ` - ${staff.workType}` : ""}`;
+  };
 
   const panelClass = "rounded-2xl border border-slate-200/80 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.06)]";
 
@@ -733,18 +751,6 @@ export default function PatientProfile() {
                     <Phone size={14} />
                     {patient.mobile}
                   </span>
-                  <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1">
-                    {String(patient.treatmentLocation || "").toLowerCase() === "home" ? (
-                      <House size={14} />
-                    ) : (
-                      <Building2 size={14} />
-                    )}
-                    {treatmentLocationLabel}
-                  </span>
-                  <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1">
-                    <UserCheck size={14} />
-                    {assignedStaffDetails?.name || "No staff assigned"}
-                  </span>
                 </div>
               </div>
             </div>
@@ -775,42 +781,6 @@ export default function PatientProfile() {
           ))}
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-2">
-          <section className={`${panelClass} p-4`}>
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-blue-50 p-2 text-blue-700">
-                {String(patient.treatmentLocation || "").toLowerCase() === "home" ? (
-                  <House size={18} />
-                ) : (
-                  <Building2 size={18} />
-                )}
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                  Treatment Going On
-                </p>
-                <p className="mt-1 text-base font-semibold text-slate-900">
-                  {treatmentLocationLabel}
-                </p>
-              </div>
-            </div>
-          </section>
-
-          <section className={`${panelClass} p-4`}>
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-emerald-50 p-2 text-emerald-700">
-                <UserCheck size={18} />
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                  Staff Assigned
-                </p>
-                <p className="mt-1 text-base font-semibold text-slate-900">{assignedStaffLabel}</p>
-              </div>
-            </div>
-          </section>
-        </div>
-
         <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,430px)]">
           <div className="min-w-0 space-y-4">
             <section className={`${panelClass} p-4`}>
@@ -828,6 +798,19 @@ export default function PatientProfile() {
                       return;
                     }
 
+                    setEditingPlanId("");
+                    setTreatmentForm({
+                      treatmentTypeInput: "",
+                      treatmentTypes: [],
+                      treatmentLocation: "clinic",
+                      assignedStaffId: "",
+                      fromDate: "",
+                      toDate: "",
+                      totalAmount: "",
+                      advanceAmount: "",
+                      paymentMethod: "",
+                      paymentNotes: "",
+                    });
                     setShowTreatmentModal(true);
                   }}
                   disabled={activeTreatmentCount > 0}
@@ -911,7 +894,7 @@ export default function PatientProfile() {
                         ))}
                       </div>
 
-                      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                         <div className="rounded-2xl border border-slate-100 bg-white p-3">
                           <p className="text-xs uppercase tracking-wide text-slate-400">From Date</p>
                           <p className="mt-2 text-sm font-medium text-slate-900">{plan.fromDate || "Not added"}</p>
@@ -919,6 +902,26 @@ export default function PatientProfile() {
                         <div className="rounded-2xl border border-slate-100 bg-white p-3">
                           <p className="text-xs uppercase tracking-wide text-slate-400">To Date</p>
                           <p className="mt-2 text-sm font-medium text-slate-900">{plan.toDate || "Not added"}</p>
+                        </div>
+                        <div className="rounded-2xl border border-slate-100 bg-white p-3">
+                          <p className="text-xs uppercase tracking-wide text-slate-400">Treatment Mode</p>
+                          <div className="mt-2 flex items-center gap-2 text-sm font-medium text-slate-900">
+                            {String(plan.treatmentLocation || "").toLowerCase() === "home" ? (
+                              <House size={16} className="text-cyan-700" />
+                            ) : (
+                              <Building2 size={16} className="text-cyan-700" />
+                            )}
+                            {String(plan.treatmentLocation || "").toLowerCase() === "home"
+                              ? "Home Visit"
+                              : "Clinic Visit"}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-slate-100 bg-white p-3">
+                          <p className="text-xs uppercase tracking-wide text-slate-400">Staff Assigned</p>
+                          <div className="mt-2 flex items-center gap-2 text-sm font-medium text-slate-900">
+                            <UserCheck size={16} className="text-emerald-700" />
+                            {getStaffLabel(plan.assignedStaffId)}
+                          </div>
                         </div>
                         <div className="rounded-2xl border border-slate-100 bg-white p-3">
                           <p className="text-xs uppercase tracking-wide text-slate-400">Total Amount</p>
@@ -1699,31 +1702,6 @@ export default function PatientProfile() {
                   value={form.mobile}
                   onChange={(e) => setForm({ ...form, mobile: e.target.value })}
                 />
-                <select
-                  className="input"
-                  value={form.treatmentLocation}
-                  onChange={(e) =>
-                    setForm({ ...form, treatmentLocation: e.target.value })
-                  }
-                >
-                  <option value="clinic">Treatment at clinic</option>
-                  <option value="home">Home visit</option>
-                </select>
-                <select
-                  className="input"
-                  value={form.assignedStaffId}
-                  onChange={(e) =>
-                    setForm({ ...form, assignedStaffId: e.target.value })
-                  }
-                >
-                  <option value="">No staff assigned</option>
-                  {staffOptions.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name}
-                      {user.workType ? ` - ${user.workType}` : ""}
-                    </option>
-                  ))}
-                </select>
                 <button className="w-full rounded-xl bg-slate-900 px-4 py-3 font-medium text-white hover:bg-slate-800">
                   Save Changes
                 </button>
@@ -1826,6 +1804,58 @@ export default function PatientProfile() {
                           setTreatmentForm((current) => ({ ...current, toDate: e.target.value }))
                         }
                       />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-3">
+                    <p className="text-sm font-semibold text-slate-900">Session Assignment</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Choose whether this session is in clinic or home visit, and assign the responsible staff.
+                    </p>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Treatment Going On
+                      </span>
+                      <select
+                        className="input bg-white"
+                        value={treatmentForm.treatmentLocation}
+                        onChange={(e) =>
+                          setTreatmentForm((current) => ({
+                            ...current,
+                            treatmentLocation: e.target.value,
+                          }))
+                        }
+                      >
+                        <option value="clinic">At Clinic</option>
+                        <option value="home">Home Visit</option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Staff Assigned
+                      </span>
+                      <select
+                        className="input bg-white"
+                        value={treatmentForm.assignedStaffId}
+                        onChange={(e) =>
+                          setTreatmentForm((current) => ({
+                            ...current,
+                            assignedStaffId: e.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Select staff</option>
+                        {staffOptions.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {user.name}
+                            {user.workType ? ` - ${user.workType}` : ""}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                   </div>
                 </div>

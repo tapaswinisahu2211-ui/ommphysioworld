@@ -187,6 +187,29 @@ const serializePatient = (patient) => ({
   email: patient.email,
   mobile: patient.mobile,
   createdFrom: patient.createdFrom || "admin",
+  treatmentLocation:
+    String(patient.treatmentLocation || "").toLowerCase() === "home" ? "home" : "clinic",
+  assignedStaffId: patient.assignedStaffId
+    ? typeof patient.assignedStaffId === "object" && patient.assignedStaffId._id
+      ? patient.assignedStaffId._id.toString()
+      : patient.assignedStaffId.toString()
+    : "",
+  assignedStaff:
+    patient.assignedStaffId &&
+    typeof patient.assignedStaffId === "object" &&
+    patient.assignedStaffId._id
+      ? {
+          id: patient.assignedStaffId._id.toString(),
+          name: patient.assignedStaffId.name || "",
+          email: patient.assignedStaffId.email || "",
+          mobile: patient.assignedStaffId.mobile || "",
+          role: patient.assignedStaffId.role || "",
+          workType: patient.assignedStaffId.workType || "",
+          profileImageUrl: patient.assignedStaffId.profileImageData
+            ? `/users/${patient.assignedStaffId._id.toString()}/profile-image`
+            : "",
+        }
+      : null,
   disease: patient.disease || "",
   notes: patient.notes || "",
   profileImageUrl: patient.profileImageData
@@ -3497,7 +3520,10 @@ app.get("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
   try {
     await autoCompleteOverdueAppointments();
 
-    const patient = await Patient.findById(req.params.id);
+    const patient = await Patient.findById(req.params.id).populate(
+      "assignedStaffId",
+      "name email mobile role workType profileImageData"
+    );
 
     if (!patient) {
       return res.status(404).json({ message: "Patient not found." });
@@ -3564,6 +3590,14 @@ app.put("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
     const mobile = req.body.mobile !== undefined ? cleanPhone(req.body.mobile) : undefined;
     const disease = req.body.disease !== undefined ? cleanText(req.body.disease) : undefined;
     const notes = req.body.notes !== undefined ? cleanText(req.body.notes) : undefined;
+    const treatmentLocation =
+      req.body.treatmentLocation !== undefined
+        ? String(req.body.treatmentLocation || "")
+            .trim()
+            .toLowerCase()
+        : undefined;
+    const assignedStaffId =
+      req.body.assignedStaffId !== undefined ? String(req.body.assignedStaffId || "").trim() : undefined;
     const patient = await Patient.findById(req.params.id);
 
     if (!patient) {
@@ -3588,6 +3622,14 @@ app.put("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
       return res.status(400).json({ message: "Please enter a valid 10-digit mobile number." });
     }
 
+    if (
+      req.auth?.type === "staff" &&
+      treatmentLocation !== undefined &&
+      !["clinic", "home", ""].includes(treatmentLocation)
+    ) {
+      return res.status(400).json({ message: "Treatment location must be clinic or home." });
+    }
+
     if (req.auth?.type === "staff") {
       const identityConflict = await getPatientIdentityConflict({
         email: email ?? patient.email,
@@ -3598,10 +3640,27 @@ app.put("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
       if (identityConflict) {
         return res.status(409).json({ message: identityConflict.message });
       }
+
+      if (assignedStaffId !== undefined) {
+        if (!assignedStaffId) {
+          patient.assignedStaffId = null;
+        } else {
+          const assignedStaff = await User.findById(assignedStaffId);
+
+          if (!assignedStaff) {
+            return res.status(400).json({ message: "Assigned staff member not found." });
+          }
+
+          patient.assignedStaffId = assignedStaff._id;
+        }
+      }
     }
 
     if (req.auth?.type === "staff") {
       patient.email = email ?? patient.email;
+      if (treatmentLocation !== undefined && treatmentLocation) {
+        patient.treatmentLocation = treatmentLocation;
+      }
     }
     patient.name = name ?? patient.name;
     patient.mobile = mobile ?? patient.mobile;
@@ -3620,6 +3679,8 @@ app.put("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
         },
       }
     );
+
+    await patient.populate("assignedStaffId", "name email mobile role workType profileImageData");
 
     res.json(serializePatient(patient));
   } catch (error) {

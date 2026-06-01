@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
+  Building2,
   CheckCircle2,
   CreditCard,
   Download,
   FileText,
   Files,
+  House,
   Image,
   IndianRupee,
   Mail,
@@ -16,6 +18,7 @@ import {
   RotateCcw,
   Stethoscope,
   Trash2,
+  UserCheck,
   UserCircle2,
   X,
   XCircle,
@@ -79,6 +82,8 @@ export default function PatientProfile() {
     name: "",
     email: "",
     mobile: "",
+    treatmentLocation: "clinic",
+    assignedStaffId: "",
   });
   const [editBasic, setEditBasic] = useState(false);
   const [showClinicalNoteModal, setShowClinicalNoteModal] = useState(false);
@@ -92,6 +97,7 @@ export default function PatientProfile() {
     serviceLocation: "clinic",
   });
   const [services, setServices] = useState([]);
+  const [staffOptions, setStaffOptions] = useState([]);
   const [therapyResources, setTherapyResources] = useState([]);
   const [appointmentActionForms, setAppointmentActionForms] = useState({});
   const [appointmentRequests, setAppointmentRequests] = useState([]);
@@ -163,6 +169,8 @@ export default function PatientProfile() {
         name: response.data.name,
         email: response.data.email,
         mobile: response.data.mobile,
+        treatmentLocation: response.data.treatmentLocation || "clinic",
+        assignedStaffId: response.data.assignedStaff?.id || response.data.assignedStaffId || "",
       });
       setError("");
     } catch (loadError) {
@@ -179,15 +187,26 @@ export default function PatientProfile() {
   useEffect(() => {
     const loadReferenceData = async () => {
       try {
-        const [servicesResponse, therapyResponse] = await Promise.all([
+        const [servicesResponse, therapyResponse, staffResponse] = await Promise.allSettled([
           API.get("/services"),
           API.get("/therapy-resources"),
+          API.get("/users"),
         ]);
-        setServices(servicesResponse.data || []);
-        setTherapyResources(therapyResponse.data || []);
+        setServices(servicesResponse.status === "fulfilled" ? servicesResponse.value.data || [] : []);
+        setTherapyResources(
+          therapyResponse.status === "fulfilled" ? therapyResponse.value.data || [] : []
+        );
+        setStaffOptions(
+          staffResponse.status === "fulfilled"
+            ? (staffResponse.value.data || []).filter(
+                (user) => user.role !== "Admin" && String(user.status || "Active") === "Active"
+              )
+            : []
+        );
       } catch (_) {
         setServices([]);
         setTherapyResources([]);
+        setStaffOptions([]);
       }
     };
 
@@ -217,6 +236,8 @@ export default function PatientProfile() {
         name: form.name,
         email: form.email,
         mobile: form.mobile,
+        treatmentLocation: form.treatmentLocation,
+        assignedStaffId: form.assignedStaffId,
       });
       setPatient(response.data);
       setForm((current) => ({ ...current, ...response.data }));
@@ -658,6 +679,16 @@ export default function PatientProfile() {
   const availableTherapyResources = therapyForm.serviceId
     ? therapyResources.filter((resource) => resource.serviceId === therapyForm.serviceId)
     : [];
+  const assignedStaffDetails =
+    patient.assignedStaff ||
+    staffOptions.find((user) => user.id === (patient.assignedStaffId || form.assignedStaffId || ""));
+  const assignedStaffLabel = assignedStaffDetails
+    ? `${assignedStaffDetails.name}${assignedStaffDetails.workType ? ` • ${assignedStaffDetails.workType}` : ""}`
+    : "Not assigned yet";
+  const treatmentLocationLabel =
+    String(patient.treatmentLocation || form.treatmentLocation || "").toLowerCase() === "home"
+      ? "Home Visit"
+      : "Clinic Visit";
 
   const panelClass = "rounded-2xl border border-slate-200/80 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.06)]";
 
@@ -702,6 +733,18 @@ export default function PatientProfile() {
                     <Phone size={14} />
                     {patient.mobile}
                   </span>
+                  <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1">
+                    {String(patient.treatmentLocation || "").toLowerCase() === "home" ? (
+                      <House size={14} />
+                    ) : (
+                      <Building2 size={14} />
+                    )}
+                    {treatmentLocationLabel}
+                  </span>
+                  <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1">
+                    <UserCheck size={14} />
+                    {assignedStaffDetails?.name || "No staff assigned"}
+                  </span>
                 </div>
               </div>
             </div>
@@ -730,6 +773,42 @@ export default function PatientProfile() {
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-2">
+          <section className={`${panelClass} p-4`}>
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-blue-50 p-2 text-blue-700">
+                {String(patient.treatmentLocation || "").toLowerCase() === "home" ? (
+                  <House size={18} />
+                ) : (
+                  <Building2 size={18} />
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                  Treatment Going On
+                </p>
+                <p className="mt-1 text-base font-semibold text-slate-900">
+                  {treatmentLocationLabel}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className={`${panelClass} p-4`}>
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-emerald-50 p-2 text-emerald-700">
+                <UserCheck size={18} />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                  Staff Assigned
+                </p>
+                <p className="mt-1 text-base font-semibold text-slate-900">{assignedStaffLabel}</p>
+              </div>
+            </div>
+          </section>
         </div>
 
         <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,430px)]">
@@ -1620,6 +1699,31 @@ export default function PatientProfile() {
                   value={form.mobile}
                   onChange={(e) => setForm({ ...form, mobile: e.target.value })}
                 />
+                <select
+                  className="input"
+                  value={form.treatmentLocation}
+                  onChange={(e) =>
+                    setForm({ ...form, treatmentLocation: e.target.value })
+                  }
+                >
+                  <option value="clinic">Treatment at clinic</option>
+                  <option value="home">Home visit</option>
+                </select>
+                <select
+                  className="input"
+                  value={form.assignedStaffId}
+                  onChange={(e) =>
+                    setForm({ ...form, assignedStaffId: e.target.value })
+                  }
+                >
+                  <option value="">No staff assigned</option>
+                  {staffOptions.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.name}
+                      {user.workType ? ` - ${user.workType}` : ""}
+                    </option>
+                  ))}
+                </select>
                 <button className="w-full rounded-xl bg-slate-900 px-4 py-3 font-medium text-white hover:bg-slate-800">
                   Save Changes
                 </button>

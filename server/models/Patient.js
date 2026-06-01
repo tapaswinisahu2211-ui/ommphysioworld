@@ -127,6 +127,12 @@ const patientSchema = new mongoose.Schema({
     enum: ["website", "mobile_app", "admin"],
     default: "admin",
   },
+  treatmentLocation: {
+    type: String,
+    enum: ["clinic", "home"],
+    default: "clinic",
+  },
+  assignedStaffId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
   disease: { type: String, default: "", trim: true },
   notes: { type: String, default: "", trim: true },
   profileImageData: { type: Buffer, default: null },

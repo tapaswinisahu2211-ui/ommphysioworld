@@ -854,7 +854,7 @@ export default function PatientProfile() {
                             onClick={() => startEditingPlan(plan)}
                             className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                           >
-                            Edit
+                            Edit / Extend
                           </button>
                           {plan.status === "active" ? (
                             <button
@@ -938,7 +938,7 @@ export default function PatientProfile() {
                           <div>
                             <p className="text-sm font-semibold text-slate-900">Session Days</p>
                             <p className="text-xs text-slate-500">
-                              Only today&apos;s session can be marked done or not done.
+                              Past and today&apos;s session status can be corrected. Extend dates from Edit / Extend.
                             </p>
                           </div>
                           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
@@ -950,7 +950,7 @@ export default function PatientProfile() {
                           <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                             {plan.sessionDays.map((day) => {
                               const isDone = day.status === "done";
-                              const isToday = day.date === todayKey;
+                              const canUpdate = day.date && day.date <= todayKey;
 
                               return (
                                 <div
@@ -971,7 +971,7 @@ export default function PatientProfile() {
                                       {isDone ? "Done" : "Not done"}
                                     </span>
                                   </div>
-                                  {isToday ? (
+                                  {canUpdate ? (
                                     <button
                                       type="button"
                                       onClick={() =>
@@ -991,7 +991,7 @@ export default function PatientProfile() {
                                     </button>
                                   ) : (
                                     <span className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-semibold text-slate-500">
-                                      Locked
+                                      Upcoming
                                     </span>
                                   )}
                                 </div>

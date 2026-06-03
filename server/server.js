@@ -4017,8 +4017,21 @@ app.patch("/api/patients/:id/treatment-plans/:planId/session-days/:dayId", requi
       return res.status(404).json({ message: "Session day not found." });
     }
 
-    if (sessionDay.date !== getTodayKey()) {
-      return res.status(400).json({ message: "Only today's session status can be updated." });
+    const sessionDate = parseDateKey(sessionDay.date);
+    const planStartDate = parseDateKey(plan.fromDate);
+    const planEndDate = parseDateKey(plan.toDate);
+    const todayDate = parseDateKey(getTodayKey());
+
+    if (!sessionDate || !planStartDate || !planEndDate) {
+      return res.status(400).json({ message: "Session date is not valid." });
+    }
+
+    if (sessionDate < planStartDate || sessionDate > planEndDate) {
+      return res.status(400).json({ message: "Session day is outside the treatment date range." });
+    }
+
+    if (sessionDate > todayDate) {
+      return res.status(400).json({ message: "Upcoming session status cannot be marked yet." });
     }
 
     const nextStatus = String(req.body.status || "").trim().toLowerCase();

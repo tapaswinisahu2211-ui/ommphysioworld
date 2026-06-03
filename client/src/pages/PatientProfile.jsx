@@ -961,15 +961,9 @@ export default function PatientProfile() {
                                     <p className="truncate text-xs font-semibold text-slate-800">
                                       {day.date || "Date not added"}
                                     </p>
-                                    <span
-                                      className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                                        isDone
-                                          ? "bg-emerald-100 text-emerald-700"
-                                          : "bg-amber-100 text-amber-700"
-                                      }`}
-                                    >
-                                      {isDone ? "Done" : "Not done"}
-                                    </span>
+                                    <p className="mt-1 text-[11px] text-slate-400">
+                                      Tap status to change
+                                    </p>
                                   </div>
                                   {canUpdate ? (
                                     <button
@@ -981,13 +975,14 @@ export default function PatientProfile() {
                                           isDone ? "not_done" : "done"
                                         )
                                       }
-                                      className={`shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold ${
+                                      className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
                                         isDone
-                                          ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
-                                          : "bg-emerald-600 text-white hover:bg-emerald-700"
+                                          ? "bg-emerald-100 text-emerald-700 hover:bg-amber-100 hover:text-amber-700"
+                                          : "bg-amber-100 text-amber-700 hover:bg-emerald-600 hover:text-white"
                                       }`}
+                                      title={isDone ? "Click to mark not done" : "Click to mark done"}
                                     >
-                                      {isDone ? "Not done" : "Done"}
+                                      {isDone ? "Done" : "Not done"}
                                     </button>
                                   ) : (
                                     <span className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-semibold text-slate-500">

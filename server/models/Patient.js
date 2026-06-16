@@ -22,6 +22,7 @@ const paymentEntrySchema = new mongoose.Schema(
   {
     amount: { type: Number, required: true },
     method: { type: String, default: "" },
+    paymentDate: { type: String, default: "" },
     createdAt: { type: Date, default: Date.now },
   },
   { _id: true }

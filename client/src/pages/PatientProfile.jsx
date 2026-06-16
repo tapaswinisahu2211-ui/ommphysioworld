@@ -40,6 +40,18 @@ const formatDate = (value) => {
   });
 };
 
+const formatDateOnly = (value) => {
+  if (!value) {
+    return "Unknown";
+  }
+
+  return new Date(`${String(value).slice(0, 10)}T00:00:00`).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
 const formatMoney = (value) => `Rs. ${Number(value || 0).toLocaleString("en-IN")}`;
 
 const getAppointmentStatusLabel = (status) => {
@@ -127,6 +139,7 @@ export default function PatientProfile() {
     planId: "",
     amount: "",
     method: "",
+    paymentDate: getTodayKey(),
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -218,7 +231,7 @@ export default function PatientProfile() {
     setShowAppointmentModal(false);
     setShowTreatmentModal(false);
     setEditingPlanId("");
-    setPlanPaymentForm({ planId: "", amount: "", method: "" });
+    setPlanPaymentForm({ planId: "", amount: "", method: "", paymentDate: getTodayKey() });
     setTherapyForm({
       serviceId: "",
       note: "",
@@ -519,11 +532,12 @@ export default function PatientProfile() {
         {
           amount: Number(planPaymentForm.amount || 0),
           method: planPaymentForm.method,
+          paymentDate: planPaymentForm.paymentDate || getTodayKey(),
         }
       );
 
       setPatient(response.data);
-      setPlanPaymentForm({ planId: "", amount: "", method: "" });
+      setPlanPaymentForm({ planId: "", amount: "", method: "", paymentDate: getTodayKey() });
       setError("");
     } catch (saveError) {
       setError(saveError.response?.data?.message || "Failed to add payment.");
@@ -1052,6 +1066,36 @@ export default function PatientProfile() {
                                       planPaymentForm.planId === plan.id
                                         ? planPaymentForm.method
                                         : plan.paymentMethod || "",
+                                    paymentDate:
+                                      planPaymentForm.planId === plan.id
+                                        ? planPaymentForm.paymentDate
+                                        : getTodayKey(),
+                                  })
+                                }
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <label className="text-xs uppercase tracking-wide text-slate-400">
+                                Payment Date
+                              </label>
+                              <input
+                                type="date"
+                                className="input mt-2"
+                                value={
+                                  planPaymentForm.planId === plan.id
+                                    ? planPaymentForm.paymentDate || getTodayKey()
+                                    : getTodayKey()
+                                }
+                                onChange={(e) =>
+                                  setPlanPaymentForm({
+                                    planId: plan.id,
+                                    amount:
+                                      planPaymentForm.planId === plan.id ? planPaymentForm.amount : "",
+                                    method:
+                                      planPaymentForm.planId === plan.id
+                                        ? planPaymentForm.method
+                                        : plan.paymentMethod || "",
+                                    paymentDate: e.target.value,
                                   })
                                 }
                               />
@@ -1070,6 +1114,10 @@ export default function PatientProfile() {
                                     amount:
                                       planPaymentForm.planId === plan.id ? planPaymentForm.amount : "",
                                     method: e.target.value,
+                                    paymentDate:
+                                      planPaymentForm.planId === plan.id
+                                        ? planPaymentForm.paymentDate
+                                        : getTodayKey(),
                                   })
                                 }
                               />
@@ -1085,6 +1133,8 @@ export default function PatientProfile() {
                                     current.planId === plan.id
                                       ? current.method
                                       : plan.paymentMethod || "",
+                                  paymentDate:
+                                    current.planId === plan.id ? current.paymentDate || getTodayKey() : getTodayKey(),
                                 }))
                               }
                             >
@@ -1113,7 +1163,9 @@ export default function PatientProfile() {
                                     </p>
                                   </div>
                                   <p className="text-xs text-slate-400">
-                                    {formatDate(payment.createdAt)}
+                                    {payment.paymentDate
+                                      ? formatDateOnly(payment.paymentDate)
+                                      : formatDate(payment.createdAt)}
                                   </p>
                                 </div>
                               ))}

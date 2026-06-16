@@ -249,6 +249,7 @@ const serializePatient = (patient) => ({
       id: payment._id.toString(),
       amount: Number(payment.amount || 0),
       method: payment.method || "",
+      paymentDate: payment.paymentDate || (payment.createdAt ? formatDateKey(new Date(payment.createdAt)) : ""),
       createdAt: payment.createdAt,
     })),
     sessionDays: (plan.sessionDays || []).map((day) => ({
@@ -265,6 +266,7 @@ const serializePatient = (patient) => ({
     id: payment._id.toString(),
     amount: payment.amount,
     method: payment.method,
+    paymentDate: payment.paymentDate || (payment.createdAt ? formatDateKey(new Date(payment.createdAt)) : ""),
     createdAt: payment.createdAt,
   })),
   isArchived: Boolean(patient.archivedAt),
@@ -612,7 +614,7 @@ const collectPatientPaymentIncome = (patients = [], fromKey, toKey) => {
       const treatmentTypes = (plan.treatmentTypes || []).join(", ") || "Treatment Session";
 
       (plan.payments || []).forEach((payment) => {
-        const dateKey = payment.createdAt ? formatDateKey(new Date(payment.createdAt)) : "";
+        const dateKey = payment.paymentDate || (payment.createdAt ? formatDateKey(new Date(payment.createdAt)) : "");
         if (!isInRange(dateKey)) {
           return;
         }
@@ -638,7 +640,7 @@ const collectPatientPaymentIncome = (patients = [], fromKey, toKey) => {
     });
 
     (patient.payments || []).forEach((payment) => {
-      const dateKey = payment.createdAt ? formatDateKey(new Date(payment.createdAt)) : "";
+      const dateKey = payment.paymentDate || (payment.createdAt ? formatDateKey(new Date(payment.createdAt)) : "");
       if (!isInRange(dateKey)) {
         return;
       }
@@ -1987,7 +1989,7 @@ app.get("/api/dashboard", requireStaffPermission("dashboard", "view"), async (re
     const revenueByMonth = createRecentMonthBuckets(6);
     const revenueBuckets = createBucketMap(revenueByMonth);
     const addRevenueToMonth = (payment) => {
-      addValueToMonthBucket(revenueBuckets, payment.createdAt, payment.amount || 0);
+      addValueToMonthBucket(revenueBuckets, payment.paymentDate || payment.createdAt, payment.amount || 0);
     };
 
     patients.forEach((patient) => {
@@ -2163,7 +2165,7 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
         });
 
         (plan.payments || []).forEach((payment) => {
-          const dateKey = payment.createdAt ? formatDateKey(new Date(payment.createdAt)) : "";
+          const dateKey = payment.paymentDate || (payment.createdAt ? formatDateKey(new Date(payment.createdAt)) : "");
           if (!isInRange(dateKey)) {
             return;
           }
@@ -2180,13 +2182,14 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
             method: payment.method || "",
             source: "Session Payment",
             treatmentTypes,
+            paymentDate: dateKey,
             createdAt: payment.createdAt || null,
           });
         });
       });
 
       (patient.payments || []).forEach((payment) => {
-        const dateKey = payment.createdAt ? formatDateKey(new Date(payment.createdAt)) : "";
+        const dateKey = payment.paymentDate || (payment.createdAt ? formatDateKey(new Date(payment.createdAt)) : "");
         if (!isInRange(dateKey)) {
           return;
         }
@@ -2203,6 +2206,7 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
           method: payment.method || "",
           source: "Direct Payment",
           treatmentTypes: "",
+          paymentDate: dateKey,
           createdAt: payment.createdAt || null,
         });
       });
@@ -4092,6 +4096,7 @@ app.post("/api/patients/:id/treatment-plans/:planId/payments", requireStaffPermi
 
     const amount = Number(req.body.amount || 0);
     const method = String(req.body.method || "").trim();
+    const paymentDate = String(req.body.paymentDate || getTodayKey()).trim().slice(0, 10);
 
     if (!amount) {
       return res.status(400).json({ message: "Payment amount is required." });
@@ -4101,9 +4106,14 @@ app.post("/api/patients/:id/treatment-plans/:planId/payments", requireStaffPermi
       return res.status(400).json({ message: "Payment amount must be greater than zero." });
     }
 
+    if (!isValidDateValue(paymentDate)) {
+      return res.status(400).json({ message: "Please select a valid payment date." });
+    }
+
     plan.payments.push({
       amount,
       method,
+      paymentDate,
     });
 
     const paidAmount = (plan.payments || []).reduce(
@@ -4128,7 +4138,7 @@ app.post("/api/patients/:id/treatment-plans/:planId/payments", requireStaffPermi
         entityType: "treatment_plan",
         entityId: plan._id.toString(),
         actionUrl: "payments",
-        metadata: { amount, balanceAmount: Number(plan.balanceAmount || 0) },
+        metadata: { amount, balanceAmount: Number(plan.balanceAmount || 0), paymentDate },
       });
     } else {
       await createPatientNotification({
@@ -4140,7 +4150,7 @@ app.post("/api/patients/:id/treatment-plans/:planId/payments", requireStaffPermi
         entityType: "treatment_plan",
         entityId: plan._id.toString(),
         actionUrl: "payments",
-        metadata: { amount, balanceAmount: Number(plan.balanceAmount || 0) },
+        metadata: { amount, balanceAmount: Number(plan.balanceAmount || 0), paymentDate },
       });
     }
     res.status(201).json(serializePatient(patient));
@@ -4684,6 +4694,7 @@ app.post("/api/patients/:id/payments", requireStaffPermission("payments", "add")
   try {
     const amount = Number(req.body.amount || 0);
     const method = cleanText(req.body.method);
+    const paymentDate = String(req.body.paymentDate || getTodayKey()).trim().slice(0, 10);
 
     if (!amount) {
       return res.status(400).json({ message: "Amount is required." });
@@ -4693,13 +4704,17 @@ app.post("/api/patients/:id/payments", requireStaffPermission("payments", "add")
       return res.status(400).json({ message: "Amount must be greater than zero." });
     }
 
+    if (!isValidDateValue(paymentDate)) {
+      return res.status(400).json({ message: "Please select a valid payment date." });
+    }
+
     const patient = await Patient.findById(req.params.id);
 
     if (!patient) {
       return res.status(404).json({ message: "Patient not found." });
     }
 
-    patient.payments.push({ amount, method: method || "" });
+    patient.payments.push({ amount, method: method || "", paymentDate });
     await patient.save();
     const latestPayment = patient.payments[patient.payments.length - 1];
     await createPatientNotification({
@@ -4711,7 +4726,7 @@ app.post("/api/patients/:id/payments", requireStaffPermission("payments", "add")
       entityType: "payment",
       entityId: latestPayment?._id?.toString() || "",
       actionUrl: "payments",
-      metadata: { amount, method },
+      metadata: { amount, method, paymentDate },
     });
 
     res.status(201).json(serializePatient(patient));

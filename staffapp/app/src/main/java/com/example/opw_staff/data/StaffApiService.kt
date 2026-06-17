@@ -160,11 +160,19 @@ class StaffApiService(
             )
         }
 
-    suspend fun addTreatmentPayment(token: String, patientId: String, planId: String, amount: Double, method: String): JSONObject =
+    suspend fun addTreatmentPayment(
+        token: String,
+        patientId: String,
+        planId: String,
+        amount: Double,
+        method: String,
+        paymentDate: String,
+    ): JSONObject =
         withContext(Dispatchers.IO) {
             val body = JSONObject()
                 .put("amount", amount)
                 .put("method", method)
+                .put("paymentDate", paymentDate)
             JSONObject(request("POST", "/patients/$patientId/treatment-plans/$planId/payments", token = token, body = body))
         }
 

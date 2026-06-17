@@ -228,39 +228,49 @@ const serializePatient = (patient) => ({
       downloadUrl: `/patients/${patient._id.toString()}/therapy-recommendations/${entry._id.toString()}/items/${item._id.toString()}/download`,
     })),
   })),
-  treatmentPlans: (patient.treatmentPlans || []).map((plan) => ({
-    id: plan._id.toString(),
-    treatmentTypes: plan.treatmentTypes || [],
-    treatmentLocation:
-      String(plan.treatmentLocation || "").toLowerCase() === "home" ? "home" : "clinic",
-    assignedStaffId: plan.assignedStaffId
-      ? typeof plan.assignedStaffId === "object" && plan.assignedStaffId._id
-        ? plan.assignedStaffId._id.toString()
-        : plan.assignedStaffId.toString()
-      : "",
-    fromDate: plan.fromDate || "",
-    toDate: plan.toDate || "",
-    totalAmount: Number(plan.totalAmount || 0),
-    advanceAmount: Number(plan.advanceAmount || 0),
-    balanceAmount: Number(plan.balanceAmount || 0),
-    paymentMethod: plan.paymentMethod || "",
-    paymentNotes: plan.paymentNotes || "",
-    payments: (plan.payments || []).map((payment) => ({
-      id: payment._id.toString(),
-      amount: Number(payment.amount || 0),
-      method: payment.method || "",
-      paymentDate: payment.paymentDate || (payment.createdAt ? formatDateKey(new Date(payment.createdAt)) : ""),
-      createdAt: payment.createdAt,
-    })),
-    sessionDays: (plan.sessionDays || []).map((day) => ({
-      id: day._id.toString(),
-      date: day.date || "",
-      status: day.status || "not_done",
-      updatedAt: day.updatedAt || null,
-    })),
-    status: plan.status || "active",
-    createdAt: plan.createdAt,
-  })),
+  treatmentPlans: (patient.treatmentPlans || []).map((plan) => {
+    const assignedStaff =
+      plan.assignedStaffId && typeof plan.assignedStaffId === "object" && plan.assignedStaffId._id
+        ? plan.assignedStaffId
+        : null;
+
+    return {
+      id: plan._id.toString(),
+      treatmentTypes: plan.treatmentTypes || [],
+      treatmentLocation:
+        String(plan.treatmentLocation || "").toLowerCase() === "home" ? "home" : "clinic",
+      treatmentLocationLabel: formatServiceLocation(plan.treatmentLocation),
+      assignedStaffId: plan.assignedStaffId
+        ? assignedStaff
+          ? assignedStaff._id.toString()
+          : plan.assignedStaffId.toString()
+        : "",
+      assignedStaffName: assignedStaff?.name || "",
+      assignedStaffRole: assignedStaff?.role || "",
+      fromDate: plan.fromDate || "",
+      toDate: plan.toDate || "",
+      totalAmount: Number(plan.totalAmount || 0),
+      advanceAmount: Number(plan.advanceAmount || 0),
+      balanceAmount: Number(plan.balanceAmount || 0),
+      paymentMethod: plan.paymentMethod || "",
+      paymentNotes: plan.paymentNotes || "",
+      payments: (plan.payments || []).map((payment) => ({
+        id: payment._id.toString(),
+        amount: Number(payment.amount || 0),
+        method: payment.method || "",
+        paymentDate: payment.paymentDate || (payment.createdAt ? formatDateKey(new Date(payment.createdAt)) : ""),
+        createdAt: payment.createdAt,
+      })),
+      sessionDays: (plan.sessionDays || []).map((day) => ({
+        id: day._id.toString(),
+        date: day.date || "",
+        status: day.status || "not_done",
+        updatedAt: day.updatedAt || null,
+      })),
+      status: plan.status || "active",
+      createdAt: plan.createdAt,
+    };
+  }),
   appointments: serializePatientAppointments(patient.appointments || []),
   payments: (patient.payments || []).map((payment) => ({
     id: payment._id.toString(),
@@ -280,12 +290,23 @@ const serializePatient = (patient) => ({
 const getArchivedPatients = () =>
   Patient.find({ archivedAt: { $ne: null } })
     .setOptions({ includeArchived: true })
+    .populate("treatmentPlans.assignedStaffId", "name role status")
     .sort({ archivedAt: -1, updatedAt: -1 });
 
 const findArchivedPatientById = (id) =>
-  Patient.findOne({ _id: id, archivedAt: { $ne: null } }).setOptions({
-    includeArchived: true,
-  });
+  Patient.findOne({ _id: id, archivedAt: { $ne: null } })
+    .setOptions({
+      includeArchived: true,
+    })
+    .populate("treatmentPlans.assignedStaffId", "name role status");
+
+const populatePatientTreatmentStaff = (patient) =>
+  patient?.populate
+    ? patient.populate("treatmentPlans.assignedStaffId", "name role status")
+    : patient;
+
+const serializePatientWithTreatmentStaff = async (patient) =>
+  serializePatient(await populatePatientTreatmentStaff(patient));
 
 const DEFAULT_ADMIN_CREATED_PATIENT_PASSWORD = "123456";
 
@@ -3486,7 +3507,9 @@ app.get("/api/patients", requireStaffPermission("patients", "view"), async (req,
   try {
     await autoCompleteOverdueAppointments();
 
-    const patients = await Patient.find().sort({ createdAt: -1 });
+    const patients = await Patient.find()
+      .populate("treatmentPlans.assignedStaffId", "name role status")
+      .sort({ createdAt: -1 });
     res.json(patients.map(serializePatient));
   } catch (error) {
     console.log(error);
@@ -3508,7 +3531,10 @@ app.get("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
   try {
     await autoCompleteOverdueAppointments();
 
-    const patient = await Patient.findById(req.params.id);
+    const patient = await Patient.findById(req.params.id).populate(
+      "treatmentPlans.assignedStaffId",
+      "name role status"
+    );
 
     if (!patient) {
       return res.status(404).json({ message: "Patient not found." });
@@ -3518,7 +3544,7 @@ app.get("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
       await patient.save();
     }
 
-    res.json(serializePatient(patient));
+    res.json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to load patient." });
@@ -3561,7 +3587,7 @@ app.post("/api/patients", requireStaffPermission("patients", "add"), async (req,
 
     await syncAdminCreatedPatientPortalAccount(patient);
 
-    res.status(201).json(serializePatient(patient));
+    res.status(201).json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to create patient." });
@@ -3632,7 +3658,7 @@ app.put("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
       }
     );
 
-    res.json(serializePatient(patient));
+    res.json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to update patient." });
@@ -3673,7 +3699,7 @@ app.post("/api/patients/:id/profile-image", requirePatientRecordAccess, upload.s
     patient.profileImageUpdatedAt = new Date();
     await patient.save();
 
-    res.json(serializePatient(patient));
+    res.json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to upload patient profile image." });
@@ -3701,7 +3727,7 @@ app.delete("/api/patients/:id", requireStaffPermission("patients", "edit"), asyn
 
     res.json({
       message: "Patient archived successfully.",
-      patient: serializePatient(patient),
+      patient: await serializePatientWithTreatmentStaff(patient),
     });
   } catch (error) {
     console.log(error);
@@ -3736,7 +3762,7 @@ app.patch("/api/patients/:id/restore", requireStaffPermission("archived_patients
 
     res.json({
       message: "Archived patient restored successfully.",
-      patient: serializePatient(patient),
+      patient: await serializePatientWithTreatmentStaff(patient),
     });
   } catch (error) {
     console.log(error);
@@ -3862,7 +3888,7 @@ app.post("/api/patients/:id/treatment-plans", requireStaffPermission("treatment_
 
     await patient.save();
     await scheduleTreatmentPlanNotifications(patient, patient.treatmentPlans[0]);
-    res.status(201).json(serializePatient(patient));
+    res.status(201).json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to start treatment session." });
@@ -3904,7 +3930,7 @@ app.patch("/api/patients/:id/treatment-plans/:planId/status", requireStaffPermis
       });
       await scheduleTreatmentPlanNotifications(patient, plan);
     }
-    res.json(serializePatient(patient));
+    res.json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to update treatment status." });
@@ -3994,7 +4020,7 @@ app.put("/api/patients/:id/treatment-plans/:planId", requireStaffPermission("tre
 
     await patient.save();
     await scheduleTreatmentPlanNotifications(patient, plan);
-    res.json(serializePatient(patient));
+    res.json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to update treatment plan." });
@@ -4073,7 +4099,7 @@ app.patch("/api/patients/:id/treatment-plans/:planId/session-days/:dayId", requi
       }
     }
 
-    res.json(serializePatient(patient));
+    res.json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to update session day." });
@@ -4153,7 +4179,7 @@ app.post("/api/patients/:id/treatment-plans/:planId/payments", requireStaffPermi
         metadata: { amount, balanceAmount: Number(plan.balanceAmount || 0), paymentDate },
       });
     }
-    res.status(201).json(serializePatient(patient));
+    res.status(201).json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to add treatment payment." });
@@ -4173,7 +4199,7 @@ app.delete("/api/patients/:id/treatment-plans/:planId", requireStaffPermission("
     );
 
     await patient.save();
-    res.json(serializePatient(patient));
+    res.json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to delete treatment plan." });
@@ -4224,7 +4250,7 @@ app.post("/api/patients/:id/clinical-notes", requirePatientRecordAccess, upload.
         metadata: { documentCount: (req.files || []).length },
       });
     }
-    res.status(201).json(serializePatient(patient));
+    res.status(201).json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to save clinical note." });
@@ -4244,7 +4270,7 @@ app.delete("/api/patients/:id/clinical-notes/:noteId", requireStaffPermission("c
     );
 
     await patient.save();
-    res.json(serializePatient(patient));
+    res.json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to delete clinical note." });
@@ -4335,7 +4361,7 @@ app.post("/api/patients/:id/therapy-recommendations", requireStaffPermission("th
       actionUrl: "therapy",
       metadata: { serviceName: service.name, itemCount: items.length },
     });
-    res.status(201).json(serializePatient(patient));
+    res.status(201).json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to save therapy recommendation." });
@@ -4355,7 +4381,7 @@ app.delete("/api/patients/:id/therapy-recommendations/:recommendationId", requir
     );
 
     await patient.save();
-    res.json(serializePatient(patient));
+    res.json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to delete therapy recommendation." });
@@ -4527,7 +4553,7 @@ app.post("/api/patients/:id/appointments", requireStaffPermission("appointments"
       "scheduled"
     );
 
-    res.status(201).json(serializePatient(patient));
+    res.status(201).json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to add appointment." });
@@ -4569,7 +4595,7 @@ app.delete("/api/patients/:id/appointments/:appointmentId", requireStaffPermissi
 
     await patient.save();
 
-    res.json(serializePatient(patient));
+    res.json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to delete appointment." });
@@ -4683,7 +4709,7 @@ app.patch("/api/patients/:id/appointments/:appointmentId", requireStaffPermissio
         );
       }
     }
-    res.json(serializePatient(patient));
+    res.json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to update appointment." });
@@ -4729,7 +4755,7 @@ app.post("/api/patients/:id/payments", requireStaffPermission("payments", "add")
       metadata: { amount, method, paymentDate },
     });
 
-    res.status(201).json(serializePatient(patient));
+    res.status(201).json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to add payment." });
@@ -4750,7 +4776,7 @@ app.delete("/api/patients/:id/payments/:paymentId", requireStaffPermission("paym
 
     await patient.save();
 
-    res.json(serializePatient(patient));
+    res.json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to delete payment." });

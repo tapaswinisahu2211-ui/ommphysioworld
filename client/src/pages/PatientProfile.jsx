@@ -677,6 +677,19 @@ export default function PatientProfile() {
       !linkedAppointmentRequestIds.has(request.id) &&
       (!request.status || request.status === "pending")
   );
+  const treatmentPlans = patient.treatmentPlans || [];
+  const treatmentPaymentCount = treatmentPlans.reduce(
+    (sum, plan) => sum + (plan.payments?.length || 0),
+    0
+  );
+  const treatmentPaidTotal = treatmentPlans.reduce(
+    (sum, plan) => sum + Number(plan.advanceAmount || 0),
+    0
+  );
+  const treatmentBalanceTotal = treatmentPlans.reduce(
+    (sum, plan) => sum + Number(plan.balanceAmount || 0),
+    0
+  );
 
   const summaryCards = [
     {
@@ -693,10 +706,7 @@ export default function PatientProfile() {
     },
     {
       label: "Session Payments",
-      value: (patient.treatmentPlans || []).reduce(
-        (sum, plan) => sum + (plan.payments?.length || 0),
-        0
-      ),
+      value: treatmentPaymentCount,
       icon: CreditCard,
       tone: "bg-amber-50 text-amber-600",
     },
@@ -802,7 +812,7 @@ export default function PatientProfile() {
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">Treatment Sessions</h2>
                   <p className="text-sm text-slate-500">
-                    Start treatment with multiple treatment types, timeline, and payment structure.
+                    Start treatment with multiple treatment types, assigned staff, and daily session tracking.
                   </p>
                 </div>
                 <button
@@ -1014,155 +1024,215 @@ export default function PatientProfile() {
                         )}
                       </div>
 
-                      <div className="mt-4 rounded-2xl border border-slate-200 bg-[linear-gradient(180deg,#ffffff,#f8fafc)] p-4">
-                        <div className="flex items-center gap-2 text-slate-900">
-                          <IndianRupee size={16} />
-                          <p className="text-sm font-semibold">Payment Structure</p>
-                        </div>
-                        <div className="mt-3 grid gap-3 md:grid-cols-3">
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+
+            <section className={`${panelClass} p-4`}>
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">Payments</h2>
+                  <p className="text-sm text-slate-500">
+                    Track treatment payments separately from session progress.
+                  </p>
+                </div>
+                <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                  <IndianRupee size={14} />
+                  {formatMoney(treatmentPaidTotal)} collected
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                    Total Paid
+                  </p>
+                  <p className="mt-2 text-xl font-semibold text-slate-900">
+                    {formatMoney(treatmentPaidTotal)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                    Pending Balance
+                  </p>
+                  <p className="mt-2 text-xl font-semibold text-slate-900">
+                    {formatMoney(treatmentBalanceTotal)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                    Payment Entries
+                  </p>
+                  <p className="mt-2 text-xl font-semibold text-slate-900">
+                    {treatmentPaymentCount}
+                  </p>
+                </div>
+              </div>
+
+              {!treatmentPlans.length ? (
+                <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                  Start a treatment session before adding payments.
+                </div>
+              ) : (
+                <div className="mt-4 space-y-4">
+                  <form
+                    onSubmit={handleAddPlanPayment}
+                    className="rounded-2xl border border-slate-200 bg-[linear-gradient(180deg,#ffffff,#f8fafc)] p-4"
+                  >
+                    <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr_1fr_1fr_auto] lg:items-end">
+                      <div>
+                        <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          Treatment Plan
+                        </label>
+                        <select
+                          className="input mt-2"
+                          value={planPaymentForm.planId}
+                          onChange={(e) => {
+                            const selectedPlan = treatmentPlans.find((plan) => plan.id === e.target.value);
+                            setPlanPaymentForm({
+                              planId: e.target.value,
+                              amount: "",
+                              method: selectedPlan?.paymentMethod || "",
+                              paymentDate: getTodayKey(),
+                            });
+                          }}
+                        >
+                          <option value="">Select plan</option>
+                          {treatmentPlans.map((plan, index) => (
+                            <option key={plan.id} value={plan.id}>
+                              Plan {index + 1} - {plan.status === "completed" ? "Completed" : "Active"}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          Amount
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          className="input mt-2"
+                          placeholder="Amount"
+                          value={planPaymentForm.amount}
+                          onChange={(e) =>
+                            setPlanPaymentForm((current) => ({
+                              ...current,
+                              amount: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          Payment Date
+                        </label>
+                        <input
+                          type="date"
+                          className="input mt-2"
+                          value={planPaymentForm.paymentDate || getTodayKey()}
+                          onChange={(e) =>
+                            setPlanPaymentForm((current) => ({
+                              ...current,
+                              paymentDate: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          Method
+                        </label>
+                        <input
+                          className="input mt-2"
+                          placeholder="Cash / UPI / Card"
+                          value={planPaymentForm.method}
+                          onChange={(e) =>
+                            setPlanPaymentForm((current) => ({
+                              ...current,
+                              method: e.target.value,
+                            }))
+                          }
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={!planPaymentForm.planId || !planPaymentForm.amount}
+                        className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
+                      >
+                        Add Payment
+                      </button>
+                    </div>
+                  </form>
+
+                  <div className="space-y-3">
+                    {treatmentPlans.map((plan, index) => (
+                      <div
+                        key={plan.id}
+                        className="rounded-2xl border border-slate-200 bg-white p-4"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div>
-                            <p className="text-xs uppercase tracking-wide text-slate-400">Total Paid</p>
-                            <p className="mt-1 text-sm text-slate-800">{formatMoney(plan.advanceAmount)}</p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-semibold text-slate-900">Plan {index + 1}</p>
+                              <span
+                                className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                                  plan.status === "completed"
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : "bg-blue-50 text-blue-700"
+                                }`}
+                              >
+                                {plan.status === "completed" ? "Completed" : "Active"}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-sm text-slate-500">
+                              {(plan.treatmentTypes || []).join(", ") || "Treatment plan"}
+                            </p>
                           </div>
-                          <div>
-                            <p className="text-xs uppercase tracking-wide text-slate-400">Method</p>
-                            <p className="mt-1 text-sm text-slate-800">{plan.paymentMethod || "Not added"}</p>
+                          <div className="grid grid-cols-2 gap-2 text-right text-sm">
+                            <div className="rounded-xl bg-slate-50 px-3 py-2">
+                              <p className="text-[11px] uppercase tracking-wide text-slate-400">Paid</p>
+                              <p className="font-semibold text-slate-900">
+                                {formatMoney(plan.advanceAmount)}
+                              </p>
+                            </div>
+                            <div className="rounded-xl bg-slate-50 px-3 py-2">
+                              <p className="text-[11px] uppercase tracking-wide text-slate-400">Balance</p>
+                              <p className="font-semibold text-slate-900">
+                                {formatMoney(plan.balanceAmount)}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-xs uppercase tracking-wide text-slate-400">Rest Balance</p>
-                            <p className="mt-1 text-sm font-semibold text-slate-800">{formatMoney(plan.balanceAmount)}</p>
-                          </div>
-                        </div>
-                        <div className="mt-3">
-                          <p className="text-xs uppercase tracking-wide text-slate-400">Notes</p>
-                          <p className="mt-1 text-sm text-slate-800">{plan.paymentNotes || "No notes added"}</p>
                         </div>
 
-                        <form
-                          onSubmit={handleAddPlanPayment}
-                          className="mt-4 rounded-2xl bg-slate-50 p-4"
-                        >
-                          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-                            <input
-                              type="hidden"
-                              value={planPaymentForm.planId}
-                              readOnly
-                            />
-                            <div className="flex-1">
-                              <label className="text-xs uppercase tracking-wide text-slate-400">
-                                Add Payment
-                              </label>
-                              <input
-                                type="number"
-                                min="0"
-                                className="input mt-2"
-                                placeholder="Amount"
-                                value={planPaymentForm.planId === plan.id ? planPaymentForm.amount : ""}
-                                onChange={(e) =>
-                                  setPlanPaymentForm({
-                                    planId: plan.id,
-                                    amount: e.target.value,
-                                    method:
-                                      planPaymentForm.planId === plan.id
-                                        ? planPaymentForm.method
-                                        : plan.paymentMethod || "",
-                                    paymentDate:
-                                      planPaymentForm.planId === plan.id
-                                        ? planPaymentForm.paymentDate
-                                        : getTodayKey(),
-                                  })
-                                }
-                              />
-                            </div>
-                            <div className="flex-1">
-                              <label className="text-xs uppercase tracking-wide text-slate-400">
-                                Payment Date
-                              </label>
-                              <input
-                                type="date"
-                                className="input mt-2"
-                                value={
-                                  planPaymentForm.planId === plan.id
-                                    ? planPaymentForm.paymentDate || getTodayKey()
-                                    : getTodayKey()
-                                }
-                                onChange={(e) =>
-                                  setPlanPaymentForm({
-                                    planId: plan.id,
-                                    amount:
-                                      planPaymentForm.planId === plan.id ? planPaymentForm.amount : "",
-                                    method:
-                                      planPaymentForm.planId === plan.id
-                                        ? planPaymentForm.method
-                                        : plan.paymentMethod || "",
-                                    paymentDate: e.target.value,
-                                  })
-                                }
-                              />
-                            </div>
-                            <div className="flex-1">
-                              <label className="text-xs uppercase tracking-wide text-slate-400">
-                                Method
-                              </label>
-                              <input
-                                className="input mt-2"
-                                placeholder="Payment method"
-                                value={planPaymentForm.planId === plan.id ? planPaymentForm.method : ""}
-                                onChange={(e) =>
-                                  setPlanPaymentForm({
-                                    planId: plan.id,
-                                    amount:
-                                      planPaymentForm.planId === plan.id ? planPaymentForm.amount : "",
-                                    method: e.target.value,
-                                    paymentDate:
-                                      planPaymentForm.planId === plan.id
-                                        ? planPaymentForm.paymentDate
-                                        : getTodayKey(),
-                                  })
-                                }
-                              />
-                            </div>
-                            <button
-                              type="submit"
-                              className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white hover:bg-emerald-700"
-                              onClick={() =>
-                                setPlanPaymentForm((current) => ({
-                                  planId: plan.id,
-                                  amount: current.planId === plan.id ? current.amount : "",
-                                  method:
-                                    current.planId === plan.id
-                                      ? current.method
-                                      : plan.paymentMethod || "",
-                                  paymentDate:
-                                    current.planId === plan.id ? current.paymentDate || getTodayKey() : getTodayKey(),
-                                }))
-                              }
-                            >
-                              Add Payment
-                            </button>
-                          </div>
-                        </form>
+                        {plan.paymentNotes ? (
+                          <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                            {plan.paymentNotes}
+                          </p>
+                        ) : null}
 
                         <div className="mt-4">
-                          <p className="text-xs uppercase tracking-wide text-slate-400">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                             Payment History
                           </p>
                           {plan.payments?.length ? (
-                            <div className="mt-3 space-y-2">
+                            <div className="mt-3 grid gap-2 md:grid-cols-2">
                               {plan.payments.map((payment) => (
                                 <div
                                   key={payment.id}
-                                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3"
+                                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
                                 >
                                   <div>
-                                    <p className="text-sm font-medium text-slate-900">
+                                    <p className="text-sm font-semibold text-slate-900">
                                       {formatMoney(payment.amount)}
                                     </p>
                                     <p className="text-xs text-slate-500">
-                                      {payment.method || "Method not added"}
+                                      {payment.method || plan.paymentMethod || "Method not added"}
                                     </p>
                                   </div>
-                                  <p className="text-xs text-slate-400">
+                                  <p className="shrink-0 text-xs text-slate-400">
                                     {payment.paymentDate
                                       ? formatDateOnly(payment.paymentDate)
                                       : formatDate(payment.createdAt)}
@@ -1171,16 +1241,16 @@ export default function PatientProfile() {
                               ))}
                             </div>
                           ) : (
-                            <p className="mt-2 text-sm text-slate-500">
+                            <p className="mt-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">
                               No payment entries yet.
                             </p>
                           )}
                         </div>
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </section>
 
             <section className={`${panelClass} p-4`}>

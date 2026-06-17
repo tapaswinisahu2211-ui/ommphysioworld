@@ -79,6 +79,7 @@ const formatServiceLocation = (value) =>
 
 const appointmentLocationNote =
   "Home service is available after OPW confirms suitability. First-time patients and every post-session review must visit the clinic.";
+const CLINICAL_NOTE_TYPES = ["C/C", "History", "O/E", "D/D", "HEP", "Advice"];
 
 const getTodayKey = () => {
   const now = new Date();
@@ -113,7 +114,7 @@ export default function PatientProfile() {
   const [appointmentRequests, setAppointmentRequests] = useState([]);
   const [appointmentRequestForms, setAppointmentRequestForms] = useState({});
   const [clinicalNoteForm, setClinicalNoteForm] = useState({
-    title: "",
+    title: CLINICAL_NOTE_TYPES[0],
     note: "",
     documents: [],
   });
@@ -232,6 +233,11 @@ export default function PatientProfile() {
     setShowTreatmentModal(false);
     setEditingPlanId("");
     setPlanPaymentForm({ planId: "", amount: "", method: "", paymentDate: getTodayKey() });
+    setClinicalNoteForm({
+      title: CLINICAL_NOTE_TYPES[0],
+      note: "",
+      documents: [],
+    });
     setTherapyForm({
       serviceId: "",
       note: "",
@@ -290,7 +296,7 @@ export default function PatientProfile() {
 
       setPatient(response.data);
       setClinicalNoteForm({
-        title: "",
+        title: CLINICAL_NOTE_TYPES[0],
         note: "",
         documents: [],
       });
@@ -2037,9 +2043,8 @@ export default function PatientProfile() {
 
             {showClinicalNoteModal && (
               <form onSubmit={handleAddClinicalNote} className="space-y-4">
-                <input
+                <select
                   className="input"
-                  placeholder="Note title"
                   value={clinicalNoteForm.title}
                   onChange={(e) =>
                     setClinicalNoteForm((current) => ({
@@ -2047,7 +2052,13 @@ export default function PatientProfile() {
                       title: e.target.value,
                     }))
                   }
-                />
+                >
+                  {CLINICAL_NOTE_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
                 <textarea
                   className="input min-h-[160px]"
                   placeholder="Clinical note"

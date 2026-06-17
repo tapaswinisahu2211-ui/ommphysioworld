@@ -4627,6 +4627,8 @@ private enum class PatientProfileModule {
     Therapy,
 }
 
+private val ClinicalNoteTypes = listOf("C/C", "History", "O/E", "D/D", "HEP", "Advice")
+
 @Composable
 private fun PatientsTab(
     patients: List<JSONObject>,
@@ -5971,7 +5973,7 @@ private fun PatientProfileModuleGrid(
     val treatmentPayments = treatmentPlans.flatMap { it.array("payments").toJsonObjects() }
     val paymentCount = directPayments.size + treatmentPayments.size
     val totalPaid = directPayments.sumOf { it.optDouble("amount", 0.0) } +
-        treatmentPayments.sumOf { it.optDouble("amount", 0.0) }
+        treatmentPlans.sumOf { it.optDouble("advanceAmount", 0.0) }
     val pendingBalance = treatmentPlans.sumOf { it.optDouble("balanceAmount", 0.0) }
     val cards = listOf(
         PatientProfileModule.Appointments to ModuleCardSpec(
@@ -6147,11 +6149,23 @@ private fun PatientProfileHeader(
             ) {
                 AccentOrb(accent = OpwBlue, label = patient.text("name", fallback = "P"))
                 Column(modifier = Modifier.weight(1f)) {
+                    val rawPatientId = patient.text("patientId", "id", fallback = "")
+                    val displayPatientId = rawPatientId.takeIf { it.isNotBlank() }
+                        ?.takeLast(6)
+                        ?.uppercase()
+                        ?.let { "#$it" }
+                        ?: "Not assigned"
                     Text(
                         text = patient.text("name", fallback = "Patient"),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.ExtraBold,
                         color = OpwInk,
+                    )
+                    Text(
+                        text = "Patient ID: $displayPatientId",
+                        color = OpwBlue,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.ExtraBold,
                     )
                     Text(
                         text = patient.text("mobile", fallback = "Mobile not provided"),
@@ -6247,8 +6261,15 @@ private fun TreatmentPlanCard(
                 )
             }
 
-            DetailRow("Period", "${plan.text("fromDate", fallback = "Not set")} to ${plan.text("toDate", fallback = "Not set")}")
-            DetailRow("Total", formatMoney(plan.optDouble("totalAmount", 0.0)))
+            DetailRow("From Date", plan.text("fromDate", fallback = "Not set"))
+            DetailRow("To Date", plan.text("toDate", fallback = "Not set"))
+            DetailRow(
+                "Treatment Mode",
+                plan.text("treatmentLocationLabel", fallback = "")
+                    .ifBlank { formatServiceLocation(plan.text("treatmentLocation", "serviceLocation", fallback = "clinic")) },
+            )
+            DetailRow("Staff Assigned", assignedStaffText(plan, emptyList()))
+            DetailRow("Total Amount", formatMoney(plan.optDouble("totalAmount", 0.0)))
             DetailRow("Balance", formatMoney(plan.optDouble("balanceAmount", 0.0)))
 
             if (canEdit || onEdit != null) {
@@ -6403,7 +6424,7 @@ private fun PatientPaymentsSection(
     }
     val selectedPlan = treatmentPlans.firstOrNull { it.text("id") == selectedPlanId }
     val totalPaid = directPayments.sumOf { it.optDouble("amount", 0.0) } +
-        treatmentPayments.sumOf { (_, payment) -> payment.optDouble("amount", 0.0) }
+        treatmentPlans.sumOf { it.optDouble("advanceAmount", 0.0) }
     val pendingBalance = treatmentPlans.sumOf { it.optDouble("balanceAmount", 0.0) }
 
     SectionCard(title = "Payment Summary") {
@@ -6538,7 +6559,6 @@ private fun PatientPaymentsSection(
                     statusColor = OpwSuccess,
                     rows = listOf(
                         "Treatment" to treatmentTypeText(plan),
-                        "Period" to treatmentPeriodText(plan),
                     ),
                 )
             }
@@ -7162,7 +7182,7 @@ private fun ClinicalNoteDialog(
     onDismiss: () -> Unit,
     onSave: (String, String) -> Unit,
 ) {
-    var title by rememberSaveable { mutableStateOf("") }
+    var title by rememberSaveable { mutableStateOf(ClinicalNoteTypes.first()) }
     var note by rememberSaveable { mutableStateOf("") }
     var error by rememberSaveable { mutableStateOf("") }
 
@@ -7171,14 +7191,14 @@ private fun ClinicalNoteDialog(
         primaryLabel = "Save Note",
         onDismiss = onDismiss,
         onPrimary = {
-            if (title.isBlank() && note.isBlank()) {
-                error = "Add a title or note."
+            if (note.isBlank()) {
+                error = "Add note details."
             } else {
                 onSave(title.trim(), note.trim())
             }
         },
         onReset = {
-            title = ""
+            title = ClinicalNoteTypes.first()
             note = ""
             error = ""
         },
@@ -7186,10 +7206,11 @@ private fun ClinicalNoteDialog(
         if (error.isNotBlank()) {
             StatusBanner(message = error, tone = BannerTone.Error)
         }
-        SheetPatientField(
-            label = "Title",
-            value = title,
-            onValueChange = {
+        Text("Note Type", fontWeight = FontWeight.Bold, color = OpwInk)
+        ChoiceChipRow(
+            options = ClinicalNoteTypes,
+            selected = title,
+            onSelected = {
                 title = it
                 error = ""
             },

@@ -135,6 +135,12 @@ export default function PatientProfile() {
     paymentMethod: "",
     paymentNotes: "",
   });
+  const [sessionEntryForm, setSessionEntryForm] = useState({
+    planId: "",
+    date: getTodayKey(),
+    treatmentType: "",
+    doneByStaffId: "",
+  });
   const [editingPlanId, setEditingPlanId] = useState("");
   const [planPaymentForm, setPlanPaymentForm] = useState({
     planId: "",
@@ -233,6 +239,12 @@ export default function PatientProfile() {
     setShowTreatmentModal(false);
     setEditingPlanId("");
     setPlanPaymentForm({ planId: "", amount: "", method: "", paymentDate: getTodayKey() });
+    setSessionEntryForm({
+      planId: "",
+      date: getTodayKey(),
+      treatmentType: "",
+      doneByStaffId: "",
+    });
     setClinicalNoteForm({
       title: CLINICAL_NOTE_TYPES[0],
       note: "",
@@ -395,62 +407,38 @@ export default function PatientProfile() {
     }));
   };
 
-  const handleStartTreatment = async (e) => {
-    e.preventDefault();
-
+  const handleStartTreatment = async () => {
     try {
-      const pendingType = treatmentForm.treatmentTypeInput.trim();
-      const treatmentTypes = pendingType
-        ? Array.from(new Set([...treatmentForm.treatmentTypes, pendingType]))
-        : treatmentForm.treatmentTypes;
-
-      const response = await API.post(`/patients/${id}/treatment-plans`, {
-        treatmentTypes,
-        treatmentLocation: treatmentForm.treatmentLocation,
-        assignedStaffId: treatmentForm.assignedStaffId,
-        fromDate: treatmentForm.fromDate,
-        toDate: treatmentForm.toDate,
-        totalAmount: Number(treatmentForm.totalAmount || 0),
-        advanceAmount: Number(treatmentForm.advanceAmount || 0),
-        paymentMethod: treatmentForm.paymentMethod,
-        paymentNotes: treatmentForm.paymentNotes,
-      });
+      const response = await API.post(`/patients/${id}/treatment-plans`, {});
 
       setPatient(response.data);
-      setTreatmentForm({
-        treatmentTypeInput: "",
-        treatmentTypes: [],
-        treatmentLocation: "clinic",
-        assignedStaffId: "",
-        fromDate: "",
-        toDate: "",
-        totalAmount: "",
-        advanceAmount: "",
-        paymentMethod: "",
-        paymentNotes: "",
-      });
-      setShowTreatmentModal(false);
       setError("");
     } catch (saveError) {
       setError(saveError.response?.data?.message || "Failed to start treatment.");
     }
   };
 
-  const startEditingPlan = (plan) => {
-    setEditingPlanId(plan.id);
-    setTreatmentForm({
-      treatmentTypeInput: "",
-      treatmentTypes: plan.treatmentTypes || [],
-      treatmentLocation: plan.treatmentLocation || "clinic",
-      assignedStaffId: plan.assignedStaffId || "",
-      fromDate: plan.fromDate || "",
-      toDate: plan.toDate || "",
-      totalAmount: String(plan.totalAmount || ""),
-      advanceAmount: String(plan.advanceAmount || ""),
-      paymentMethod: plan.paymentMethod || "",
-      paymentNotes: plan.paymentNotes || "",
-    });
-    setShowTreatmentModal(true);
+  const handleAddSessionEntry = async (event, planId) => {
+    event.preventDefault();
+
+    try {
+      const response = await API.post(`/patients/${id}/treatment-plans/${planId}/session-days`, {
+        date: sessionEntryForm.date || getTodayKey(),
+        treatmentType: sessionEntryForm.treatmentType,
+        doneByStaffId: sessionEntryForm.doneByStaffId,
+      });
+
+      setPatient(response.data);
+      setSessionEntryForm({
+        planId,
+        date: getTodayKey(),
+        treatmentType: "",
+        doneByStaffId: "",
+      });
+      setError("");
+    } catch (saveError) {
+      setError(saveError.response?.data?.message || "Failed to add treatment done details.");
+    }
   };
 
   const handleUpdateTreatment = async (e) => {
@@ -818,7 +806,7 @@ export default function PatientProfile() {
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">Treatment Sessions</h2>
                   <p className="text-sm text-slate-500">
-                    Start treatment with multiple treatment types, assigned staff, and daily session tracking.
+                    Start an active session, then add date-wise treatment done details below it.
                   </p>
                 </div>
                 <button
@@ -828,20 +816,7 @@ export default function PatientProfile() {
                       return;
                     }
 
-                    setEditingPlanId("");
-                    setTreatmentForm({
-                      treatmentTypeInput: "",
-                      treatmentTypes: [],
-                      treatmentLocation: "clinic",
-                      assignedStaffId: "",
-                      fromDate: "",
-                      toDate: "",
-                      totalAmount: "",
-                      advanceAmount: "",
-                      paymentMethod: "",
-                      paymentNotes: "",
-                    });
-                    setShowTreatmentModal(true);
+                    handleStartTreatment();
                   }}
                   disabled={activeTreatmentCount > 0}
                   className="inline-flex items-center gap-2 rounded-xl bg-cyan-700 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
@@ -862,7 +837,7 @@ export default function PatientProfile() {
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-lg font-semibold text-slate-900">Treatment Plan</p>
+                            <p className="text-lg font-semibold text-slate-900">Active Session</p>
                             <span
                               className={`rounded-full px-3 py-1 text-xs font-medium ${
                                 plan.status === "completed"
@@ -879,13 +854,6 @@ export default function PatientProfile() {
                         </div>
 
                         <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => startEditingPlan(plan)}
-                            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                          >
-                            Edit / Extend
-                          </button>
                           {plan.status === "active" ? (
                             <button
                               type="button"
@@ -914,24 +882,28 @@ export default function PatientProfile() {
                       </div>
 
                       <div className="mt-4 flex flex-wrap gap-2">
-                        {plan.treatmentTypes.map((type) => (
+                        {(plan.treatmentTypes || []).length ? (plan.treatmentTypes || []).map((type) => (
                           <span
                             key={`${plan.id}-${type}`}
                             className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700"
                           >
                             {type}
                           </span>
-                        ))}
+                        )) : (
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-500">
+                            No treatment done details added yet
+                          </span>
+                        )}
                       </div>
 
                       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                         <div className="rounded-2xl border border-slate-100 bg-white p-3">
                           <p className="text-xs uppercase tracking-wide text-slate-400">From Date</p>
-                          <p className="mt-2 text-sm font-medium text-slate-900">{plan.fromDate || "Not added"}</p>
+                          <p className="mt-2 text-sm font-medium text-slate-900">{plan.fromDate || "Auto after first entry"}</p>
                         </div>
                         <div className="rounded-2xl border border-slate-100 bg-white p-3">
                           <p className="text-xs uppercase tracking-wide text-slate-400">To Date</p>
-                          <p className="mt-2 text-sm font-medium text-slate-900">{plan.toDate || "Not added"}</p>
+                          <p className="mt-2 text-sm font-medium text-slate-900">{plan.toDate || "Auto after first entry"}</p>
                         </div>
                         <div className="rounded-2xl border border-slate-100 bg-white p-3">
                           <p className="text-xs uppercase tracking-wide text-slate-400">Treatment Mode</p>
@@ -968,13 +940,99 @@ export default function PatientProfile() {
                           <div>
                             <p className="text-sm font-semibold text-slate-900">Session Days</p>
                             <p className="text-xs text-slate-500">
-                              Past and today&apos;s session status can be corrected. Extend dates from Edit / Extend.
+                              Add date, treatment done type, and the staff who completed it.
                             </p>
                           </div>
                           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
                             {plan.sessionDays?.length || 0} days
                           </span>
                         </div>
+
+                        {plan.status === "active" && (
+                          <form
+                            onSubmit={(event) => handleAddSessionEntry(event, plan.id)}
+                            className="mt-4 rounded-2xl border border-cyan-100 bg-cyan-50/50 p-3"
+                          >
+                            <div className="grid gap-3 md:grid-cols-[0.8fr_1.2fr_1fr_auto] md:items-end">
+                              <div>
+                                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                  Date
+                                </label>
+                                <input
+                                  type="date"
+                                  max={todayKey}
+                                  className="input mt-2 bg-white"
+                                  value={
+                                    sessionEntryForm.planId === plan.id
+                                      ? sessionEntryForm.date
+                                      : getTodayKey()
+                                  }
+                                  onChange={(event) =>
+                                    setSessionEntryForm((current) => ({
+                                      ...current,
+                                      planId: plan.id,
+                                      date: event.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div>
+                                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                  Treatment Done
+                                </label>
+                                <input
+                                  className="input mt-2 bg-white"
+                                  placeholder="IFT, Exercise, Manual therapy..."
+                                  value={
+                                    sessionEntryForm.planId === plan.id
+                                      ? sessionEntryForm.treatmentType
+                                      : ""
+                                  }
+                                  onChange={(event) =>
+                                    setSessionEntryForm((current) => ({
+                                      ...current,
+                                      planId: plan.id,
+                                      treatmentType: event.target.value,
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div>
+                                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                  Done By Staff
+                                </label>
+                                <select
+                                  className="input mt-2 bg-white"
+                                  value={
+                                    sessionEntryForm.planId === plan.id
+                                      ? sessionEntryForm.doneByStaffId
+                                      : ""
+                                  }
+                                  onChange={(event) =>
+                                    setSessionEntryForm((current) => ({
+                                      ...current,
+                                      planId: plan.id,
+                                      doneByStaffId: event.target.value,
+                                    }))
+                                  }
+                                >
+                                  <option value="">Select staff</option>
+                                  {staffOptions.map((staff) => (
+                                    <option key={staff.id} value={staff.id}>
+                                      {staff.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <button
+                                type="submit"
+                                className="inline-flex h-11 items-center justify-center rounded-xl bg-cyan-700 px-4 text-sm font-semibold text-white hover:bg-cyan-800"
+                              >
+                                Add
+                              </button>
+                            </div>
+                          </form>
+                        )}
 
                         {plan.sessionDays?.length ? (
                           <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -991,8 +1049,11 @@ export default function PatientProfile() {
                                     <p className="truncate text-xs font-semibold text-slate-800">
                                       {day.date || "Date not added"}
                                     </p>
-                                    <p className="mt-1 text-[11px] text-slate-400">
-                                      Tap status to change
+                                    <p className="mt-1 truncate text-[11px] text-slate-500">
+                                      {day.treatmentType || "Treatment detail not added"}
+                                    </p>
+                                    <p className="mt-0.5 truncate text-[11px] text-slate-400">
+                                      {day.doneByStaffName ? `By ${day.doneByStaffName}` : "Staff not added"}
                                     </p>
                                   </div>
                                   {canUpdate ? (
@@ -1025,7 +1086,7 @@ export default function PatientProfile() {
                           </div>
                         ) : (
                           <p className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">
-                            No daily session entries yet. Edit the session dates once to generate them.
+                            No treatment done entries yet. Add the first date-wise treatment detail above.
                           </p>
                         )}
                       </div>

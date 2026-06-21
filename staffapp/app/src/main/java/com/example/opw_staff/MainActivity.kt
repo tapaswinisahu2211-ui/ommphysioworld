@@ -48,6 +48,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -1154,6 +1155,35 @@ private fun StaffAdminApp() {
         }
     }
 
+    fun addTreatmentSessionEntry(patientId: String, planId: String, date: String, treatmentType: String, doneByStaffId: String) {
+        val activeSession = session ?: return
+        if (patientId.isBlank() || planId.isBlank()) return
+        scope.launch {
+            try {
+                val updated = api.addTreatmentSessionEntry(
+                    activeSession.token,
+                    patientId,
+                    planId,
+                    date,
+                    treatmentType,
+                    doneByStaffId,
+                )
+                val tracker = api.getTreatmentTracker(activeSession.token)
+                applyUpdatedPatient(updated)
+                dashboardState = dashboardState.copy(treatmentTracker = tracker)
+                showMessage("Treatment done details added.")
+            } catch (error: ApiException) {
+                if (error.statusCode == 401 || error.statusCode == 403) {
+                    clearToLogin("Your session ended. Please log in again.")
+                } else {
+                    showMessage(error.message)
+                }
+            } catch (error: Exception) {
+                showMessage(networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error))
+            }
+        }
+    }
+
     fun addTreatmentPayment(patientId: String, planId: String, amount: Double, method: String, paymentDate: String) {
         val activeSession = session ?: return
         if (patientId.isBlank() || planId.isBlank()) return
@@ -2171,6 +2201,7 @@ private fun StaffAdminApp() {
                     onTreatmentPlanSave = ::saveTreatmentPlan,
                     onTreatmentPlanStatusChange = ::updateTreatmentPlanStatus,
                     onSessionDayStatusChange = ::updateSessionDayStatus,
+                    onTreatmentSessionEntryAdd = ::addTreatmentSessionEntry,
                     onTreatmentPaymentAdd = ::addTreatmentPayment,
                     onTreatmentPlanDelete = ::deleteTreatmentPlan,
                     onClinicalNoteAdd = ::addClinicalNote,
@@ -2382,6 +2413,7 @@ private fun DashboardScreen(
     onTreatmentPlanSave: (String, String?, JSONObject) -> Unit,
     onTreatmentPlanStatusChange: (String, String, String) -> Unit,
     onSessionDayStatusChange: (String, String, String, String) -> Unit,
+    onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
     onTreatmentPaymentAdd: (String, String, Double, String, String) -> Unit,
     onTreatmentPlanDelete: (String, String) -> Unit,
     onClinicalNoteAdd: (String, String, String) -> Unit,
@@ -2718,6 +2750,7 @@ private fun DashboardScreen(
                                 onTreatmentPlanSave = onTreatmentPlanSave,
                                 onTreatmentPlanStatusChange = onTreatmentPlanStatusChange,
                                 onSessionDayStatusChange = onSessionDayStatusChange,
+                                onTreatmentSessionEntryAdd = onTreatmentSessionEntryAdd,
                                 onTreatmentPaymentAdd = onTreatmentPaymentAdd,
                                 onTreatmentPlanDelete = onTreatmentPlanDelete,
                                 onClinicalNoteAdd = onClinicalNoteAdd,
@@ -4658,6 +4691,7 @@ private fun PatientsTab(
     onTreatmentPlanSave: (String, String?, JSONObject) -> Unit,
     onTreatmentPlanStatusChange: (String, String, String) -> Unit,
     onSessionDayStatusChange: (String, String, String, String) -> Unit,
+    onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
     onTreatmentPaymentAdd: (String, String, Double, String, String) -> Unit,
     onTreatmentPlanDelete: (String, String) -> Unit,
     onClinicalNoteAdd: (String, String, String) -> Unit,
@@ -4729,6 +4763,7 @@ private fun PatientsTab(
             } else {
                 PatientDetailScreen(
                     patient = selectedPatient,
+                    users = users,
                     services = services,
                     therapyResources = therapyResources,
                     appointmentRequests = appointmentRequests.patientRequestsFor(selectedPatient),
@@ -4749,6 +4784,7 @@ private fun PatientsTab(
                     onTreatmentPlanSave = onTreatmentPlanSave,
                     onTreatmentPlanStatusChange = onTreatmentPlanStatusChange,
                     onSessionDayStatusChange = onSessionDayStatusChange,
+                    onTreatmentSessionEntryAdd = onTreatmentSessionEntryAdd,
                     onTreatmentPaymentAdd = onTreatmentPaymentAdd,
                     onTreatmentPlanDelete = onTreatmentPlanDelete,
                     onClinicalNoteAdd = onClinicalNoteAdd,
@@ -5747,6 +5783,7 @@ private fun ModernPatientTextField(
 @Composable
 private fun PatientDetailScreen(
     patient: JSONObject,
+    users: List<StaffUser>,
     services: List<JSONObject>,
     therapyResources: List<JSONObject>,
     appointmentRequests: List<JSONObject>,
@@ -5764,6 +5801,7 @@ private fun PatientDetailScreen(
     onTreatmentPlanSave: (String, String?, JSONObject) -> Unit,
     onTreatmentPlanStatusChange: (String, String, String) -> Unit,
     onSessionDayStatusChange: (String, String, String, String) -> Unit,
+    onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
     onTreatmentPaymentAdd: (String, String, Double, String, String) -> Unit,
     onTreatmentPlanDelete: (String, String) -> Unit,
     onClinicalNoteAdd: (String, String, String) -> Unit,
@@ -5905,18 +5943,15 @@ private fun PatientDetailScreen(
                     TreatmentPlansSection(
                         patientId = patientId,
                         plans = treatmentPlans,
+                        users = users,
                         activeTreatmentCount = activeTreatmentCount,
                         onStart = if (canAddTreatmentPlan) { {
-                            editingPlanId = ""
-                            showTreatmentDialog = true
-                        } } else null,
-                        onEdit = if (canEditTreatmentPlan) { { plan ->
-                            editingPlanId = plan.text("id")
-                            showTreatmentDialog = true
+                            onTreatmentPlanSave(patientId, null, JSONObject())
                         } } else null,
                         canEdit = canEditTreatmentPlan,
                         onStatusChange = onTreatmentPlanStatusChange,
                         onSessionDayStatusChange = onSessionDayStatusChange,
+                        onTreatmentSessionEntryAdd = onTreatmentSessionEntryAdd,
                         onDelete = onTreatmentPlanDelete,
                     )
                 }
@@ -6186,12 +6221,13 @@ private fun PatientProfileHeader(
 private fun TreatmentPlansSection(
     patientId: String,
     plans: List<JSONObject>,
+    users: List<StaffUser>,
     activeTreatmentCount: Int,
     onStart: (() -> Unit)?,
-    onEdit: ((JSONObject) -> Unit)?,
     canEdit: Boolean,
     onStatusChange: (String, String, String) -> Unit,
     onSessionDayStatusChange: (String, String, String, String) -> Unit,
+    onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
     onDelete: (String, String) -> Unit,
 ) {
     SectionCard(
@@ -6207,10 +6243,11 @@ private fun TreatmentPlansSection(
                 TreatmentPlanCard(
                     patientId = patientId,
                     plan = plan,
-                    onEdit = onEdit?.let { edit -> { edit(plan) } },
+                    users = users,
                     canEdit = canEdit,
                     onStatusChange = onStatusChange,
                     onSessionDayStatusChange = onSessionDayStatusChange,
+                    onTreatmentSessionEntryAdd = onTreatmentSessionEntryAdd,
                     onDelete = onDelete,
                 )
             }
@@ -6222,15 +6259,20 @@ private fun TreatmentPlansSection(
 private fun TreatmentPlanCard(
     patientId: String,
     plan: JSONObject,
-    onEdit: (() -> Unit)?,
+    users: List<StaffUser>,
     canEdit: Boolean,
     onStatusChange: (String, String, String) -> Unit,
     onSessionDayStatusChange: (String, String, String, String) -> Unit,
+    onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
     onDelete: (String, String) -> Unit,
 ) {
     val planId = plan.text("id")
     val status = plan.text("status", fallback = "active")
     val sessionDays = plan.array("sessionDays").toJsonObjects()
+    val activeStaff = users.filter { it.role != "Admin" && it.status != "Inactive" }
+    var entryDate by rememberSaveable(planId) { mutableStateOf(todayDateKey()) }
+    var entryTreatmentType by rememberSaveable(planId) { mutableStateOf("") }
+    var entryStaffId by rememberSaveable(planId) { mutableStateOf("") }
 
     Surface(
         shape = RoundedCornerShape(26.dp),
@@ -6248,7 +6290,7 @@ private fun TreatmentPlanCard(
                 verticalAlignment = Alignment.Top,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Treatment Plan", fontWeight = FontWeight.ExtraBold, color = OpwInk)
+                    Text("Active Session", fontWeight = FontWeight.ExtraBold, color = OpwInk)
                     Text(
                         plan.array("treatmentTypes").joinLabels().ifBlank { "Treatment type not added" },
                         color = Color(0xFF64748B),
@@ -6261,8 +6303,8 @@ private fun TreatmentPlanCard(
                 )
             }
 
-            DetailRow("From Date", plan.text("fromDate", fallback = "Not set"))
-            DetailRow("To Date", plan.text("toDate", fallback = "Not set"))
+            DetailRow("From Date", plan.text("fromDate", fallback = "Auto after first entry"))
+            DetailRow("To Date", plan.text("toDate", fallback = "Auto after first entry"))
             DetailRow(
                 "Treatment Mode",
                 plan.text("treatmentLocationLabel", fallback = "")
@@ -6272,32 +6314,90 @@ private fun TreatmentPlanCard(
             DetailRow("Total Amount", formatMoney(plan.optDouble("totalAmount", 0.0)))
             DetailRow("Balance", formatMoney(plan.optDouble("balanceAmount", 0.0)))
 
-            if (canEdit || onEdit != null) {
+            if (canEdit) {
                 Row(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    if (onEdit != null) {
-                        OutlinedButton(onClick = onEdit) { Text("Edit") }
+                    OutlinedButton(
+                        onClick = {
+                            onStatusChange(patientId, planId, if (status == "active") "completed" else "active")
+                        },
+                    ) {
+                        Text(if (status == "active") "Mark Completed" else "Mark Active")
                     }
-                    if (canEdit) {
-                        OutlinedButton(
-                            onClick = {
-                                onStatusChange(patientId, planId, if (status == "active") "completed" else "active")
-                            },
-                        ) {
-                            Text(if (status == "active") "Mark Completed" else "Mark Active")
-                        }
-                        OutlinedButton(onClick = { onDelete(patientId, planId) }) {
-                            Text("Delete")
-                        }
+                    OutlinedButton(onClick = { onDelete(patientId, planId) }) {
+                        Text("Delete")
                     }
                 }
             }
 
-            SectionTitle("Session Days")
+            SectionTitle("Treatment Done Details")
+            if (status == "active" && canEdit) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFFEFFBFF), RoundedCornerShape(18.dp))
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    ModernPatientTextField(
+                        label = "Date",
+                        value = entryDate,
+                        onValueChange = { entryDate = it },
+                    )
+                    ModernPatientTextField(
+                        label = "Treatment Done",
+                        value = entryTreatmentType,
+                        onValueChange = { entryTreatmentType = it },
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Done By Staff", fontWeight = FontWeight.ExtraBold, color = OpwInk)
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            activeStaff.forEach { staff ->
+                                val selected = entryStaffId == staff.id
+                                if (selected) {
+                                    Button(
+                                        onClick = { entryStaffId = staff.id },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D8A82)),
+                                    ) {
+                                        Text(staff.name)
+                                    }
+                                } else {
+                                    OutlinedButton(onClick = { entryStaffId = staff.id }) {
+                                        Text(staff.name)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Button(
+                        onClick = {
+                            onTreatmentSessionEntryAdd(
+                                patientId,
+                                planId,
+                                entryDate,
+                                entryTreatmentType,
+                                entryStaffId,
+                            )
+                            entryTreatmentType = ""
+                            entryStaffId = ""
+                            entryDate = todayDateKey()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = entryTreatmentType.isNotBlank() && entryStaffId.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D8A82)),
+                    ) {
+                        Text("Add Treatment Done")
+                    }
+                }
+            }
+
             if (sessionDays.isEmpty()) {
-                InlineEmpty("No session days generated yet.")
+                InlineEmpty("No treatment done entries yet.")
             } else {
                 sessionDays.forEach { day ->
                     val done = day.text("status", fallback = "not_done") == "done"
@@ -6313,7 +6413,14 @@ private fun TreatmentPlanCard(
                     ) {
                         Column {
                             Text(day.text("date", fallback = "Date not set"), fontWeight = FontWeight.Bold, color = OpwInk)
-                            Text(if (done) "Done" else "Not done", color = if (done) OpwSuccess else OpwWarning)
+                            Text(
+                                day.text("treatmentType", fallback = "Treatment detail not added"),
+                                color = Color(0xFF64748B),
+                            )
+                            Text(
+                                day.text("doneByStaffName", fallback = "Staff not added"),
+                                color = if (done) OpwSuccess else OpwWarning,
+                            )
                         }
                         if (canToggleSessionDay) {
                             OutlinedButton(

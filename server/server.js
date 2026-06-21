@@ -261,12 +261,26 @@ const serializePatient = (patient) => ({
         paymentDate: payment.paymentDate || (payment.createdAt ? formatDateKey(new Date(payment.createdAt)) : ""),
         createdAt: payment.createdAt,
       })),
-      sessionDays: (plan.sessionDays || []).map((day) => ({
-        id: day._id.toString(),
-        date: day.date || "",
-        status: day.status || "not_done",
-        updatedAt: day.updatedAt || null,
-      })),
+      sessionDays: (plan.sessionDays || []).map((day) => {
+        const doneByStaff =
+          day.doneByStaffId && typeof day.doneByStaffId === "object" && day.doneByStaffId._id
+            ? day.doneByStaffId
+            : null;
+
+        return {
+          id: day._id.toString(),
+          date: day.date || "",
+          treatmentType: day.treatmentType || "",
+          doneByStaffId: day.doneByStaffId
+            ? doneByStaff
+              ? doneByStaff._id.toString()
+              : day.doneByStaffId.toString()
+            : "",
+          doneByStaffName: doneByStaff?.name || day.doneByStaffName || "",
+          status: day.status || "not_done",
+          updatedAt: day.updatedAt || null,
+        };
+      }),
       status: plan.status || "active",
       createdAt: plan.createdAt,
     };
@@ -291,6 +305,7 @@ const getArchivedPatients = () =>
   Patient.find({ archivedAt: { $ne: null } })
     .setOptions({ includeArchived: true })
     .populate("treatmentPlans.assignedStaffId", "name role status")
+    .populate("treatmentPlans.sessionDays.doneByStaffId", "name role status")
     .sort({ archivedAt: -1, updatedAt: -1 });
 
 const findArchivedPatientById = (id) =>
@@ -298,11 +313,15 @@ const findArchivedPatientById = (id) =>
     .setOptions({
       includeArchived: true,
     })
-    .populate("treatmentPlans.assignedStaffId", "name role status");
+    .populate("treatmentPlans.assignedStaffId", "name role status")
+    .populate("treatmentPlans.sessionDays.doneByStaffId", "name role status");
 
 const populatePatientTreatmentStaff = (patient) =>
   patient?.populate
-    ? patient.populate("treatmentPlans.assignedStaffId", "name role status")
+    ? patient.populate([
+        { path: "treatmentPlans.assignedStaffId", select: "name role status" },
+        { path: "treatmentPlans.sessionDays.doneByStaffId", select: "name role status" },
+      ])
     : patient;
 
 const serializePatientWithTreatmentStaff = async (patient) =>
@@ -563,6 +582,9 @@ const buildSessionDays = (fromDate, toDate, existingDays = []) => {
       {
         status: day.status || "not_done",
         updatedAt: day.updatedAt || null,
+        treatmentType: day.treatmentType || "",
+        doneByStaffId: day.doneByStaffId || null,
+        doneByStaffName: day.doneByStaffName || "",
       },
     ])
   );
@@ -576,6 +598,9 @@ const buildSessionDays = (fromDate, toDate, existingDays = []) => {
       date,
       status: existing?.status || "not_done",
       updatedAt: existing?.updatedAt || null,
+      treatmentType: existing?.treatmentType || "",
+      doneByStaffId: existing?.doneByStaffId || null,
+      doneByStaffName: existing?.doneByStaffName || "",
     });
     cursor.setDate(cursor.getDate() + 1);
   }
@@ -3509,6 +3534,7 @@ app.get("/api/patients", requireStaffPermission("patients", "view"), async (req,
 
     const patients = await Patient.find()
       .populate("treatmentPlans.assignedStaffId", "name role status")
+      .populate("treatmentPlans.sessionDays.doneByStaffId", "name role status")
       .sort({ createdAt: -1 });
     res.json(patients.map(serializePatient));
   } catch (error) {
@@ -3531,10 +3557,9 @@ app.get("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
   try {
     await autoCompleteOverdueAppointments();
 
-    const patient = await Patient.findById(req.params.id).populate(
-      "treatmentPlans.assignedStaffId",
-      "name role status"
-    );
+    const patient = await Patient.findById(req.params.id)
+      .populate("treatmentPlans.assignedStaffId", "name role status")
+      .populate("treatmentPlans.sessionDays.doneByStaffId", "name role status");
 
     if (!patient) {
       return res.status(404).json({ message: "Patient not found." });
@@ -3824,19 +3849,15 @@ app.post("/api/patients/:id/treatment-plans", requireStaffPermission("treatment_
       .toLowerCase();
     const assignedStaffId = String(req.body.assignedStaffId || "").trim();
 
-    if (!treatmentTypes.length) {
-      return res.status(400).json({ message: "Add at least one treatment type." });
+    if ((fromDate || toDate) && (!fromDate || !toDate)) {
+      return res.status(400).json({ message: "Please select both from date and to date." });
     }
 
-    if (!fromDate || !toDate) {
-      return res.status(400).json({ message: "From date and to date are required." });
-    }
-
-    if (!isValidDateValue(fromDate) || !isValidDateValue(toDate)) {
+    if (fromDate && toDate && (!isValidDateValue(fromDate) || !isValidDateValue(toDate))) {
       return res.status(400).json({ message: "Please select valid treatment dates." });
     }
 
-    if (new Date(toDate) < new Date(fromDate)) {
+    if (fromDate && toDate && new Date(toDate) < new Date(fromDate)) {
       return res.status(400).json({ message: "To date cannot be before from date." });
     }
 
@@ -3882,7 +3903,7 @@ app.post("/api/patients/:id/treatment-plans", requireStaffPermission("treatment_
               },
             ]
           : [],
-      sessionDays: buildSessionDays(fromDate, toDate),
+      sessionDays: fromDate && toDate ? buildSessionDays(fromDate, toDate) : [],
       status: "active",
     });
 
@@ -4103,6 +4124,127 @@ app.patch("/api/patients/:id/treatment-plans/:planId/session-days/:dayId", requi
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to update session day." });
+  }
+});
+
+app.post("/api/patients/:id/treatment-plans/:planId/session-days", requireStaffPermission("treatment_plans", "edit"), async (req, res) => {
+  try {
+    const patient = await Patient.findById(req.params.id);
+
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found." });
+    }
+
+    const plan = patient.treatmentPlans.id(req.params.planId);
+
+    if (!plan) {
+      return res.status(404).json({ message: "Treatment plan not found." });
+    }
+
+    if ((plan.status || "active") !== "active") {
+      return res.status(400).json({ message: "Only an active treatment session can receive done details." });
+    }
+
+    const date = String(req.body.date || getTodayKey()).trim().slice(0, 10);
+    const treatmentType = String(req.body.treatmentType || "").trim();
+    const doneByStaffId = String(req.body.doneByStaffId || "").trim();
+    const sessionDate = parseDateKey(date);
+    const todayDate = parseDateKey(getTodayKey());
+
+    if (!isValidDateValue(date) || !sessionDate) {
+      return res.status(400).json({ message: "Please select a valid treatment date." });
+    }
+
+    if (sessionDate > todayDate) {
+      return res.status(400).json({ message: "Future treatment details cannot be added yet." });
+    }
+
+    if (!treatmentType) {
+      return res.status(400).json({ message: "Treatment done type is required." });
+    }
+
+    if (!doneByStaffId) {
+      return res.status(400).json({ message: "Please select the staff who completed treatment." });
+    }
+
+    const doneByStaff = await User.findById(doneByStaffId);
+
+    if (!doneByStaff) {
+      return res.status(400).json({ message: "Selected staff member not found." });
+    }
+
+    let sessionDay = (plan.sessionDays || []).find((day) => day.date === date);
+
+    if (!sessionDay) {
+      plan.sessionDays.push({
+        date,
+        treatmentType,
+        doneByStaffId: doneByStaff._id,
+        doneByStaffName: doneByStaff.name,
+        status: "done",
+        updatedAt: new Date(),
+      });
+      sessionDay = plan.sessionDays[plan.sessionDays.length - 1];
+    } else {
+      sessionDay.treatmentType = treatmentType;
+      sessionDay.doneByStaffId = doneByStaff._id;
+      sessionDay.doneByStaffName = doneByStaff.name;
+      sessionDay.status = "done";
+      sessionDay.updatedAt = new Date();
+    }
+
+    if (!plan.treatmentTypes.includes(treatmentType)) {
+      plan.treatmentTypes.push(treatmentType);
+    }
+
+    if (!plan.fromDate || date < plan.fromDate) {
+      plan.fromDate = date;
+    }
+
+    if (!plan.toDate || date > plan.toDate) {
+      plan.toDate = date;
+    }
+
+    plan.sessionDays.sort((left, right) => String(left.date || "").localeCompare(String(right.date || "")));
+
+    await patient.save();
+
+    await createPatientNotification({
+      patient,
+      category: "session",
+      title: "Treatment session completed",
+      body: `${treatmentType} was completed on ${date} by ${doneByStaff.name}.`,
+      uniqueKey: `session-detail:${patient._id.toString()}:${plan._id.toString()}:${sessionDay._id.toString()}:${sessionDay.updatedAt.getTime()}`,
+      entityType: "treatment_plan",
+      entityId: plan._id.toString(),
+      actionUrl: "sessions",
+      metadata: {
+        date,
+        treatmentType,
+        doneByStaffId: doneByStaff._id.toString(),
+        doneByStaffName: doneByStaff.name,
+        status: "done",
+      },
+    });
+
+    if (Number(plan.balanceAmount || 0) > 0) {
+      await createPatientNotification({
+        patient,
+        category: "payment",
+        title: "Pending treatment balance",
+        body: `Your current treatment balance is Rs. ${Number(plan.balanceAmount || 0).toLocaleString("en-IN")}. Please complete payment when convenient.`,
+        uniqueKey: `session-balance:${patient._id.toString()}:${plan._id.toString()}:${sessionDay._id.toString()}:${Number(plan.balanceAmount || 0)}`,
+        entityType: "treatment_plan",
+        entityId: plan._id.toString(),
+        actionUrl: "payments",
+        metadata: { balanceAmount: Number(plan.balanceAmount || 0), date },
+      });
+    }
+
+    res.status(201).json(await serializePatientWithTreatmentStaff(patient));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to add treatment done details." });
   }
 });
 

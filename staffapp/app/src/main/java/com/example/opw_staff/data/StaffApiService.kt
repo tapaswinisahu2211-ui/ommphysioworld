@@ -160,6 +160,29 @@ class StaffApiService(
             )
         }
 
+    suspend fun addTreatmentSessionEntry(
+        token: String,
+        patientId: String,
+        planId: String,
+        date: String,
+        treatmentType: String,
+        doneByStaffId: String,
+    ): JSONObject =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("date", date)
+                .put("treatmentType", treatmentType)
+                .put("doneByStaffId", doneByStaffId)
+            JSONObject(
+                request(
+                    "POST",
+                    "/patients/$patientId/treatment-plans/$planId/session-days",
+                    token = token,
+                    body = body,
+                ),
+            )
+        }
+
     suspend fun addTreatmentPayment(
         token: String,
         patientId: String,

@@ -18,7 +18,6 @@ import {
   RotateCcw,
   Stethoscope,
   Trash2,
-  UserCheck,
   UserCircle2,
   X,
   XCircle,
@@ -386,27 +385,6 @@ export default function PatientProfile() {
     }
   };
 
-  const addTreatmentType = () => {
-    const value = treatmentForm.treatmentTypeInput.trim();
-
-    if (!value || treatmentForm.treatmentTypes.includes(value)) {
-      return;
-    }
-
-    setTreatmentForm((current) => ({
-      ...current,
-      treatmentTypes: [...current.treatmentTypes, value],
-      treatmentTypeInput: "",
-    }));
-  };
-
-  const removeTreatmentType = (type) => {
-    setTreatmentForm((current) => ({
-      ...current,
-      treatmentTypes: current.treatmentTypes.filter((item) => item !== type),
-    }));
-  };
-
   const handleStartTreatment = async () => {
     try {
       const response = await API.post(`/patients/${id}/treatment-plans`, {});
@@ -445,20 +423,8 @@ export default function PatientProfile() {
     e.preventDefault();
 
     try {
-      const pendingType = treatmentForm.treatmentTypeInput.trim();
-      const treatmentTypes = pendingType
-        ? Array.from(new Set([...treatmentForm.treatmentTypes, pendingType]))
-        : treatmentForm.treatmentTypes;
-
       const response = await API.put(`/patients/${id}/treatment-plans/${editingPlanId}`, {
-        treatmentTypes,
         treatmentLocation: treatmentForm.treatmentLocation,
-        assignedStaffId: treatmentForm.assignedStaffId,
-        fromDate: treatmentForm.fromDate,
-        toDate: treatmentForm.toDate,
-        totalAmount: Number(treatmentForm.totalAmount || 0),
-        paymentMethod: treatmentForm.paymentMethod,
-        paymentNotes: treatmentForm.paymentNotes,
       });
 
       setPatient(response.data);
@@ -491,6 +457,18 @@ export default function PatientProfile() {
       setError("");
     } catch (updateError) {
       setError(updateError.response?.data?.message || "Failed to update treatment status.");
+    }
+  };
+
+  const handleTreatmentModeChange = async (planId, treatmentLocation) => {
+    try {
+      const response = await API.put(`/patients/${id}/treatment-plans/${planId}`, {
+        treatmentLocation,
+      });
+      setPatient(response.data);
+      setError("");
+    } catch (updateError) {
+      setError(updateError.response?.data?.message || "Failed to update treatment mode.");
     }
   };
 
@@ -714,17 +692,7 @@ export default function PatientProfile() {
 
   const availableTherapyResources = therapyForm.serviceId
     ? therapyResources.filter((resource) => resource.serviceId === therapyForm.serviceId)
-    : []; /*
-    ? `${assignedStaffDetails.name}${assignedStaffDetails.workType ? ` • ${assignedStaffDetails.workType}` : ""}`
-  */ const getStaffLabel = (staffId) => {
-    const staff = staffOptions.find((user) => user.id === staffId);
-
-    if (!staff) {
-      return "Not assigned yet";
-    }
-
-    return `${staff.name}${staff.workType ? ` - ${staff.workType}` : ""}`;
-  };
+    : [];
 
   const panelClass = "rounded-2xl border border-slate-200/80 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.06)]";
 
@@ -896,42 +864,45 @@ export default function PatientProfile() {
                         )}
                       </div>
 
-                      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                        <div className="rounded-2xl border border-slate-100 bg-white p-3">
-                          <p className="text-xs uppercase tracking-wide text-slate-400">From Date</p>
-                          <p className="mt-2 text-sm font-medium text-slate-900">{plan.fromDate || "Auto after first entry"}</p>
-                        </div>
-                        <div className="rounded-2xl border border-slate-100 bg-white p-3">
-                          <p className="text-xs uppercase tracking-wide text-slate-400">To Date</p>
-                          <p className="mt-2 text-sm font-medium text-slate-900">{plan.toDate || "Auto after first entry"}</p>
-                        </div>
-                        <div className="rounded-2xl border border-slate-100 bg-white p-3">
-                          <p className="text-xs uppercase tracking-wide text-slate-400">Treatment Mode</p>
-                          <div className="mt-2 flex items-center gap-2 text-sm font-medium text-slate-900">
-                            {String(plan.treatmentLocation || "").toLowerCase() === "home" ? (
-                              <House size={16} className="text-cyan-700" />
-                            ) : (
-                              <Building2 size={16} className="text-cyan-700" />
-                            )}
-                            {String(plan.treatmentLocation || "").toLowerCase() === "home"
-                              ? "Home Visit"
-                              : "Clinic Visit"}
+                      <div className="mt-4 rounded-2xl border border-slate-100 bg-white p-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-xs uppercase tracking-wide text-slate-400">Treatment Mode</p>
+                            <div className="mt-2 flex items-center gap-2 text-sm font-medium text-slate-900">
+                              {String(plan.treatmentLocation || "").toLowerCase() === "home" ? (
+                                <House size={16} className="text-cyan-700" />
+                              ) : (
+                                <Building2 size={16} className="text-cyan-700" />
+                              )}
+                              {String(plan.treatmentLocation || "").toLowerCase() === "home"
+                                ? "Home Visit"
+                                : "Clinic Visit"}
+                            </div>
                           </div>
-                        </div>
-                        <div className="rounded-2xl border border-slate-100 bg-white p-3">
-                          <p className="text-xs uppercase tracking-wide text-slate-400">Staff Assigned</p>
-                          <div className="mt-2 flex items-center gap-2 text-sm font-medium text-slate-900">
-                            <UserCheck size={16} className="text-emerald-700" />
-                            {getStaffLabel(plan.assignedStaffId)}
+                          <div className="flex flex-wrap gap-2">
+                            {[
+                              ["clinic", "Clinic"],
+                              ["home", "Home"],
+                            ].map(([mode, label]) => {
+                              const activeMode =
+                                String(plan.treatmentLocation || "clinic").toLowerCase() === mode;
+
+                              return (
+                                <button
+                                  key={`${plan.id}-${mode}`}
+                                  type="button"
+                                  onClick={() => handleTreatmentModeChange(plan.id, mode)}
+                                  className={`rounded-xl px-4 py-2 text-xs font-semibold transition ${
+                                    activeMode
+                                      ? "bg-cyan-700 text-white shadow-sm"
+                                      : "border border-slate-200 bg-slate-50 text-slate-600 hover:bg-white"
+                                  }`}
+                                >
+                                  {label}
+                                </button>
+                              );
+                            })}
                           </div>
-                        </div>
-                        <div className="rounded-2xl border border-slate-100 bg-white p-3">
-                          <p className="text-xs uppercase tracking-wide text-slate-400">Total Amount</p>
-                          <p className="mt-2 text-sm font-medium text-slate-900">{formatMoney(plan.totalAmount)}</p>
-                        </div>
-                        <div className="rounded-2xl border border-slate-100 bg-white p-3">
-                          <p className="text-xs uppercase tracking-wide text-slate-400">Balance</p>
-                          <p className="mt-2 text-sm font-medium text-slate-900">{formatMoney(plan.balanceAmount)}</p>
                         </div>
                       </div>
 
@@ -1893,211 +1864,54 @@ export default function PatientProfile() {
             )}
 
             {showTreatmentModal && (
-              <form onSubmit={editingPlanId ? handleUpdateTreatment : handleStartTreatment} className="space-y-5">
-                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="mb-3 flex items-start justify-between gap-3">
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-900">
-                        Treatment Types
-                      </label>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Add one or multiple care items for this session.
-                      </p>
-                    </div>
-                    <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-                      {treatmentForm.treatmentTypes.length} added
-                    </span>
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      className="input flex-1 bg-white"
-                      placeholder="Add treatment type"
-                      value={treatmentForm.treatmentTypeInput}
-                      onChange={(e) =>
-                        setTreatmentForm((current) => ({
-                          ...current,
-                          treatmentTypeInput: e.target.value,
-                        }))
-                      }
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          addTreatmentType();
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={addTreatmentType}
-                      className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800"
-                    >
-                      Add
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {treatmentForm.treatmentTypes.map((type) => (
-                      <span
-                        key={type}
-                        className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700"
-                      >
-                        {type}
-                        <button
-                          type="button"
-                          onClick={() => removeTreatmentType(type)}
-                          className="text-slate-500 hover:text-slate-800"
-                        >
-                          <X size={14} />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (editingPlanId) {
+                    handleUpdateTreatment(event);
+                    return;
+                  }
+                  handleStartTreatment();
+                }}
+                className="space-y-5"
+              >
                 <div className="rounded-3xl border border-cyan-100 bg-cyan-50/60 p-4">
-                  <div className="mb-3">
-                    <p className="text-sm font-semibold text-slate-900">Session Period</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Updating the end date extends daily session status automatically.
-                    </p>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <label className="block">
-                      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Start Date
-                      </span>
-                      <input
-                        type="date"
-                        className="input bg-white"
-                        required
-                        value={treatmentForm.fromDate}
-                        onChange={(e) =>
-                          setTreatmentForm((current) => ({ ...current, fromDate: e.target.value }))
-                        }
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        End Date
-                      </span>
-                      <input
-                        type="date"
-                        className="input bg-white"
-                        required
-                        value={treatmentForm.toDate}
-                        onChange={(e) =>
-                          setTreatmentForm((current) => ({ ...current, toDate: e.target.value }))
-                        }
-                      />
-                    </label>
-                  </div>
-                </div>
+                  <p className="text-sm font-semibold text-slate-900">Treatment Mode</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Choose whether the active session is handled at clinic or as a home visit.
+                  </p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {[
+                      ["clinic", "Clinic"],
+                      ["home", "Home Visit"],
+                    ].map(([mode, label]) => {
+                      const activeMode = treatmentForm.treatmentLocation === mode;
 
-                <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="mb-3">
-                    <p className="text-sm font-semibold text-slate-900">Session Assignment</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Choose whether this session is in clinic or home visit, and assign the responsible staff.
-                    </p>
+                      return (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() =>
+                            setTreatmentForm((current) => ({
+                              ...current,
+                              treatmentLocation: mode,
+                            }))
+                          }
+                          className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
+                            activeMode
+                              ? "border-cyan-700 bg-cyan-700 text-white shadow-lg shadow-cyan-700/20"
+                              : "border-slate-200 bg-white text-slate-600 hover:border-cyan-200"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <label className="block">
-                      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Treatment Going On
-                      </span>
-                      <select
-                        className="input bg-white"
-                        value={treatmentForm.treatmentLocation}
-                        onChange={(e) =>
-                          setTreatmentForm((current) => ({
-                            ...current,
-                            treatmentLocation: e.target.value,
-                          }))
-                        }
-                      >
-                        <option value="clinic">At Clinic</option>
-                        <option value="home">Home Visit</option>
-                      </select>
-                    </label>
-                    <label className="block">
-                      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Staff Assigned
-                      </span>
-                      <select
-                        className="input bg-white"
-                        value={treatmentForm.assignedStaffId}
-                        onChange={(e) =>
-                          setTreatmentForm((current) => ({
-                            ...current,
-                            assignedStaffId: e.target.value,
-                          }))
-                        }
-                      >
-                        <option value="">Select staff</option>
-                        {staffOptions.map((user) => (
-                          <option key={user.id} value={user.id}>
-                            {user.name}
-                            {user.workType ? ` - ${user.workType}` : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="mb-3">
-                    <p className="text-sm font-semibold text-slate-900">Payment Details</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {editingPlanId
-                        ? "Plan amount can be edited here. Add extra payments from the session card."
-                        : "Add total and first payment if collected at session start."}
-                    </p>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <input
-                      type="number"
-                      min="0"
-                      className="input"
-                      placeholder="Total amount"
-                      value={treatmentForm.totalAmount}
-                      onChange={(e) =>
-                        setTreatmentForm((current) => ({ ...current, totalAmount: e.target.value }))
-                      }
-                    />
-                    <input
-                      type="number"
-                      min="0"
-                      className="input"
-                      placeholder="Advance amount"
-                      disabled={Boolean(editingPlanId)}
-                      value={treatmentForm.advanceAmount}
-                      onChange={(e) =>
-                        setTreatmentForm((current) => ({ ...current, advanceAmount: e.target.value }))
-                      }
-                    />
-                  </div>
-
-                  <input
-                    className="input mt-4"
-                    placeholder="Payment method"
-                    value={treatmentForm.paymentMethod}
-                    onChange={(e) =>
-                      setTreatmentForm((current) => ({ ...current, paymentMethod: e.target.value }))
-                    }
-                  />
-
-                  <textarea
-                    className="input mt-4 min-h-[110px]"
-                    placeholder="Payment structure notes"
-                    value={treatmentForm.paymentNotes}
-                    onChange={(e) =>
-                      setTreatmentForm((current) => ({ ...current, paymentNotes: e.target.value }))
-                    }
-                  />
                 </div>
 
                 <button className="w-full rounded-2xl bg-cyan-700 px-4 py-3 font-semibold text-white shadow-lg shadow-cyan-700/20 hover:bg-cyan-800">
-                  {editingPlanId ? "Save Session" : "Start Treatment"}
+                  {editingPlanId ? "Save Treatment Mode" : "Start Session"}
                 </button>
               </form>
             )}

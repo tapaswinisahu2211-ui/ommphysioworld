@@ -4002,15 +4002,17 @@ app.put("/api/patients/:id/treatment-plans/:planId", requireStaffPermission("tre
     plan.fromDate = nextFromDate;
     plan.toDate = nextToDate;
 
-    if (!plan.treatmentTypes.length) {
-      return res.status(400).json({ message: "Add at least one treatment type." });
+    const hasDateRange = Boolean(plan.fromDate || plan.toDate);
+
+    if (hasDateRange && (!plan.fromDate || !plan.toDate)) {
+      return res.status(400).json({ message: "Please select both from date and to date." });
     }
 
-    if (!isValidDateValue(plan.fromDate) || !isValidDateValue(plan.toDate)) {
+    if (hasDateRange && (!isValidDateValue(plan.fromDate) || !isValidDateValue(plan.toDate))) {
       return res.status(400).json({ message: "Please select valid treatment dates." });
     }
 
-    if (new Date(plan.toDate) < new Date(plan.fromDate)) {
+    if (hasDateRange && new Date(plan.toDate) < new Date(plan.fromDate)) {
       return res.status(400).json({ message: "To date cannot be before from date." });
     }
 
@@ -4037,7 +4039,9 @@ app.put("/api/patients/:id/treatment-plans/:planId", requireStaffPermission("tre
     plan.paymentNotes = paymentNotes;
     plan.treatmentLocation = treatmentLocation;
     plan.assignedStaffId = assignedStaffId || null;
-    plan.sessionDays = buildSessionDays(plan.fromDate, plan.toDate, plan.sessionDays || []);
+    if (hasDateRange) {
+      plan.sessionDays = buildSessionDays(plan.fromDate, plan.toDate, plan.sessionDays || []);
+    }
 
     await patient.save();
     await scheduleTreatmentPlanNotifications(patient, plan);

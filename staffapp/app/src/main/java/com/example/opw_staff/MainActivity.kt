@@ -5951,6 +5951,13 @@ private fun PatientDetailScreen(
                         canEdit = canEditTreatmentPlan,
                         onStatusChange = onTreatmentPlanStatusChange,
                         onSessionDayStatusChange = onSessionDayStatusChange,
+                        onTreatmentModeChange = { currentPatientId, planId, mode ->
+                            onTreatmentPlanSave(
+                                currentPatientId,
+                                planId,
+                                JSONObject().put("treatmentLocation", mode),
+                            )
+                        },
                         onTreatmentSessionEntryAdd = onTreatmentSessionEntryAdd,
                         onDelete = onTreatmentPlanDelete,
                     )
@@ -6227,6 +6234,7 @@ private fun TreatmentPlansSection(
     canEdit: Boolean,
     onStatusChange: (String, String, String) -> Unit,
     onSessionDayStatusChange: (String, String, String, String) -> Unit,
+    onTreatmentModeChange: (String, String, String) -> Unit,
     onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
     onDelete: (String, String) -> Unit,
 ) {
@@ -6247,6 +6255,7 @@ private fun TreatmentPlansSection(
                     canEdit = canEdit,
                     onStatusChange = onStatusChange,
                     onSessionDayStatusChange = onSessionDayStatusChange,
+                    onTreatmentModeChange = onTreatmentModeChange,
                     onTreatmentSessionEntryAdd = onTreatmentSessionEntryAdd,
                     onDelete = onDelete,
                 )
@@ -6263,6 +6272,7 @@ private fun TreatmentPlanCard(
     canEdit: Boolean,
     onStatusChange: (String, String, String) -> Unit,
     onSessionDayStatusChange: (String, String, String, String) -> Unit,
+    onTreatmentModeChange: (String, String, String) -> Unit,
     onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
     onDelete: (String, String) -> Unit,
 ) {
@@ -6303,16 +6313,42 @@ private fun TreatmentPlanCard(
                 )
             }
 
-            DetailRow("From Date", plan.text("fromDate", fallback = "Auto after first entry"))
-            DetailRow("To Date", plan.text("toDate", fallback = "Auto after first entry"))
-            DetailRow(
-                "Treatment Mode",
-                plan.text("treatmentLocationLabel", fallback = "")
-                    .ifBlank { formatServiceLocation(plan.text("treatmentLocation", "serviceLocation", fallback = "clinic")) },
-            )
-            DetailRow("Staff Assigned", assignedStaffText(plan, emptyList()))
-            DetailRow("Total Amount", formatMoney(plan.optDouble("totalAmount", 0.0)))
-            DetailRow("Balance", formatMoney(plan.optDouble("balanceAmount", 0.0)))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFF8FAFC), RoundedCornerShape(18.dp))
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                val treatmentMode = plan.text("treatmentLocation", "serviceLocation", fallback = "clinic")
+                    .trim()
+                    .lowercase()
+                Text("Treatment Mode", fontWeight = FontWeight.ExtraBold, color = OpwInk)
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    listOf("clinic" to "Clinic", "home" to "Home").forEach { (mode, label) ->
+                        val selected = treatmentMode == mode
+                        if (selected) {
+                            Button(
+                                onClick = { onTreatmentModeChange(patientId, planId, mode) },
+                                enabled = canEdit,
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D8A82)),
+                            ) {
+                                Text(label)
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = { onTreatmentModeChange(patientId, planId, mode) },
+                                enabled = canEdit,
+                            ) {
+                                Text(label)
+                            }
+                        }
+                    }
+                }
+            }
 
             if (canEdit) {
                 Row(
@@ -7149,54 +7185,21 @@ private fun TreatmentPlanDialog(
     onDismiss: () -> Unit,
     onSave: (String?, JSONObject) -> Unit,
 ) {
-    var treatmentTypes by rememberSaveable(plan?.text("id").orEmpty()) {
-        mutableStateOf(plan?.array("treatmentTypes")?.joinLabels().orEmpty())
+    var treatmentLocation by rememberSaveable(plan?.text("id").orEmpty()) {
+        mutableStateOf(plan?.text("treatmentLocation", "serviceLocation", fallback = "clinic").orEmpty().ifBlank { "clinic" })
     }
-    var fromDate by rememberSaveable(plan?.text("id").orEmpty()) { mutableStateOf(plan?.text("fromDate").orEmpty()) }
-    var toDate by rememberSaveable(plan?.text("id").orEmpty()) { mutableStateOf(plan?.text("toDate").orEmpty()) }
-    var totalAmount by rememberSaveable(plan?.text("id").orEmpty()) {
-        mutableStateOf(plan?.optDouble("totalAmount", 0.0)?.takeIf { it > 0.0 }?.toString().orEmpty())
-    }
-    var advanceAmount by rememberSaveable(plan?.text("id").orEmpty()) {
-        mutableStateOf(plan?.optDouble("advanceAmount", 0.0)?.takeIf { it > 0.0 }?.toString().orEmpty())
-    }
-    var paymentMethod by rememberSaveable(plan?.text("id").orEmpty()) { mutableStateOf(plan?.text("paymentMethod").orEmpty()) }
-    var paymentNotes by rememberSaveable(plan?.text("id").orEmpty()) { mutableStateOf(plan?.text("paymentNotes").orEmpty()) }
     var error by rememberSaveable { mutableStateOf("") }
-    var showFromDatePicker by rememberSaveable { mutableStateOf(false) }
-    var showToDatePicker by rememberSaveable { mutableStateOf(false) }
 
     fun resetFields() {
-        treatmentTypes = plan?.array("treatmentTypes")?.joinLabels().orEmpty()
-        fromDate = plan?.text("fromDate").orEmpty()
-        toDate = plan?.text("toDate").orEmpty()
-        totalAmount = plan?.optDouble("totalAmount", 0.0)?.takeIf { it > 0.0 }?.toString().orEmpty()
-        advanceAmount = plan?.optDouble("advanceAmount", 0.0)?.takeIf { it > 0.0 }?.toString().orEmpty()
-        paymentMethod = plan?.text("paymentMethod").orEmpty()
-        paymentNotes = plan?.text("paymentNotes").orEmpty()
+        treatmentLocation = plan?.text("treatmentLocation", "serviceLocation", fallback = "clinic").orEmpty().ifBlank { "clinic" }
         error = ""
     }
 
     fun submit() {
-        val types = treatmentTypes.split(",").map { it.trim() }.filter { it.isNotBlank() }
-        val typeArray = JSONArray()
-        types.forEach { typeArray.put(it) }
-        when {
-            types.isEmpty() -> error = "Add at least one treatment type."
-            fromDate.isBlank() || toDate.isBlank() -> error = "Start and end date are required."
-            toDate < fromDate -> error = "End date cannot be before start date."
-            else -> onSave(
-                plan?.text("id")?.takeIf { it.isNotBlank() },
-                JSONObject()
-                    .put("treatmentTypes", typeArray)
-                    .put("fromDate", fromDate.trim())
-                    .put("toDate", toDate.trim())
-                    .put("totalAmount", totalAmount.toDoubleOrNull() ?: 0.0)
-                    .put("advanceAmount", advanceAmount.toDoubleOrNull() ?: 0.0)
-                    .put("paymentMethod", paymentMethod.trim())
-                    .put("paymentNotes", paymentNotes.trim()),
-            )
-        }
+        onSave(
+            plan?.text("id")?.takeIf { it.isNotBlank() },
+            JSONObject().put("treatmentLocation", treatmentLocation.trim().ifBlank { "clinic" }),
+        )
     }
 
     OpwBottomSheetDialog(
@@ -7209,78 +7212,35 @@ private fun TreatmentPlanDialog(
         if (error.isNotBlank()) {
             StatusBanner(message = error, tone = BannerTone.Error)
         }
-        SheetPatientField(
-            label = "Treatment Types",
-            value = treatmentTypes,
-            onValueChange = {
-                treatmentTypes = it
-                error = ""
-            },
-        )
-        SheetPickerField(
-            label = "Start Date",
-            value = appointmentDateLabel(fromDate),
-            placeholder = "Select start date",
-            onClick = { showFromDatePicker = true },
-        )
-        SheetPickerField(
-            label = "End Date",
-            value = appointmentDateLabel(toDate),
-            placeholder = "Select end date",
-            onClick = { showToDatePicker = true },
-        )
-        SheetPatientField(
-            label = "Total Amount",
-            value = totalAmount,
-            onValueChange = { totalAmount = it.filter { char -> char.isDigit() } },
-            keyboardType = KeyboardType.Number,
-        )
-        if (plan == null) {
-            SheetPatientField(
-                label = "Advance Amount",
-                value = advanceAmount,
-                onValueChange = { advanceAmount = it.filter { char -> char.isDigit() } },
-                keyboardType = KeyboardType.Number,
-            )
-        }
-        SheetPatientField(
-            label = "Payment Method",
-            value = paymentMethod,
-            onValueChange = { paymentMethod = it },
-        )
-        SheetPatientField(
-            label = "Payment Notes",
-            value = paymentNotes,
-            onValueChange = { paymentNotes = it },
-            minLines = 3,
-        )
-    }
-
-    if (showFromDatePicker) {
-        AppointmentDatePickerDialog(
-            selectedDate = fromDate.ifBlank { todayDateKey() },
-            onDismiss = { showFromDatePicker = false },
-            onDateSelected = {
-                fromDate = it
-                if (toDate.isBlank()) {
-                    toDate = it
+        Text("Treatment Mode", fontWeight = FontWeight.Bold, color = OpwInk)
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            listOf("clinic" to "Clinic", "home" to "Home Visit").forEach { (mode, label) ->
+                val selected = treatmentLocation == mode
+                if (selected) {
+                    Button(
+                        onClick = {
+                            treatmentLocation = mode
+                            error = ""
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D8A82)),
+                    ) {
+                        Text(label)
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = {
+                            treatmentLocation = mode
+                            error = ""
+                        },
+                    ) {
+                        Text(label)
+                    }
                 }
-                error = ""
-                showFromDatePicker = false
-            },
-        )
-    }
-
-    if (showToDatePicker) {
-        AppointmentDatePickerDialog(
-            selectedDate = toDate.ifBlank { fromDate.ifBlank { todayDateKey() } },
-            onDismiss = { showToDatePicker = false },
-            onDateSelected = {
-                toDate = it
-                error = ""
-                showToDatePicker = false
-            },
-        )
+            }
+        }
     }
 }
 

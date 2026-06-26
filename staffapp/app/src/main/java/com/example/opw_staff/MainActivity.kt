@@ -6238,27 +6238,46 @@ private fun TreatmentPlansSection(
     onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
     onDelete: (String, String) -> Unit,
 ) {
-    SectionCard(
-        title = "Treatment Sessions",
-        actionLabel = if (onStart == null) null else if (activeTreatmentCount > 0) "Active Running" else "Session Start",
-        actionEnabled = activeTreatmentCount == 0,
-        onAction = onStart,
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, Color(0xFFE5EDF7), RoundedCornerShape(30.dp)),
+        shape = RoundedCornerShape(30.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.97f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
-        if (plans.isEmpty()) {
-            InlineEmpty("No treatment session started yet.")
-        } else {
-            plans.forEach { plan ->
-                TreatmentPlanCard(
-                    patientId = patientId,
-                    plan = plan,
-                    users = users,
-                    canEdit = canEdit,
-                    onStatusChange = onStatusChange,
-                    onSessionDayStatusChange = onSessionDayStatusChange,
-                    onTreatmentModeChange = onTreatmentModeChange,
-                    onTreatmentSessionEntryAdd = onTreatmentSessionEntryAdd,
-                    onDelete = onDelete,
-                )
+        Column(
+            modifier = Modifier
+                .background(Brush.verticalGradient(listOf(Color.White, Color(0xFFF8FBFF))))
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            if (onStart != null && activeTreatmentCount == 0) {
+                Button(
+                    onClick = onStart,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D8A82)),
+                ) {
+                    Text("Session Start", fontWeight = FontWeight.ExtraBold)
+                }
+            }
+            if (plans.isEmpty()) {
+                InlineEmpty("No treatment session started yet.")
+            } else {
+                plans.forEach { plan ->
+                    TreatmentPlanCard(
+                        patientId = patientId,
+                        plan = plan,
+                        users = users,
+                        canEdit = canEdit,
+                        onStatusChange = onStatusChange,
+                        onSessionDayStatusChange = onSessionDayStatusChange,
+                        onTreatmentModeChange = onTreatmentModeChange,
+                        onTreatmentSessionEntryAdd = onTreatmentSessionEntryAdd,
+                        onDelete = onDelete,
+                    )
+                }
             }
         }
     }

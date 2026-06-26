@@ -769,11 +769,15 @@ export default function PatientProfile() {
 
         <div className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,430px)]">
           <div className="min-w-0 space-y-4">
-            <section className={`${panelClass} p-4`}>
-              <div className="mb-5 flex items-center justify-between">
+            <section className="rounded-[28px] border border-cyan-100/80 bg-white p-4 shadow-[0_18px_50px_rgba(15,118,110,0.08)]">
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-900">Treatment Sessions</h2>
-                  <p className="text-sm text-slate-500">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-700">
+                    <Stethoscope size={14} />
+                    Treatment
+                  </div>
+                  <h2 className="mt-3 text-xl font-semibold text-slate-950">Session progress</h2>
+                  <p className="mt-1 text-sm text-slate-500">
                     Start an active session, then add date-wise treatment done details below it.
                   </p>
                 </div>
@@ -787,7 +791,7 @@ export default function PatientProfile() {
                     handleStartTreatment();
                   }}
                   disabled={activeTreatmentCount > 0}
-                  className="inline-flex items-center gap-2 rounded-xl bg-cyan-700 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-cyan-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
                 >
                   <Plus size={15} />
                   {activeTreatmentCount > 0 ? "Active Session Running" : "Session Start"}
@@ -801,11 +805,11 @@ export default function PatientProfile() {
                   </div>
                 ) : (
                   patient.treatmentPlans.map((plan) => (
-                    <div key={plan.id} className="rounded-2xl border border-slate-200 bg-[linear-gradient(180deg,#fff,#f8fafc)] p-4">
+                    <div key={plan.id} className="rounded-[26px] border border-cyan-100 bg-[linear-gradient(180deg,#ffffff,#f8fcff)] p-4 shadow-[0_14px_36px_rgba(8,145,178,0.08)]">
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-lg font-semibold text-slate-900">Active Session</p>
+                            <p className="text-lg font-semibold text-slate-950">Active Session</p>
                             <span
                               className={`rounded-full px-3 py-1 text-xs font-medium ${
                                 plan.status === "completed"
@@ -892,7 +896,7 @@ export default function PatientProfile() {
                                   key={`${plan.id}-${mode}`}
                                   type="button"
                                   onClick={() => handleTreatmentModeChange(plan.id, mode)}
-                                  className={`rounded-xl px-4 py-2 text-xs font-semibold transition ${
+                                  className={`rounded-xl px-4 py-2 text-xs font-semibold ${
                                     activeMode
                                       ? "bg-cyan-700 text-white shadow-sm"
                                       : "border border-slate-200 bg-slate-50 text-slate-600 hover:bg-white"
@@ -1037,7 +1041,7 @@ export default function PatientProfile() {
                                           isDone ? "not_done" : "done"
                                         )
                                       }
-                                      className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold transition ${
+                                      className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold ${
                                         isDone
                                           ? "bg-emerald-100 text-emerald-700 hover:bg-amber-100 hover:text-amber-700"
                                           : "bg-amber-100 text-amber-700 hover:bg-emerald-600 hover:text-white"
@@ -1897,7 +1901,7 @@ export default function PatientProfile() {
                               treatmentLocation: mode,
                             }))
                           }
-                          className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
+                          className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${
                             activeMode
                               ? "border-cyan-700 bg-cyan-700 text-white shadow-lg shadow-cyan-700/20"
                               : "border-slate-200 bg-white text-slate-600 hover:border-cyan-200"
@@ -2045,7 +2049,7 @@ export default function PatientProfile() {
                         return (
                           <label
                             key={resource.id}
-                            className={`flex cursor-pointer gap-3 rounded-2xl border px-4 py-4 transition ${
+                            className={`flex cursor-pointer gap-3 rounded-2xl border px-4 py-4 ${
                               checked
                                 ? "border-sky-300 bg-sky-50"
                                 : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"

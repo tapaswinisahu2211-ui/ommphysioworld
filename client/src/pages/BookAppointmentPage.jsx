@@ -165,6 +165,12 @@ export default function BookAppointmentPage() {
   );
   const hasOpenAppointmentFlow =
     activeAppointmentRequests.length > 0 || activeAppointments.length > 0;
+  const activeTreatmentPlan = (patientRecord?.treatmentPlans || []).find(
+    (plan) => (plan.status || "active") === "active"
+  );
+  const hasActiveTreatmentSession = Boolean(activeTreatmentPlan);
+  const activeTreatmentAppointmentMessage =
+    "Your treatment session is active. A new appointment can be requested only after the current treatment session is completed.";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -174,6 +180,7 @@ export default function BookAppointmentPage() {
     setSuccessMessage("");
 
     const validationError = firstValidationError([
+      hasActiveTreatmentSession ? activeTreatmentAppointmentMessage : "",
       hasOpenAppointmentFlow
         ? "You already have an active appointment request. You can send another after it is done or cancelled."
         : "",
@@ -344,6 +351,10 @@ export default function BookAppointmentPage() {
             {loadingAppointments ? (
               <div className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm font-medium text-slate-500">
                 Checking your active appointment status...
+              </div>
+            ) : hasActiveTreatmentSession ? (
+              <div className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm font-medium leading-6 text-emerald-800">
+                {activeTreatmentAppointmentMessage}
               </div>
             ) : hasOpenAppointmentFlow ? (
               <div className="mt-8 grid gap-4">

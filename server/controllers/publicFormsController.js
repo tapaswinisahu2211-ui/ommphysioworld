@@ -67,23 +67,11 @@ const hasStartedActiveTreatment = (patient) => {
     return false;
   }
 
-  const todayKey = getTodayKey();
-
-  return (patient.treatmentPlans || []).some((plan) => {
-    if ((plan.status || "active") !== "active") {
-      return false;
-    }
-
-    const fromKey = String(plan.fromDate || "").slice(0, 10);
-    const toKey = String(plan.toDate || "").slice(0, 10);
-
-    if (!fromKey || !toKey) {
-      return false;
-    }
-
-    return fromKey <= todayKey && toKey >= todayKey;
-  });
+  return (patient.treatmentPlans || []).some((plan) => (plan.status || "active") === "active");
 };
+
+const ACTIVE_TREATMENT_APPOINTMENT_MESSAGE =
+  "Treatment session is active. A new appointment can be scheduled only after the current treatment session is completed.";
 
 const buildAppointmentIdentityQuery = ({ patient, email, phone }) => {
   const filters = [];
@@ -297,8 +285,7 @@ const submitAppointment = async (req, res) => {
 
     if (hasStartedActiveTreatment(linkedPatient)) {
       return res.status(409).json({
-        message:
-          "Your treatment session is already active. You can request a new appointment after the current session date is finished.",
+        message: ACTIVE_TREATMENT_APPOINTMENT_MESSAGE,
       });
     }
 

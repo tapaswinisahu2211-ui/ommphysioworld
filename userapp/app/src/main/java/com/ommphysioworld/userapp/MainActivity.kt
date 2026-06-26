@@ -2518,6 +2518,10 @@ private fun AppointmentsTab(
     val activeAppointments = appointments.filter { isOpenAppointmentStatus(it.stringOrNull("status")) }
     val activeRequests = requests.filter { isOpenAppointmentStatus(it.stringOrNull("status")) }
     val hasOpenAppointmentFlow = activeAppointments.isNotEmpty() || activeRequests.isNotEmpty()
+    val hasActiveTreatmentSession = patient.listOfMaps("treatmentPlans")
+        .any { (it.stringOrNull("status") ?: "active") == "active" }
+    val activeTreatmentAppointmentMessage =
+        "Your treatment session is active. A new appointment can be requested only after the current treatment session is completed."
     val hasPending = requests.any { it.string("status").lowercase().ifBlank { "pending" } == "pending" }
     val pendingCount = requests.count { it.string("status").lowercase().ifBlank { "pending" } == "pending" }
     val nextVisit = remember(appointments) {
@@ -2599,7 +2603,20 @@ private fun AppointmentsTab(
                 title = "Request Appointment",
                 subtitle = "",
             ) {
-                if (hasOpenAppointmentFlow) {
+                if (hasActiveTreatmentSession) {
+                    Surface(
+                        color = Color(0xFFECFDF5),
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = activeTreatmentAppointmentMessage,
+                            modifier = Modifier.padding(16.dp),
+                            color = Color(0xFF047857),
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                } else if (hasOpenAppointmentFlow) {
                     Surface(
                         color = Color(0xFFFFF7ED),
                         shape = RoundedCornerShape(20.dp),
@@ -2761,6 +2778,10 @@ private fun AppointmentsTab(
                 Spacer(modifier = Modifier.height(14.dp))
                 Button(
                     onClick = {
+                        if (hasActiveTreatmentSession) {
+                            showMessage(activeTreatmentAppointmentMessage)
+                            return@Button
+                        }
                         if (hasOpenAppointmentFlow || hasPending) {
                             showMessage("You already have an active appointment request. You can send another after it is done or cancelled.")
                             return@Button

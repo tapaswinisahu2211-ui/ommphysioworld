@@ -28,6 +28,33 @@ const paymentEntrySchema = new mongoose.Schema(
   { _id: true }
 );
 
+const treatmentBillingSettingsSchema = new mongoose.Schema(
+  {
+    homeVisitCharge: { type: Number, default: 500 },
+    clinicVisitCharge: { type: Number, default: 300 },
+    firstConsultationCharge: { type: Number, default: 200 },
+    discountType: {
+      type: String,
+      enum: ["none", "percent", "amount"],
+      default: "none",
+    },
+    discountValue: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
+const treatmentBillingSummarySchema = new mongoose.Schema(
+  {
+    sessionCount: { type: Number, default: 0 },
+    sessionRate: { type: Number, default: 0 },
+    sessionSubtotal: { type: Number, default: 0 },
+    consultationCharge: { type: Number, default: 0 },
+    discountAmount: { type: Number, default: 0 },
+    payableAmount: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
 const clinicalDocumentSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
@@ -120,6 +147,8 @@ const treatmentPlanSchema = new mongoose.Schema(
     balanceAmount: { type: Number, default: 0 },
     paymentMethod: { type: String, default: "" },
     paymentNotes: { type: String, default: "" },
+    billingSettings: { type: treatmentBillingSettingsSchema, default: () => ({}) },
+    billingSummary: { type: treatmentBillingSummarySchema, default: () => ({}) },
     payments: { type: [paymentEntrySchema], default: [] },
     sessionDays: { type: [sessionDaySchema], default: [] },
     status: { type: String, default: "active" },

@@ -276,6 +276,12 @@ export default function PatientDashboardPage() {
   );
   const hasOpenAppointmentFlow =
     activeAppointmentRequests.length > 0 || activeAppointments.length > 0;
+  const activeTreatmentPlan = treatmentPlans.find(
+    (plan) => (plan.status || "active") === "active"
+  );
+  const hasActiveTreatmentSession = Boolean(activeTreatmentPlan);
+  const activeTreatmentAppointmentMessage =
+    "Your treatment session is active. A new appointment can be requested only after the current treatment session is completed.";
   const hasPendingAppointmentRequest = visibleAppointmentRequests.some(
     (request) => (request.status || "pending") === "pending"
   );
@@ -308,7 +314,9 @@ export default function PatientDashboardPage() {
         value: appointments.length + visibleAppointmentRequests.length,
         icon: CalendarDays,
         tabKey: "appointments",
-        detail: hasOpenAppointmentFlow
+        detail: hasActiveTreatmentSession
+          ? "Treatment session is active"
+          : hasOpenAppointmentFlow
           ? "Current appointment/request is active"
           : "Track requests and booked visits",
         tone: "bg-violet-50 text-violet-700",
@@ -340,6 +348,7 @@ export default function PatientDashboardPage() {
     ],
     [
       appointments.length,
+      hasActiveTreatmentSession,
       hasOpenAppointmentFlow,
       payments.length,
       shopOrders.length,
@@ -463,6 +472,7 @@ export default function PatientDashboardPage() {
     event.preventDefault();
 
     const validationError = firstValidationError([
+      hasActiveTreatmentSession ? activeTreatmentAppointmentMessage : "",
       hasOpenAppointmentFlow
         ? "You already have an active appointment request. You can send another after it is done or cancelled."
         : "",
@@ -1177,7 +1187,11 @@ export default function PatientDashboardPage() {
                         </p>
                       </div>
                     </div>
-                    {hasOpenAppointmentFlow ? (
+                    {hasActiveTreatmentSession ? (
+                      <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-sm font-semibold leading-6 text-emerald-800">
+                        {activeTreatmentAppointmentMessage}
+                      </div>
+                    ) : hasOpenAppointmentFlow ? (
                       <div className="grid gap-3">
                         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium leading-6 text-amber-800">
                           You already have an active appointment request or booked appointment. A new request can be created after OPW marks this one done or cancelled.

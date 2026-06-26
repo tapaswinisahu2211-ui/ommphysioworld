@@ -16,6 +16,7 @@ import {
   Phone,
   Plus,
   RotateCcw,
+  Settings,
   Stethoscope,
   Trash2,
   UserCircle2,
@@ -52,6 +53,53 @@ const formatDateOnly = (value) => {
 };
 
 const formatMoney = (value) => `Rs. ${Number(value || 0).toLocaleString("en-IN")}`;
+
+const defaultBillingSettings = {
+  homeVisitCharge: 500,
+  clinicVisitCharge: 300,
+  firstConsultationCharge: 200,
+  discountType: "none",
+  discountValue: 0,
+};
+
+const normalizeBillingSettings = (settings = {}) => ({
+  homeVisitCharge: Number(settings.homeVisitCharge ?? defaultBillingSettings.homeVisitCharge),
+  clinicVisitCharge: Number(settings.clinicVisitCharge ?? defaultBillingSettings.clinicVisitCharge),
+  firstConsultationCharge: Number(
+    settings.firstConsultationCharge ?? defaultBillingSettings.firstConsultationCharge
+  ),
+  discountType: ["percent", "amount"].includes(settings.discountType) ? settings.discountType : "none",
+  discountValue: Number(settings.discountValue || 0),
+});
+
+const calculateTreatmentBilling = (plan, settingsOverride) => {
+  const settings = normalizeBillingSettings(settingsOverride || plan?.billingSettings);
+  const sessionCount = (plan?.sessionDays || []).filter((day) => day.date).length;
+  const isHome = String(plan?.treatmentLocation || "").toLowerCase() === "home";
+  const sessionRate = isHome ? settings.homeVisitCharge : settings.clinicVisitCharge;
+  const sessionSubtotal = sessionCount * sessionRate;
+  const consultationCharge = settings.firstConsultationCharge;
+  const discountAmount =
+    settings.discountType === "percent"
+      ? Math.min(sessionSubtotal, (sessionSubtotal * Math.min(settings.discountValue, 100)) / 100)
+      : settings.discountType === "amount"
+        ? Math.min(sessionSubtotal + consultationCharge, settings.discountValue)
+        : 0;
+  const payableAmount = Math.max(0, sessionSubtotal + consultationCharge - discountAmount);
+  const paidAmount = (plan?.payments || []).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+
+  return {
+    settings,
+    sessionCount,
+    sessionRate,
+    sessionSubtotal,
+    consultationCharge,
+    discountAmount,
+    payableAmount,
+    paidAmount,
+    balanceAmount: Math.max(0, payableAmount - paidAmount),
+  };
+};
 
 const getAppointmentStatusLabel = (status) => {
   if (status === "completed") {
@@ -147,6 +195,8 @@ export default function PatientProfile() {
     method: "",
     paymentDate: getTodayKey(),
   });
+  const [billingSettingsModalPlanId, setBillingSettingsModalPlanId] = useState("");
+  const [billingSettingsForm, setBillingSettingsForm] = useState(defaultBillingSettings);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -237,6 +287,8 @@ export default function PatientProfile() {
     setShowAppointmentModal(false);
     setShowTreatmentModal(false);
     setEditingPlanId("");
+    setBillingSettingsModalPlanId("");
+    setBillingSettingsForm(defaultBillingSettings);
     setPlanPaymentForm({ planId: "", amount: "", method: "", paymentDate: getTodayKey() });
     setSessionEntryForm({
       planId: "",
@@ -472,16 +524,30 @@ export default function PatientProfile() {
     }
   };
 
-  const handleSessionDayStatus = async (planId, dayId, status) => {
+  const openBillingSettingsModal = (plan) => {
+    setBillingSettingsModalPlanId(plan.id);
+    setBillingSettingsForm(normalizeBillingSettings(plan.billingSettings));
+  };
+
+  const updateBillingSettingsForm = (key, value) => {
+    setBillingSettingsForm((current) => ({
+      ...current,
+      [key]: key === "discountType" ? value : value.replace(/[^\d.]/g, ""),
+    }));
+  };
+
+  const handleSaveBillingSettings = async (event) => {
+    event.preventDefault();
+
     try {
-      const response = await API.patch(
-        `/patients/${id}/treatment-plans/${planId}/session-days/${dayId}`,
-        { status }
-      );
+      const response = await API.put(`/patients/${id}/treatment-plans/${billingSettingsModalPlanId}`, {
+        billingSettings: normalizeBillingSettings(billingSettingsForm),
+      });
       setPatient(response.data);
+      setBillingSettingsModalPlanId("");
       setError("");
-    } catch (updateError) {
-      setError(updateError.response?.data?.message || "Failed to update session day.");
+    } catch (saveError) {
+      setError(saveError.response?.data?.message || "Failed to update payment settings.");
     }
   };
 
@@ -499,12 +565,16 @@ export default function PatientProfile() {
     e.preventDefault();
 
     try {
+      const selectedPlan = (patient.treatmentPlans || []).find(
+        (plan) => plan.id === planPaymentForm.planId
+      );
       const response = await API.post(
         `/patients/${id}/treatment-plans/${planPaymentForm.planId}/payments`,
         {
           amount: Number(planPaymentForm.amount || 0),
           method: planPaymentForm.method,
           paymentDate: planPaymentForm.paymentDate || getTodayKey(),
+          billingSettings: normalizeBillingSettings(selectedPlan?.billingSettings),
         }
       );
 
@@ -662,6 +732,14 @@ export default function PatientProfile() {
     (sum, plan) => sum + Number(plan.balanceAmount || 0),
     0
   );
+  const selectedPaymentPlan = treatmentPlans.find((plan) => plan.id === planPaymentForm.planId);
+  const selectedPaymentBilling = selectedPaymentPlan
+    ? calculateTreatmentBilling(selectedPaymentPlan)
+    : null;
+  const billingSettingsPlan = treatmentPlans.find((plan) => plan.id === billingSettingsModalPlanId);
+  const billingSettingsPreview = billingSettingsPlan
+    ? calculateTreatmentBilling(billingSettingsPlan, billingSettingsForm)
+    : null;
 
   const summaryCards = [
     {
@@ -704,6 +782,142 @@ export default function PatientProfile() {
             {error}
           </div>
         )}
+
+        {billingSettingsModalPlanId && billingSettingsPlan ? (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 px-3 py-4 backdrop-blur-sm sm:items-center">
+            <form
+              onSubmit={handleSaveBillingSettings}
+              className="w-full max-w-2xl rounded-[30px] border border-slate-200 bg-white p-5 shadow-[0_30px_90px_rgba(15,23,42,0.25)]"
+            >
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <div className="inline-flex items-center gap-2 rounded-full bg-cyan-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-700">
+                    <Settings size={14} />
+                    Payment Settings
+                  </div>
+                  <h3 className="mt-3 text-xl font-semibold text-slate-950">
+                    Auto calculate treatment payment
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Uses started days from the treatment session and the selected clinic/home visit mode.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setBillingSettingsModalPlanId("")}
+                  className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Home Visit
+                  </span>
+                  <input
+                    className="input mt-2"
+                    value={billingSettingsForm.homeVisitCharge}
+                    onChange={(event) => updateBillingSettingsForm("homeVisitCharge", event.target.value)}
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Clinic Visit
+                  </span>
+                  <input
+                    className="input mt-2"
+                    value={billingSettingsForm.clinicVisitCharge}
+                    onChange={(event) => updateBillingSettingsForm("clinicVisitCharge", event.target.value)}
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    1st Consultant
+                  </span>
+                  <input
+                    className="input mt-2"
+                    value={billingSettingsForm.firstConsultationCharge}
+                    onChange={(event) => updateBillingSettingsForm("firstConsultationCharge", event.target.value)}
+                  />
+                </label>
+              </div>
+
+              <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_1fr]">
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Discount Type
+                  </span>
+                  <select
+                    className="input mt-2"
+                    value={billingSettingsForm.discountType}
+                    onChange={(event) => updateBillingSettingsForm("discountType", event.target.value)}
+                  >
+                    <option value="none">No discount</option>
+                    <option value="percent">Percentage</option>
+                    <option value="amount">Money amount</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Discount Value
+                  </span>
+                  <input
+                    className="input mt-2"
+                    value={billingSettingsForm.discountValue}
+                    onChange={(event) => updateBillingSettingsForm("discountValue", event.target.value)}
+                    disabled={billingSettingsForm.discountType === "none"}
+                  />
+                </label>
+              </div>
+
+              {billingSettingsPreview ? (
+                <div className="mt-4 rounded-2xl border border-cyan-100 bg-cyan-50/60 p-4">
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-cyan-700">Started Days</p>
+                      <p className="text-lg font-semibold text-slate-950">{billingSettingsPreview.sessionCount}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-cyan-700">Session Amount</p>
+                      <p className="text-lg font-semibold text-slate-950">{formatMoney(billingSettingsPreview.sessionSubtotal)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-cyan-700">Discount</p>
+                      <p className="text-lg font-semibold text-slate-950">{formatMoney(billingSettingsPreview.discountAmount)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-cyan-700">Payable</p>
+                      <p className="text-lg font-semibold text-slate-950">{formatMoney(billingSettingsPreview.payableAmount)}</p>
+                    </div>
+                  </div>
+                  {billingSettingsForm.discountType === "percent" ? (
+                    <p className="mt-3 text-xs font-medium text-cyan-800">
+                      Percentage discount applies only to session charges. Consultant charge is not counted for percentage discount.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setBillingSettingsModalPlanId("")}
+                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-cyan-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-800"
+                >
+                  Save Settings
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : null}
 
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.22),transparent_32%),linear-gradient(120deg,#020617,#0f172a_52%,#075985)] px-4 py-3 text-white shadow-[0_16px_48px_rgba(2,6,23,0.16)]">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -804,12 +1018,17 @@ export default function PatientProfile() {
                     No treatment session started yet.
                   </div>
                 ) : (
-                  patient.treatmentPlans.map((plan) => (
+                  patient.treatmentPlans.map((plan) => {
+                    const planBilling = calculateTreatmentBilling(plan);
+
+                    return (
                     <div key={plan.id} className="rounded-[26px] border border-cyan-100 bg-[linear-gradient(180deg,#ffffff,#f8fcff)] p-4 shadow-[0_14px_36px_rgba(8,145,178,0.08)]">
                       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-lg font-semibold text-slate-950">Active Session</p>
+                            <p className="text-lg font-semibold text-slate-950">
+                              {plan.status === "completed" ? "Completed Session" : "Active Session"}
+                            </p>
                             <span
                               className={`rounded-full px-3 py-1 text-xs font-medium ${
                                 plan.status === "completed"
@@ -823,6 +1042,10 @@ export default function PatientProfile() {
                           <p className="mt-2 text-sm text-slate-500">
                             Added {formatDate(plan.createdAt)}
                           </p>
+                          <div className="mt-3 inline-flex items-center gap-2 rounded-2xl border border-cyan-100 bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-800">
+                            <Stethoscope size={14} />
+                            Started days: {planBilling.sessionCount}
+                          </div>
                         </div>
 
                         <div className="flex flex-wrap gap-2">
@@ -834,15 +1057,7 @@ export default function PatientProfile() {
                             >
                               Mark Completed
                             </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleTreatmentStatus(plan.id, "active")}
-                              className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100"
-                            >
-                              Mark Active
-                            </button>
-                          )}
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => handleDeleteTreatmentPlan(plan.id)}
@@ -896,10 +1111,11 @@ export default function PatientProfile() {
                                   key={`${plan.id}-${mode}`}
                                   type="button"
                                   onClick={() => handleTreatmentModeChange(plan.id, mode)}
+                                  disabled={plan.status === "completed"}
                                   className={`rounded-xl px-4 py-2 text-xs font-semibold ${
                                     activeMode
                                       ? "bg-cyan-700 text-white shadow-sm"
-                                      : "border border-slate-200 bg-slate-50 text-slate-600 hover:bg-white"
+                                      : "border border-slate-200 bg-slate-50 text-slate-600 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                                   }`}
                                 >
                                   {label}
@@ -1012,9 +1228,6 @@ export default function PatientProfile() {
                         {plan.sessionDays?.length ? (
                           <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                             {plan.sessionDays.map((day) => {
-                              const isDone = day.status === "done";
-                              const canUpdate = day.date && day.date <= todayKey;
-
                               return (
                                 <div
                                   key={day.id}
@@ -1031,30 +1244,9 @@ export default function PatientProfile() {
                                       {day.doneByStaffName ? `By ${day.doneByStaffName}` : "Staff not added"}
                                     </p>
                                   </div>
-                                  {canUpdate ? (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleSessionDayStatus(
-                                          plan.id,
-                                          day.id,
-                                          isDone ? "not_done" : "done"
-                                        )
-                                      }
-                                      className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold ${
-                                        isDone
-                                          ? "bg-emerald-100 text-emerald-700 hover:bg-amber-100 hover:text-amber-700"
-                                          : "bg-amber-100 text-amber-700 hover:bg-emerald-600 hover:text-white"
-                                      }`}
-                                      title={isDone ? "Click to mark not done" : "Click to mark done"}
-                                    >
-                                      {isDone ? "Done" : "Not done"}
-                                    </button>
-                                  ) : (
-                                    <span className="shrink-0 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-semibold text-slate-500">
-                                      Upcoming
-                                    </span>
-                                  )}
+                                  <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700">
+                                    Added
+                                  </span>
                                 </div>
                               );
                             })}
@@ -1067,7 +1259,8 @@ export default function PatientProfile() {
                       </div>
 
                     </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </section>
@@ -1080,9 +1273,28 @@ export default function PatientProfile() {
                     Track treatment payments separately from session progress.
                   </p>
                 </div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-                  <IndianRupee size={14} />
-                  {formatMoney(treatmentPaidTotal)} collected
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const targetPlan =
+                        selectedPaymentPlan ||
+                        treatmentPlans.find((plan) => plan.status === "active") ||
+                        treatmentPlans[0];
+                      if (targetPlan) {
+                        openBillingSettingsModal(targetPlan);
+                      }
+                    }}
+                    disabled={!treatmentPlans.length}
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Settings size={14} />
+                    Settings
+                  </button>
+                  <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+                    <IndianRupee size={14} />
+                    {formatMoney(treatmentPaidTotal)} collected
+                  </div>
                 </div>
               </div>
 
@@ -1133,9 +1345,10 @@ export default function PatientProfile() {
                           value={planPaymentForm.planId}
                           onChange={(e) => {
                             const selectedPlan = treatmentPlans.find((plan) => plan.id === e.target.value);
+                            const billing = selectedPlan ? calculateTreatmentBilling(selectedPlan) : null;
                             setPlanPaymentForm({
                               planId: e.target.value,
-                              amount: "",
+                              amount: billing?.balanceAmount ? String(Math.round(billing.balanceAmount)) : "",
                               method: selectedPlan?.paymentMethod || "",
                               paymentDate: getTodayKey(),
                             });
@@ -1207,10 +1420,37 @@ export default function PatientProfile() {
                         Add Payment
                       </button>
                     </div>
+                    {selectedPaymentBilling ? (
+                      <div className="mt-4 grid gap-2 md:grid-cols-5">
+                        <div className="rounded-xl bg-cyan-50 px-3 py-2">
+                          <p className="text-[11px] font-semibold uppercase text-cyan-700">Started Days</p>
+                          <p className="text-sm font-bold text-slate-900">{selectedPaymentBilling.sessionCount}</p>
+                        </div>
+                        <div className="rounded-xl bg-slate-50 px-3 py-2">
+                          <p className="text-[11px] font-semibold uppercase text-slate-500">Rate</p>
+                          <p className="text-sm font-bold text-slate-900">{formatMoney(selectedPaymentBilling.sessionRate)}</p>
+                        </div>
+                        <div className="rounded-xl bg-blue-50 px-3 py-2">
+                          <p className="text-[11px] font-semibold uppercase text-blue-700">Consult</p>
+                          <p className="text-sm font-bold text-slate-900">{formatMoney(selectedPaymentBilling.consultationCharge)}</p>
+                        </div>
+                        <div className="rounded-xl bg-rose-50 px-3 py-2">
+                          <p className="text-[11px] font-semibold uppercase text-rose-700">Discount</p>
+                          <p className="text-sm font-bold text-slate-900">{formatMoney(selectedPaymentBilling.discountAmount)}</p>
+                        </div>
+                        <div className="rounded-xl bg-emerald-50 px-3 py-2">
+                          <p className="text-[11px] font-semibold uppercase text-emerald-700">Payable</p>
+                          <p className="text-sm font-bold text-slate-900">{formatMoney(selectedPaymentBilling.payableAmount)}</p>
+                        </div>
+                      </div>
+                    ) : null}
                   </form>
 
                   <div className="space-y-3">
-                    {treatmentPlans.map((plan, index) => (
+                    {treatmentPlans.map((plan, index) => {
+                      const planBilling = calculateTreatmentBilling(plan);
+
+                      return (
                       <div
                         key={plan.id}
                         className="rounded-2xl border border-slate-200 bg-white p-4"
@@ -1233,17 +1473,23 @@ export default function PatientProfile() {
                               {(plan.treatmentTypes || []).join(", ") || "Treatment plan"}
                             </p>
                           </div>
-                          <div className="grid grid-cols-2 gap-2 text-right text-sm">
+                          <div className="grid grid-cols-3 gap-2 text-right text-sm">
+                            <div className="rounded-xl bg-cyan-50 px-3 py-2">
+                              <p className="text-[11px] uppercase tracking-wide text-cyan-700">Payable</p>
+                              <p className="font-semibold text-slate-900">
+                                {formatMoney(planBilling.payableAmount)}
+                              </p>
+                            </div>
                             <div className="rounded-xl bg-slate-50 px-3 py-2">
                               <p className="text-[11px] uppercase tracking-wide text-slate-400">Paid</p>
                               <p className="font-semibold text-slate-900">
-                                {formatMoney(plan.advanceAmount)}
+                                {formatMoney(planBilling.paidAmount)}
                               </p>
                             </div>
                             <div className="rounded-xl bg-slate-50 px-3 py-2">
                               <p className="text-[11px] uppercase tracking-wide text-slate-400">Balance</p>
                               <p className="font-semibold text-slate-900">
-                                {formatMoney(plan.balanceAmount)}
+                                {formatMoney(planBilling.balanceAmount)}
                               </p>
                             </div>
                           </div>
@@ -1289,7 +1535,8 @@ export default function PatientProfile() {
                           )}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

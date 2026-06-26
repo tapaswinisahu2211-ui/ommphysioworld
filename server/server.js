@@ -149,6 +149,82 @@ const normalizeServiceLocation = (value) => {
 const formatServiceLocation = (value) =>
   normalizeServiceLocation(value) === "home" ? "At home" : "At clinic";
 
+const DEFAULT_TREATMENT_BILLING_SETTINGS = {
+  homeVisitCharge: 500,
+  clinicVisitCharge: 300,
+  firstConsultationCharge: 200,
+  discountType: "none",
+  discountValue: 0,
+};
+
+const clampMoney = (value) => {
+  const amount = Number(value || 0);
+  return Number.isFinite(amount) && amount > 0 ? amount : 0;
+};
+
+const normalizeTreatmentBillingSettings = (value = {}) => {
+  const source = value && typeof value === "object" ? value : {};
+  const discountType = ["percent", "amount"].includes(String(source.discountType || "").toLowerCase())
+    ? String(source.discountType || "").toLowerCase()
+    : "none";
+
+  return {
+    homeVisitCharge: clampMoney(source.homeVisitCharge ?? DEFAULT_TREATMENT_BILLING_SETTINGS.homeVisitCharge),
+    clinicVisitCharge: clampMoney(source.clinicVisitCharge ?? DEFAULT_TREATMENT_BILLING_SETTINGS.clinicVisitCharge),
+    firstConsultationCharge: clampMoney(
+      source.firstConsultationCharge ?? DEFAULT_TREATMENT_BILLING_SETTINGS.firstConsultationCharge
+    ),
+    discountType,
+    discountValue: clampMoney(source.discountValue),
+  };
+};
+
+const calculateTreatmentBilling = (plan, billingSettings = null) => {
+  const settings = normalizeTreatmentBillingSettings(billingSettings || plan?.billingSettings || {});
+  const treatmentLocation = normalizeServiceLocation(plan?.treatmentLocation);
+  const sessionCount = (plan?.sessionDays || []).filter((day) => day?.date).length;
+  const sessionRate = treatmentLocation === "home" ? settings.homeVisitCharge : settings.clinicVisitCharge;
+  const sessionSubtotal = sessionCount * sessionRate;
+  const consultationCharge = settings.firstConsultationCharge;
+  const discountAmount =
+    settings.discountType === "percent"
+      ? Math.min(sessionSubtotal, (sessionSubtotal * Math.min(settings.discountValue, 100)) / 100)
+      : settings.discountType === "amount"
+        ? Math.min(sessionSubtotal + consultationCharge, settings.discountValue)
+        : 0;
+  const payableAmount = Math.max(0, sessionSubtotal + consultationCharge - discountAmount);
+
+  return {
+    settings,
+    summary: {
+      sessionCount,
+      sessionRate,
+      sessionSubtotal,
+      consultationCharge,
+      discountAmount,
+      payableAmount,
+    },
+  };
+};
+
+const applyTreatmentBilling = (plan, billingSettings = null) => {
+  if (!plan) {
+    return;
+  }
+
+  const { settings, summary } = calculateTreatmentBilling(plan, billingSettings);
+  const paidAmount = (plan.payments || []).reduce(
+    (sum, payment) => sum + Number(payment.amount || 0),
+    0
+  );
+
+  plan.billingSettings = settings;
+  plan.billingSummary = summary;
+  plan.totalAmount = summary.payableAmount;
+  plan.advanceAmount = paidAmount;
+  plan.balanceAmount = Math.max(0, summary.payableAmount - paidAmount);
+};
+
 const serializePatientAppointments = (appointments = []) => {
   const seenRequestIds = new Set();
 
@@ -233,6 +309,7 @@ const serializePatient = (patient) => ({
       plan.assignedStaffId && typeof plan.assignedStaffId === "object" && plan.assignedStaffId._id
         ? plan.assignedStaffId
         : null;
+    const billing = calculateTreatmentBilling(plan);
 
     return {
       id: plan._id.toString(),
@@ -254,6 +331,21 @@ const serializePatient = (patient) => ({
       balanceAmount: Number(plan.balanceAmount || 0),
       paymentMethod: plan.paymentMethod || "",
       paymentNotes: plan.paymentNotes || "",
+      billingSettings: {
+        homeVisitCharge: Number(billing.settings.homeVisitCharge || 0),
+        clinicVisitCharge: Number(billing.settings.clinicVisitCharge || 0),
+        firstConsultationCharge: Number(billing.settings.firstConsultationCharge || 0),
+        discountType: billing.settings.discountType || "none",
+        discountValue: Number(billing.settings.discountValue || 0),
+      },
+      billingSummary: {
+        sessionCount: Number(billing.summary.sessionCount || 0),
+        sessionRate: Number(billing.summary.sessionRate || 0),
+        sessionSubtotal: Number(billing.summary.sessionSubtotal || 0),
+        consultationCharge: Number(billing.summary.consultationCharge || 0),
+        discountAmount: Number(billing.summary.discountAmount || 0),
+        payableAmount: Number(billing.summary.payableAmount || 0),
+      },
       payments: (plan.payments || []).map((payment) => ({
         id: payment._id.toString(),
         amount: Number(payment.amount || 0),
@@ -803,19 +895,11 @@ const hasStartedActiveTreatment = (patient) => {
     return false;
   }
 
-  const todayKey = getTodayKey();
-
-  return (patient.treatmentPlans || []).some((plan) => {
-    if ((plan.status || "active") !== "active") {
-      return false;
-    }
-
-    const fromKey = String(plan.fromDate || "").slice(0, 10);
-    const toKey = String(plan.toDate || "").slice(0, 10);
-
-    return Boolean(fromKey && toKey && fromKey <= todayKey && toKey >= todayKey);
-  });
+  return (patient.treatmentPlans || []).some((plan) => (plan.status || "active") === "active");
 };
+
+const ACTIVE_TREATMENT_APPOINTMENT_MESSAGE =
+  "Treatment session is active. A new appointment can be scheduled only after the current treatment session is completed.";
 
 const hasOpenPatientAppointment = (patient) => {
   if (!patient) {
@@ -2154,6 +2238,7 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
     const appointments = [];
     const sessions = [];
     const payments = [];
+    const staffSessionMap = new Map();
 
     patients.forEach((patient) => {
       const patientId = patient._id.toString();
@@ -2194,6 +2279,9 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
           }
 
           patientsCovered.add(patientId);
+          const doneByStaffId = day.doneByStaffId ? day.doneByStaffId.toString() : "";
+          const doneByStaffName = cleanText(day.doneByStaffName) || "Unassigned";
+          const treatmentType = cleanText(day.treatmentType);
           sessions.push({
             id: `${patientId}-${plan._id.toString()}-${day._id.toString()}`,
             patientId,
@@ -2204,10 +2292,32 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
             status: day.status || "not_done",
             updatedAt: day.updatedAt || null,
             treatmentTypes,
+            treatmentType,
+            doneByStaffId,
+            doneByStaffName,
             planStatus,
             fromDate: plan.fromDate || "",
             toDate: plan.toDate || "",
           });
+
+          if ((day.status || "") === "done") {
+            const staffKey = doneByStaffId || doneByStaffName;
+            const current = staffSessionMap.get(staffKey) || {
+              staffId: doneByStaffId,
+              staffName: doneByStaffName,
+              doneCount: 0,
+              patients: [],
+            };
+            current.doneCount += 1;
+            current.patients.push({
+              patientId,
+              patientName,
+              patientMobile,
+              date: day.date || "",
+              treatmentType: treatmentType || treatmentTypes,
+            });
+            staffSessionMap.set(staffKey, current);
+          }
         });
 
         (plan.payments || []).forEach((payment) => {
@@ -2263,6 +2373,9 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
     );
     sessions.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
     payments.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    const staffSessions = Array.from(staffSessionMap.values()).sort(
+      (a, b) => b.doneCount - a.doneCount || a.staffName.localeCompare(b.staffName)
+    );
 
     res.json({
       range: {
@@ -2277,11 +2390,13 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
         ).length,
         sessionCount: sessions.length,
         completedSessions: sessions.filter((session) => session.status === "done").length,
+        staffDoneSessions: staffSessions.reduce((sum, staff) => sum + staff.doneCount, 0),
         paymentCount: payments.length,
         paymentAmount: payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
       },
       appointments,
       sessions,
+      staffSessions,
       payments,
     });
   } catch (error) {
@@ -2671,10 +2786,15 @@ app.get("/api/treatment-tracker", requireStaffPermission("treatment_tracker", "v
           totalAmount: Number(plan.totalAmount || 0),
           advanceAmount: Number(plan.advanceAmount || 0),
           balanceAmount: Number(plan.balanceAmount || 0),
+          startedDays: (plan.sessionDays || []).filter((day) => day.date).length,
+          doneDays: (plan.sessionDays || []).filter((day) => (day.status || "") === "done").length,
           sessionDays: (plan.sessionDays || []).map((day) => ({
             id: day._id.toString(),
             date: day.date || "",
             status: day.status || "not_done",
+            treatmentType: day.treatmentType || "",
+            doneByStaffId: day.doneByStaffId ? day.doneByStaffId.toString() : "",
+            doneByStaffName: day.doneByStaffName || "",
             updatedAt: day.updatedAt || null,
           })),
         }))
@@ -2711,6 +2831,8 @@ app.get("/api/treatment-tracker", requireStaffPermission("treatment_tracker", "v
             dayId: day.id,
             date: day.date,
             status: day.status || "not_done",
+            treatmentType: day.treatmentType || "",
+            doneByStaffName: day.doneByStaffName || "",
             treatmentTypes: plan.treatmentTypes || [],
           }))
       );
@@ -2839,6 +2961,11 @@ app.patch("/api/appointments/:id/approve", requireStaffPermission("appointments"
       return res.status(400).json({ message: "Appointment date is required." });
     }
 
+    const linkedPatient = await resolveAppointmentPatient(appointment);
+    if (hasStartedActiveTreatment(linkedPatient)) {
+      return res.status(409).json({ message: ACTIVE_TREATMENT_APPOINTMENT_MESSAGE });
+    }
+
     appointment.status = "approved";
     appointment.approvedDate = date;
     appointment.approvedTime = time;
@@ -2874,6 +3001,11 @@ app.patch("/api/appointments/:id/reschedule", requireStaffPermission("appointmen
 
     if (!date) {
       return res.status(400).json({ message: "Rescheduled date is required." });
+    }
+
+    const linkedPatient = await resolveAppointmentPatient(appointment);
+    if (hasStartedActiveTreatment(linkedPatient)) {
+      return res.status(409).json({ message: ACTIVE_TREATMENT_APPOINTMENT_MESSAGE });
     }
 
     appointment.status = "rescheduled";
@@ -3844,6 +3976,7 @@ app.post("/api/patients/:id/treatment-plans", requireStaffPermission("treatment_
     const advanceAmount = Number(req.body.advanceAmount || 0);
     const paymentMethod = String(req.body.paymentMethod || "").trim();
     const paymentNotes = String(req.body.paymentNotes || "").trim();
+    const billingSettings = normalizeTreatmentBillingSettings(req.body.billingSettings || {});
     const treatmentLocation = String(req.body.treatmentLocation || "clinic")
       .trim()
       .toLowerCase();
@@ -3894,6 +4027,7 @@ app.post("/api/patients/:id/treatment-plans", requireStaffPermission("treatment_
       balanceAmount,
       paymentMethod,
       paymentNotes,
+      billingSettings,
       payments:
         advanceAmount > 0
           ? [
@@ -3906,6 +4040,7 @@ app.post("/api/patients/:id/treatment-plans", requireStaffPermission("treatment_
       sessionDays: fromDate && toDate ? buildSessionDays(fromDate, toDate) : [],
       status: "active",
     });
+    applyTreatmentBilling(patient.treatmentPlans[0], billingSettings);
 
     await patient.save();
     await scheduleTreatmentPlanNotifications(patient, patient.treatmentPlans[0]);
@@ -3933,6 +4068,12 @@ app.patch("/api/patients/:id/treatment-plans/:planId/status", requireStaffPermis
     const nextStatus = String(req.body.status || "").trim().toLowerCase();
     if (!["active", "completed"].includes(nextStatus)) {
       return res.status(400).json({ message: "Invalid treatment status." });
+    }
+
+    if ((plan.status || "active") === "completed" && nextStatus === "active") {
+      return res.status(400).json({
+        message: "Completed treatment sessions cannot be reactivated. Please start a new session.",
+      });
     }
 
     plan.status = nextStatus;
@@ -3979,6 +4120,10 @@ app.put("/api/patients/:id/treatment-plans/:planId", requireStaffPermission("tre
     const totalAmount = Number(req.body.totalAmount ?? plan.totalAmount ?? 0);
     const paymentMethod = String(req.body.paymentMethod ?? plan.paymentMethod ?? "").trim();
     const paymentNotes = String(req.body.paymentNotes ?? plan.paymentNotes ?? "").trim();
+    const billingSettings =
+      req.body.billingSettings !== undefined
+        ? normalizeTreatmentBillingSettings(req.body.billingSettings)
+        : normalizeTreatmentBillingSettings(plan.billingSettings || {});
     const treatmentLocation = String(
       req.body.treatmentLocation ?? plan.treatmentLocation ?? "clinic"
     )
@@ -4042,6 +4187,7 @@ app.put("/api/patients/:id/treatment-plans/:planId", requireStaffPermission("tre
     if (hasDateRange) {
       plan.sessionDays = buildSessionDays(plan.fromDate, plan.toDate, plan.sessionDays || []);
     }
+    applyTreatmentBilling(plan, billingSettings);
 
     await patient.save();
     await scheduleTreatmentPlanNotifications(patient, plan);
@@ -4210,6 +4356,7 @@ app.post("/api/patients/:id/treatment-plans/:planId/session-days", requireStaffP
     }
 
     plan.sessionDays.sort((left, right) => String(left.date || "").localeCompare(String(right.date || "")));
+    applyTreatmentBilling(plan);
 
     await patient.save();
 
@@ -4269,6 +4416,10 @@ app.post("/api/patients/:id/treatment-plans/:planId/payments", requireStaffPermi
     const amount = Number(req.body.amount || 0);
     const method = String(req.body.method || "").trim();
     const paymentDate = String(req.body.paymentDate || getTodayKey()).trim().slice(0, 10);
+    const billingSettings =
+      req.body.billingSettings !== undefined
+        ? normalizeTreatmentBillingSettings(req.body.billingSettings)
+        : normalizeTreatmentBillingSettings(plan.billingSettings || {});
 
     if (!amount) {
       return res.status(400).json({ message: "Payment amount is required." });
@@ -4282,18 +4433,14 @@ app.post("/api/patients/:id/treatment-plans/:planId/payments", requireStaffPermi
       return res.status(400).json({ message: "Please select a valid payment date." });
     }
 
+    applyTreatmentBilling(plan, billingSettings);
     plan.payments.push({
       amount,
       method,
       paymentDate,
     });
 
-    const paidAmount = (plan.payments || []).reduce(
-      (sum, payment) => sum + Number(payment.amount || 0),
-      0
-    );
-    plan.advanceAmount = paidAmount;
-    plan.balanceAmount = Math.max(0, Number(plan.totalAmount || 0) - paidAmount);
+    applyTreatmentBilling(plan, billingSettings);
     if (method) {
       plan.paymentMethod = method;
     }
@@ -4668,8 +4815,7 @@ app.post("/api/patients/:id/appointments", requireStaffPermission("appointments"
 
     if (hasStartedActiveTreatment(patient)) {
       return res.status(409).json({
-        message:
-          "Treatment session is already active. A new appointment can be added after the current session date is finished.",
+        message: ACTIVE_TREATMENT_APPOINTMENT_MESSAGE,
       });
     }
 
@@ -4776,6 +4922,10 @@ app.patch("/api/patients/:id/appointments/:appointmentId", requireStaffPermissio
 
     if (status === "rescheduled" && !date) {
       return res.status(400).json({ message: "Rescheduled date is required." });
+    }
+
+    if (status === "rescheduled" && hasStartedActiveTreatment(patient)) {
+      return res.status(409).json({ message: ACTIVE_TREATMENT_APPOINTMENT_MESSAGE });
     }
 
     if (["completed", "cancelled"].includes(status) && !remark) {

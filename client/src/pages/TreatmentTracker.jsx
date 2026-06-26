@@ -7,6 +7,7 @@ import {
   ClipboardList,
   Eye,
   PhoneCall,
+  Plus,
   RotateCcw,
   XCircle,
 } from "lucide-react";
@@ -35,11 +36,27 @@ const formatDate = (value) => {
 const formatServiceLocation = (value) =>
   String(value || "").toLowerCase() === "home" ? "At home" : "At clinic";
 
-function PatientCard({ patient, type, onOpen }) {
+const getTodayKey = () => {
+  const now = new Date();
+  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 10);
+};
+
+function PatientCard({
+  patient,
+  type,
+  onOpen,
+  staffOptions = [],
+  sessionForm,
+  onSessionFormChange,
+  onAddSessionDay,
+  savingSessionPlanId,
+}) {
+  const activePlan = patient.activeTreatmentPlan || null;
   const latestSessionText =
-    type === "active" && patient.activeTreatmentPlan
-      ? `${formatDate(patient.activeTreatmentPlan.fromDate)} to ${formatDate(
-          patient.activeTreatmentPlan.toDate
+    type === "active" && activePlan
+      ? `${formatDate(activePlan.fromDate)} to ${formatDate(
+          activePlan.toDate
         )}`
       : patient.latestSession
       ? `${formatDate(patient.latestSession.date)}${
@@ -48,8 +65,8 @@ function PatientCard({ patient, type, onOpen }) {
       : "No session yet";
 
   const conditionText =
-    type === "active" && patient.activeTreatmentPlan?.treatmentTypes?.length
-      ? patient.activeTreatmentPlan.treatmentTypes.join(", ")
+    type === "active" && activePlan?.treatmentTypes?.length
+      ? activePlan.treatmentTypes.join(", ")
       : patient.disease || "Not added";
 
   const compactAppointmentText = patient.nextAppointment
@@ -125,6 +142,70 @@ function PatientCard({ patient, type, onOpen }) {
         <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           Last session was {patient.daysSinceLastSession} day
           {patient.daysSinceLastSession === 1 ? "" : "s"} ago.
+        </div>
+      ) : null}
+
+      {type === "active" && activePlan ? (
+        <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3">
+          <div className="mb-3 grid gap-2 sm:grid-cols-2">
+            <div className="rounded-xl bg-white px-3 py-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                Started days
+              </p>
+              <p className="mt-1 text-lg font-bold text-slate-950">
+                {activePlan.startedDays || activePlan.sessionDays?.length || 0}
+              </p>
+            </div>
+            <div className="rounded-xl bg-white px-3 py-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                Done entries
+              </p>
+              <p className="mt-1 text-lg font-bold text-slate-950">
+                {activePlan.doneDays || 0}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-2 lg:grid-cols-[140px_minmax(160px,1fr)_minmax(160px,1fr)_auto]">
+            <input
+              type="date"
+              value={sessionForm?.date || getTodayKey()}
+              onChange={(event) => onSessionFormChange(activePlan.id, "date", event.target.value)}
+              className="rounded-xl border border-emerald-100 bg-white px-3 py-2 text-xs outline-none focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+            />
+            <input
+              type="text"
+              value={sessionForm?.treatmentType || ""}
+              onChange={(event) =>
+                onSessionFormChange(activePlan.id, "treatmentType", event.target.value)
+              }
+              placeholder="Treatment done today"
+              className="rounded-xl border border-emerald-100 bg-white px-3 py-2 text-xs outline-none focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+            />
+            <select
+              value={sessionForm?.doneByStaffId || ""}
+              onChange={(event) =>
+                onSessionFormChange(activePlan.id, "doneByStaffId", event.target.value)
+              }
+              className="rounded-xl border border-emerald-100 bg-white px-3 py-2 text-xs outline-none focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+            >
+              <option value="">Done by staff</option>
+              {staffOptions.map((staff) => (
+                <option key={staff.id || staff._id} value={staff.id || staff._id}>
+                  {staff.name || staff.email || "Staff"}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={savingSessionPlanId === activePlan.id}
+              onClick={() => onAddSessionDay(patient)}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+            >
+              <Plus size={15} />
+              Add
+            </button>
+          </div>
         </div>
       ) : null}
     </div>
@@ -366,7 +447,7 @@ function TodayAppointmentCard({
   );
 }
 
-function TodaySessionCard({ session, onUpdateStatus, onOpen, saving }) {
+function TodaySessionCard({ session, onOpen }) {
   const isDone = session.status === "done";
   const treatmentText = Array.isArray(session.treatmentTypes) && session.treatmentTypes.length
     ? session.treatmentTypes.join(", ")
@@ -385,7 +466,7 @@ function TodaySessionCard({ session, onUpdateStatus, onOpen, saving }) {
                 isDone ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
               }`}
             >
-              {isDone ? "Done" : "Not done"}
+              {isDone ? "Added" : "Pending"}
             </span>
           </div>
           <p className="mt-1 truncate text-sm font-medium text-slate-600">
@@ -397,24 +478,11 @@ function TodaySessionCard({ session, onUpdateStatus, onOpen, saving }) {
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled={saving || isDone}
-            onClick={() => onUpdateStatus(session, "done")}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-          >
-            <CheckCircle2 size={16} />
-            Done
-          </button>
-          <button
-            type="button"
-            disabled={saving || !isDone}
-            onClick={() => onUpdateStatus(session, "not_done")}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-600 disabled:opacity-50"
-          >
-            <XCircle size={16} />
-            Not done
-          </button>
+          {session.treatmentType ? (
+            <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+              {session.treatmentType}
+            </p>
+          ) : null}
           <button
             type="button"
             onClick={() => onOpen(session.patientId)}
@@ -443,14 +511,20 @@ export default function TreatmentTracker() {
   const [error, setError] = useState("");
   const [actionForms, setActionForms] = useState({});
   const [todayForms, setTodayForms] = useState({});
+  const [sessionForms, setSessionForms] = useState({});
+  const [staffOptions, setStaffOptions] = useState([]);
   const [savingRequestId, setSavingRequestId] = useState("");
   const [savingTodayId, setSavingTodayId] = useState("");
-  const [savingSessionDayId, setSavingSessionDayId] = useState("");
+  const [savingSessionPlanId, setSavingSessionPlanId] = useState("");
 
   const loadTracker = async () => {
     try {
-      const response = await API.get("/treatment-tracker");
+      const [response, usersResponse] = await Promise.all([
+        API.get("/treatment-tracker"),
+        API.get("/users").catch(() => ({ data: [] })),
+      ]);
       setData(response.data);
+      setStaffOptions((usersResponse.data || []).filter((user) => user.status !== "Inactive"));
       setError("");
       setActionForms((current) => {
         const next = { ...current };
@@ -471,6 +545,20 @@ export default function TreatmentTracker() {
           if (!next[appointment.id]) {
             next[appointment.id] = {
               remark: appointment.decisionNote || "",
+            };
+          }
+        });
+        return next;
+      });
+      setSessionForms((current) => {
+        const next = { ...current };
+        (response.data.activeSessions || []).forEach((patient) => {
+          const plan = patient.activeTreatmentPlan;
+          if (plan?.id && !next[plan.id]) {
+            next[plan.id] = {
+              date: getTodayKey(),
+              treatmentType: "",
+              doneByStaffId: "",
             };
           }
         });
@@ -504,6 +592,16 @@ export default function TreatmentTracker() {
       ...current,
       [appointmentId]: {
         ...(current[appointmentId] || {}),
+        [key]: value,
+      },
+    }));
+  };
+
+  const updateSessionForm = (planId, key, value) => {
+    setSessionForms((current) => ({
+      ...current,
+      [planId]: {
+        ...(current[planId] || { date: getTodayKey(), treatmentType: "", doneByStaffId: "" }),
         [key]: value,
       },
     }));
@@ -580,18 +678,43 @@ export default function TreatmentTracker() {
     }
   };
 
-  const updateTodaySessionStatus = async (session, status) => {
+  const addSessionDayFromTracker = async (patient) => {
+    const plan = patient.activeTreatmentPlan;
+    if (!plan?.id) {
+      setError("Active treatment plan was not found for this patient.");
+      return;
+    }
+
+    const form = sessionForms[plan.id] || {};
+    const date = form.date || getTodayKey();
+    const treatmentType = String(form.treatmentType || "").trim();
+    const doneByStaffId = form.doneByStaffId || "";
+
+    if (!date || !treatmentType || !doneByStaffId) {
+      setError("Please add date, treatment done, and done by staff before saving.");
+      return;
+    }
+
     try {
-      setSavingSessionDayId(session.dayId);
-      await API.patch(
-        `/patients/${session.patientId}/treatment-plans/${session.planId}/session-days/${session.dayId}`,
-        { status }
-      );
+      setSavingSessionPlanId(plan.id);
+      await API.post(`/patients/${patient.id}/treatment-plans/${plan.id}/session-days`, {
+        date,
+        treatmentType,
+        doneByStaffId,
+      });
+      setSessionForms((current) => ({
+        ...current,
+        [plan.id]: {
+          date: getTodayKey(),
+          treatmentType: "",
+          doneByStaffId,
+        },
+      }));
       await loadTracker();
     } catch (updateError) {
-      setError(updateError.response?.data?.message || "Failed to update today's session.");
+      setError(updateError.response?.data?.message || "Failed to add treatment done details.");
     } finally {
-      setSavingSessionDayId("");
+      setSavingSessionPlanId("");
     }
   };
 
@@ -732,9 +855,7 @@ export default function TreatmentTracker() {
                   <TodaySessionCard
                     key={`${session.planId}-${session.dayId}`}
                     session={session}
-                    onUpdateStatus={updateTodaySessionStatus}
                     onOpen={openProfile}
-                    saving={savingSessionDayId === session.dayId}
                   />
                 ))
               )}
@@ -850,6 +971,11 @@ export default function TreatmentTracker() {
                       patient={patient}
                       type={section.key}
                       onOpen={openProfile}
+                      staffOptions={staffOptions}
+                      sessionForm={patient.activeTreatmentPlan ? sessionForms[patient.activeTreatmentPlan.id] : null}
+                      onSessionFormChange={updateSessionForm}
+                      onAddSessionDay={addSessionDayFromTracker}
+                      savingSessionPlanId={savingSessionPlanId}
                     />
                   ))
                 )}

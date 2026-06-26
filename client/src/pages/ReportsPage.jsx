@@ -122,6 +122,7 @@ export default function ReportsPage() {
   const summary = data?.summary || {};
   const appointments = data?.appointments || [];
   const sessions = data?.sessions || [];
+  const staffSessions = data?.staffSessions || [];
   const payments = data?.payments || [];
   const activeRange = data?.range || { from: fromDate, to: toDate };
 
@@ -146,6 +147,13 @@ export default function ReportsPage() {
       note: `${summary.completedSessions ?? 0} marked done`,
       icon: ClipboardList,
       tone: "bg-emerald-50 text-emerald-700",
+    },
+    {
+      label: "Staff Done Days",
+      value: summary.staffDoneSessions ?? 0,
+      note: `${staffSessions.length} staff in selected range`,
+      icon: ClipboardList,
+      tone: "bg-teal-50 text-teal-700",
     },
     {
       label: "Payments",
@@ -250,7 +258,7 @@ export default function ReportsPage() {
           </div>
         </form>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
           {summaryCards.map(({ label, value, note, icon: Icon, tone }) => (
             <div
               key={label}
@@ -334,6 +342,56 @@ export default function ReportsPage() {
 
         <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="mb-4">
+            <h2 className="text-xl font-semibold text-slate-900">Staff Session Report</h2>
+            <p className="text-sm text-slate-500">
+              Staff-wise count of treatment days marked done, with patient and date details.
+            </p>
+          </div>
+
+          {staffSessions.length === 0 ? (
+            <TableEmptyState message="No staff session records found for this range." />
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {staffSessions.map((staff) => (
+                <div
+                  key={staff.staffId || staff.staffName}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-base font-semibold text-slate-950">
+                        {staff.staffName || "Unassigned"}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {staff.patients?.length || 0} treatment records
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-bold text-emerald-700">
+                      {staff.doneCount || 0} days
+                    </span>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    {(staff.patients || []).map((entry, index) => (
+                      <Link
+                        key={`${staff.staffId || staff.staffName}-${entry.patientId}-${entry.date}-${index}`}
+                        to={`/patients/${entry.patientId}`}
+                        className="block rounded-xl bg-white px-3 py-2 text-sm hover:bg-emerald-50"
+                      >
+                        <span className="font-semibold text-slate-900">{entry.patientName}</span>
+                        <span className="ml-2 text-xs text-slate-500">
+                          {formatDate(entry.date)} | {entry.treatmentType || "Treatment"}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-4">
             <h2 className="text-xl font-semibold text-slate-900">Sessions</h2>
             <p className="text-sm text-slate-500">
               Daily session status records between selected dates.
@@ -350,6 +408,7 @@ export default function ReportsPage() {
                     <th className="px-3 py-3">Patient</th>
                     <th className="px-3 py-3">Date</th>
                     <th className="px-3 py-3">Treatment</th>
+                    <th className="px-3 py-3">Done By</th>
                     <th className="px-3 py-3">Session Status</th>
                     <th className="px-3 py-3">Plan Period</th>
                     <th className="px-3 py-3 text-right">Open</th>
@@ -363,7 +422,12 @@ export default function ReportsPage() {
                         <p className="text-xs text-slate-500">{session.patientMobile}</p>
                       </td>
                       <td className="px-3 py-3 text-slate-700">{session.date || "-"}</td>
-                      <td className="px-3 py-3 text-slate-700">{session.treatmentTypes}</td>
+                      <td className="px-3 py-3 text-slate-700">
+                        {session.treatmentType || session.treatmentTypes}
+                      </td>
+                      <td className="px-3 py-3 text-slate-700">
+                        {session.doneByStaffName || "-"}
+                      </td>
                       <td className="px-3 py-3">
                         <span
                           className={`rounded-full px-2.5 py-1 text-xs font-semibold ${sessionStatusTone(

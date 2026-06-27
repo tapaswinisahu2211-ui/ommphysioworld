@@ -11440,6 +11440,7 @@ private fun FinanceTab(
     val expenses = finance?.array("expenses")?.toJsonObjects().orEmpty()
     var showFromDatePicker by rememberSaveable { mutableStateOf(false) }
     var showToDatePicker by rememberSaveable { mutableStateOf(false) }
+    var financePreset by rememberSaveable { mutableStateOf("monthly") }
     var editingEntry by remember { mutableStateOf<JSONObject?>(null) }
     var showEntryDialog by rememberSaveable { mutableStateOf(false) }
 
@@ -11449,6 +11450,7 @@ private fun FinanceTab(
             onDismiss = { showFromDatePicker = false },
             onDateSelected = { selected ->
                 onRangeChange(selected, toDate)
+                financePreset = "custom"
                 showFromDatePicker = false
             },
         )
@@ -11460,6 +11462,7 @@ private fun FinanceTab(
             onDismiss = { showToDatePicker = false },
             onDateSelected = { selected ->
                 onRangeChange(fromDate, selected)
+                financePreset = "custom"
                 showToDatePicker = false
             },
         )
@@ -11488,11 +11491,23 @@ private fun FinanceTab(
         }
     }
 
+    LaunchedEffect(financePreset, fromDate, toDate) {
+        if (financePreset != "custom") {
+            onApply()
+        }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         ReportFilterCard(
             fromDate = fromDate,
             toDate = toDate,
             loading = false,
+            activePreset = financePreset,
+            onPresetSelected = { preset ->
+                val range = financePresetRange(preset)
+                financePreset = preset
+                onRangeChange(range.first, range.second)
+            },
             onFromClick = { showFromDatePicker = true },
             onToClick = { showToDatePicker = true },
             onApply = onApply,
@@ -11538,6 +11553,7 @@ private fun FinanceTab(
             emptyMessage = "No patient payment income in this range.",
             items = patientIncome,
             accent = OpwSuccess,
+            patientIncome = true,
         )
         FinanceRecordsSection(
             title = "Manual Income",
@@ -11573,6 +11589,7 @@ private fun FinanceRecordsSection(
     emptyMessage: String,
     items: List<JSONObject>,
     accent: Color,
+    patientIncome: Boolean = false,
     canEdit: Boolean = false,
     onEdit: ((JSONObject) -> Unit)? = null,
     onDelete: ((JSONObject) -> Unit)? = null,
@@ -11586,7 +11603,9 @@ private fun FinanceRecordsSection(
                 val contact = item.text("staffName", "patientName", fallback = "").ifBlank {
                     item.text("method", fallback = "Manual")
                 }
-                val subtitle = listOf(
+                val subtitle = if (patientIncome) {
+                    appointmentDateLabel(item.text("date", fallback = ""))
+                } else listOf(
                     item.text("category", fallback = item.text("method", fallback = "Finance")),
                     appointmentDateLabel(item.text("date", fallback = "")),
                     contact,
@@ -11637,11 +11656,12 @@ private fun FinanceEntryDialog(
     var category by rememberSaveable(entry?.text("id").orEmpty()) { mutableStateOf(entry?.text("category").orEmpty()) }
     var amount by rememberSaveable(entry?.text("id").orEmpty()) { mutableStateOf(entry?.optDouble("amount", 0.0)?.takeIf { it > 0.0 }?.toString().orEmpty()) }
     var date by rememberSaveable(entry?.text("id").orEmpty()) { mutableStateOf(entry?.text("date").orEmpty().ifBlank { todayDateKey() }) }
-    var method by rememberSaveable(entry?.text("id").orEmpty()) { mutableStateOf(entry?.text("method").orEmpty()) }
+    var method by rememberSaveable(entry?.text("id").orEmpty()) { mutableStateOf(financeMethodValue(entry?.text("method").orEmpty())) }
     var notes by rememberSaveable(entry?.text("id").orEmpty()) { mutableStateOf(entry?.text("notes").orEmpty()) }
     var staffId by rememberSaveable(entry?.text("id").orEmpty()) { mutableStateOf(entry?.text("staffId").orEmpty()) }
     var error by rememberSaveable { mutableStateOf("") }
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
+    var showMethodMenu by rememberSaveable { mutableStateOf(false) }
 
     OpwBottomSheetDialog(
         title = if (entry == null) "Add Finance Entry" else "Edit Finance Entry",
@@ -11676,7 +11696,28 @@ private fun FinanceEntryDialog(
         SheetPatientField("Category", category, { category = it })
         SheetPatientField("Amount", amount, { amount = it.filter { char -> char.isDigit() || char == '.' }; error = "" }, KeyboardType.Number)
         SheetPickerField("Date", appointmentDateLabel(date), "Pick date", onClick = { showDatePicker = true })
-        SheetPatientField("Method", method, { method = it })
+        Box {
+            SheetPickerField(
+                label = "Payment Method",
+                value = financeMethodLabel(method),
+                placeholder = "Select payment method",
+                onClick = { showMethodMenu = true },
+            )
+            DropdownMenu(
+                expanded = showMethodMenu,
+                onDismissRequest = { showMethodMenu = false },
+            ) {
+                listOf("cash" to "Cash", "online" to "Online").forEach { (value, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label) },
+                        onClick = {
+                            method = value
+                            showMethodMenu = false
+                        },
+                    )
+                }
+            }
+        }
         SheetPatientField("Notes", notes, { notes = it }, minLines = 2)
         if (users.isNotEmpty()) {
             Text("Staff Link", fontWeight = FontWeight.Bold, color = OpwInk)
@@ -12029,6 +12070,8 @@ private fun ReportFilterCard(
     fromDate: String,
     toDate: String,
     loading: Boolean,
+    activePreset: String = "",
+    onPresetSelected: ((String) -> Unit)? = null,
     onFromClick: () -> Unit,
     onToClick: () -> Unit,
     onApply: () -> Unit,
@@ -12058,6 +12101,13 @@ private fun ReportFilterCard(
                     label = "LIVE",
                     background = OpwBlue.copy(alpha = 0.1f),
                     foreground = OpwBlue,
+                )
+            }
+            if (onPresetSelected != null) {
+                ChoiceChipRow(
+                    options = listOf("All", "Yearly", "Monthly", "Today"),
+                    selected = financePresetLabel(activePreset),
+                    onSelected = { selected -> onPresetSelected(selected.lowercase()) },
                 )
             }
             SheetPickerField(
@@ -13976,6 +14026,42 @@ private fun statusColor(status: String): Color =
 
 private fun todayDateKey(): String =
     LocalDate.now().toString()
+
+private fun allFinanceStartDateKey(): String = "2000-01-01"
+
+private fun yearStartDateKey(): String =
+    LocalDate.now().withDayOfYear(1).toString()
+
+private fun financePresetRange(preset: String): Pair<String, String> {
+    val today = todayDateKey()
+    return when (preset.lowercase()) {
+        "all" -> allFinanceStartDateKey() to today
+        "yearly" -> yearStartDateKey() to today
+        "today" -> today to today
+        else -> monthStartDateKey() to today
+    }
+}
+
+private fun financePresetLabel(preset: String): String =
+    when (preset.lowercase()) {
+        "all" -> "All"
+        "yearly" -> "Yearly"
+        "monthly" -> "Monthly"
+        "today" -> "Today"
+        else -> ""
+    }
+
+private fun financeMethodValue(method: String): String =
+    when (method.trim().lowercase()) {
+        "online" -> "online"
+        else -> "cash"
+    }
+
+private fun financeMethodLabel(method: String): String =
+    when (financeMethodValue(method)) {
+        "online" -> "Online"
+        else -> "Cash"
+    }
 
 private fun appointmentDateLabel(date: String): String =
     runCatching {

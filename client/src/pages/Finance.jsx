@@ -13,6 +13,14 @@ import { canAddModule, canEditModule } from "../utils/auth";
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const monthStartKey = () => `${todayKey().slice(0, 7)}-01`;
+const yearStartKey = () => `${todayKey().slice(0, 4)}-01-01`;
+const allStartKey = () => "2000-01-01";
+const financeReportTypes = [
+  { key: "all", label: "All" },
+  { key: "yearly", label: "Yearly" },
+  { key: "monthly", label: "Monthly" },
+  { key: "today", label: "Today" },
+];
 const emptyForm = {
   type: "income",
   title: "",
@@ -50,7 +58,17 @@ function StatCard({ label, value, note, icon: Icon, tone }) {
   );
 }
 
-function FinanceTable({ title, items, emptyText, canEdit, onEdit, onDelete, income }) {
+const normalizeMethod = (value) => {
+  const method = String(value || "").trim().toLowerCase();
+  return method === "online" ? "online" : method === "cash" ? "cash" : "";
+};
+
+const formatMethod = (value) => {
+  const method = normalizeMethod(value);
+  return method === "online" ? "Online" : method === "cash" ? "Cash" : "Manual";
+};
+
+function FinanceTable({ title, items, emptyText, canEdit, onEdit, onDelete, income, patientIncome = false }) {
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -68,54 +86,76 @@ function FinanceTable({ title, items, emptyText, canEdit, onEdit, onDelete, inco
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="text-xs uppercase tracking-wide text-slate-400">
-              <tr>
-                <th className="px-3 py-3">Title</th>
-                <th className="px-3 py-3">Date</th>
-                <th className="px-3 py-3">Category</th>
-                <th className="px-3 py-3">Staff / Patient</th>
-                <th className="px-3 py-3 text-right">Amount</th>
-                {canEdit ? <th className="px-3 py-3 text-right">Action</th> : null}
-              </tr>
+              {patientIncome ? (
+                <tr>
+                  <th className="px-3 py-3">Patient Name</th>
+                  <th className="px-3 py-3">Payment Date</th>
+                  <th className="px-3 py-3 text-right">Amount</th>
+                </tr>
+              ) : (
+                <tr>
+                  <th className="px-3 py-3">Title</th>
+                  <th className="px-3 py-3">Date</th>
+                  <th className="px-3 py-3">Category</th>
+                  <th className="px-3 py-3">Staff / Patient</th>
+                  <th className="px-3 py-3 text-right">Amount</th>
+                  {canEdit ? <th className="px-3 py-3 text-right">Action</th> : null}
+                </tr>
+              )}
             </thead>
             <tbody>
               {items.map((item) => (
                 <tr key={item.id} className="border-t border-slate-100 align-top">
-                  <td className="px-3 py-3">
-                    <p className="font-semibold text-slate-900">{item.title}</p>
-                    <p className="text-xs text-slate-500">
-                      {item.source === "payroll" ? "Managed from Payroll" : item.method || "Manual"}
-                    </p>
-                  </td>
-                  <td className="px-3 py-3 text-slate-600">{formatDate(item.date)}</td>
-                  <td className="px-3 py-3 text-slate-600">{item.category || "-"}</td>
-                  <td className="px-3 py-3 text-slate-600">{item.staffName || item.patientName || "-"}</td>
-                  <td className={`px-3 py-3 text-right font-semibold ${income ? "text-emerald-700" : "text-rose-700"}`}>
-                    {formatMoney(item.amount)}
-                  </td>
-                  {canEdit ? (
-                    <td className="px-3 py-3">
-                      {item.source === "payroll" ? (
-                        <p className="text-right text-xs font-medium text-slate-400">Payroll locked</p>
-                      ) : (
-                        <div className="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => onEdit(item)}
-                            className="rounded-xl border border-slate-200 p-2 text-slate-600 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
-                          >
-                            <Pencil size={15} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onDelete(item)}
-                            className="rounded-xl border border-rose-200 p-2 text-rose-600 hover:bg-rose-50"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  ) : null}
+                  {patientIncome ? (
+                    <>
+                      <td className="px-3 py-3 font-semibold text-slate-900">
+                        {item.patientName || item.title || "Patient"}
+                      </td>
+                      <td className="px-3 py-3 text-slate-600">{formatDate(item.date)}</td>
+                      <td className="px-3 py-3 text-right font-semibold text-emerald-700">
+                        {formatMoney(item.amount)}
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-3 py-3">
+                        <p className="font-semibold text-slate-900">{item.title}</p>
+                        <p className="text-xs text-slate-500">
+                          {item.source === "payroll" ? "Managed from Payroll" : formatMethod(item.method)}
+                        </p>
+                      </td>
+                      <td className="px-3 py-3 text-slate-600">{formatDate(item.date)}</td>
+                      <td className="px-3 py-3 text-slate-600">{item.category || "-"}</td>
+                      <td className="px-3 py-3 text-slate-600">{item.staffName || item.patientName || "-"}</td>
+                      <td className={`px-3 py-3 text-right font-semibold ${income ? "text-emerald-700" : "text-rose-700"}`}>
+                        {formatMoney(item.amount)}
+                      </td>
+                      {canEdit ? (
+                        <td className="px-3 py-3">
+                          {item.source === "payroll" ? (
+                            <p className="text-right text-xs font-medium text-slate-400">Payroll locked</p>
+                          ) : (
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => onEdit(item)}
+                                className="rounded-xl border border-slate-200 p-2 text-slate-600 hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
+                              >
+                                <Pencil size={15} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onDelete(item)}
+                                className="rounded-xl border border-rose-200 p-2 text-rose-600 hover:bg-rose-50"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      ) : null}
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -129,6 +169,7 @@ function FinanceTable({ title, items, emptyText, canEdit, onEdit, onDelete, inco
 export default function Finance() {
   const [fromDate, setFromDate] = useState(monthStartKey());
   const [toDate, setToDate] = useState(todayKey());
+  const [reportType, setReportType] = useState("monthly");
   const [data, setData] = useState(null);
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState(emptyForm);
@@ -170,11 +211,29 @@ export default function Finance() {
     [users]
   );
 
+  const applyReportType = (type) => {
+    const today = todayKey();
+    setReportType(type);
+    if (type === "all") {
+      setFromDate(allStartKey());
+      setToDate(today);
+    } else if (type === "yearly") {
+      setFromDate(yearStartKey());
+      setToDate(today);
+    } else if (type === "today") {
+      setFromDate(today);
+      setToDate(today);
+    } else {
+      setFromDate(monthStartKey());
+      setToDate(today);
+    }
+  };
+
   const submitEntry = async (event) => {
     event.preventDefault();
     setSaving(true);
     try {
-      const payload = { ...form, amount: Number(form.amount || 0) };
+      const payload = { ...form, method: normalizeMethod(form.method), amount: Number(form.amount || 0) };
       if (editingId) {
         await API.put(`/finance/entries/${editingId}`, payload);
       } else {
@@ -198,7 +257,7 @@ export default function Finance() {
       category: item.category || "",
       amount: item.amount || "",
       date: item.date || todayKey(),
-      method: item.method || "",
+      method: normalizeMethod(item.method),
       notes: item.notes || "",
       staffId: item.staffId || "",
     });
@@ -231,14 +290,30 @@ export default function Finance() {
         {error ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
 
         <form onSubmit={(event) => { event.preventDefault(); loadFinance(); }} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex flex-wrap gap-2">
+            {financeReportTypes.map((type) => (
+              <button
+                key={type.key}
+                type="button"
+                onClick={() => applyReportType(type.key)}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  reportType === type.key
+                    ? "bg-slate-950 text-white shadow-sm"
+                    : "border border-slate-200 bg-slate-50 text-slate-600 hover:bg-white"
+                }`}
+              >
+                {type.label}
+              </button>
+            ))}
+          </div>
           <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
             <label className="text-sm font-medium text-slate-600">
               From
-              <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-300 focus:bg-white" />
+              <input type="date" value={fromDate} onChange={(event) => { setReportType("custom"); setFromDate(event.target.value); }} className="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-300 focus:bg-white" />
             </label>
             <label className="text-sm font-medium text-slate-600">
               To
-              <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-300 focus:bg-white" />
+              <input type="date" value={toDate} onChange={(event) => { setReportType("custom"); setToDate(event.target.value); }} className="mt-1 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-emerald-300 focus:bg-white" />
             </label>
             <button className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white" type="submit">
               Apply Range
@@ -268,7 +343,11 @@ export default function Finance() {
               <input value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value }))} placeholder="Category" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
               <input value={form.amount} onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))} placeholder="Amount" type="number" min="0" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
               <input value={form.date} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} type="date" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
-              <input value={form.method} onChange={(event) => setForm((current) => ({ ...current, method: event.target.value }))} placeholder="Method" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+              <select value={form.method} onChange={(event) => setForm((current) => ({ ...current, method: event.target.value }))} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+                <option value="">Payment Method</option>
+                <option value="cash">Cash</option>
+                <option value="online">Online</option>
+              </select>
               <select value={form.staffId} onChange={(event) => setForm((current) => ({ ...current, staffId: event.target.value }))} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
                 <option value="">No staff link</option>
                 {staffOptions.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
@@ -291,7 +370,7 @@ export default function Finance() {
         {loading ? <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center text-slate-500">Loading finance data...</div> : null}
 
         <div className="grid gap-6 xl:grid-cols-2">
-          <FinanceTable title="Automatic Patient Income" items={patientIncome} emptyText="No patient payment income in this range." income />
+          <FinanceTable title="Automatic Patient Income" items={patientIncome} emptyText="No patient payment income in this range." income patientIncome />
           <FinanceTable title="Manual Income" items={manualIncome} emptyText="No manual income added yet." canEdit={canEdit} onEdit={editEntry} onDelete={deleteEntry} income />
           <FinanceTable title="Expenses" items={expenses} emptyText="No expense entry added yet." canEdit={canEdit} onEdit={editEntry} onDelete={deleteEntry} />
         </div>

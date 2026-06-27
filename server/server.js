@@ -765,7 +765,7 @@ const collectPatientPaymentIncome = (patients = [], fromKey, toKey) => {
           id: `${patientId}-${plan._id.toString()}-${payment._id.toString()}`,
           type: "income",
           source: "patient_payment",
-          title: "Session Payment",
+          title: patientName,
           category: "Patient Payment",
           patientId,
           patientName,
@@ -791,7 +791,7 @@ const collectPatientPaymentIncome = (patients = [], fromKey, toKey) => {
         id: `${patientId}-direct-${payment._id.toString()}`,
         type: "income",
         source: "patient_payment",
-        title: "Direct Payment",
+        title: patientName,
         category: "Patient Payment",
         patientId,
         patientName,
@@ -804,6 +804,11 @@ const collectPatientPaymentIncome = (patients = [], fromKey, toKey) => {
         createdAt: payment.createdAt || null,
       });
     });
+  });
+
+  payments.sort((left, right) => {
+    const dateOrder = String(right.date || "").localeCompare(String(left.date || ""));
+    return dateOrder || String(right.createdAt || "").localeCompare(String(left.createdAt || ""));
   });
 
   return { payments, paidPatients };
@@ -825,6 +830,11 @@ const serializeFinanceEntry = (entry) => ({
   createdAt: entry.createdAt,
   updatedAt: entry.updatedAt,
 });
+
+const normalizeFinanceMethod = (value) => {
+  const method = cleanText(value).toLowerCase();
+  return method === "online" ? "online" : "cash";
+};
 
 const getPayrollMonthKey = (value) => {
   const month = cleanText(value).slice(0, 7);
@@ -2484,7 +2494,7 @@ app.post("/api/finance/entries", requireStaffPermission("finance", "add"), async
       category,
       amount,
       date,
-      method: cleanText(req.body.method),
+      method: normalizeFinanceMethod(req.body.method),
       notes: cleanText(req.body.notes),
       staffId: req.body.staffId || null,
       patientId: req.body.patientId || null,
@@ -2538,7 +2548,7 @@ app.put("/api/finance/entries/:id", requireStaffPermission("finance", "edit"), a
     entry.category = cleanText(req.body.category);
     entry.amount = amount;
     entry.date = date;
-    entry.method = cleanText(req.body.method);
+    entry.method = normalizeFinanceMethod(req.body.method);
     entry.notes = cleanText(req.body.notes);
     entry.staffId = req.body.staffId || null;
     entry.patientId = req.body.patientId || null;

@@ -1205,6 +1205,28 @@ private fun StaffAdminApp() {
         }
     }
 
+    fun deleteTreatmentSessionEntry(patientId: String, planId: String, dayId: String) {
+        val activeSession = session ?: return
+        if (patientId.isBlank() || planId.isBlank() || dayId.isBlank()) return
+        scope.launch {
+            try {
+                val updated = api.deleteTreatmentSessionEntry(activeSession.token, patientId, planId, dayId)
+                val tracker = api.getTreatmentTracker(activeSession.token)
+                applyUpdatedPatient(updated)
+                dashboardState = dashboardState.copy(treatmentTracker = tracker)
+                showMessage("Treatment done details deleted.")
+            } catch (error: ApiException) {
+                if (error.statusCode == 401 || error.statusCode == 403) {
+                    clearToLogin("Your session ended. Please log in again.")
+                } else {
+                    showMessage(error.message)
+                }
+            } catch (error: Exception) {
+                showMessage(networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error))
+            }
+        }
+    }
+
     fun addTreatmentPayment(patientId: String, planId: String, amount: Double, method: String, paymentDate: String) {
         val activeSession = session ?: return
         if (patientId.isBlank() || planId.isBlank()) return
@@ -2223,6 +2245,7 @@ private fun StaffAdminApp() {
                     onTreatmentPlanStatusChange = ::updateTreatmentPlanStatus,
                     onSessionDayStatusChange = ::updateSessionDayStatus,
                     onTreatmentSessionEntryAdd = ::addTreatmentSessionEntry,
+                    onTreatmentSessionEntryDelete = ::deleteTreatmentSessionEntry,
                     onTreatmentPaymentAdd = ::addTreatmentPayment,
                     onTreatmentPlanDelete = ::deleteTreatmentPlan,
                     onClinicalNoteAdd = ::addClinicalNote,
@@ -2435,6 +2458,7 @@ private fun DashboardScreen(
     onTreatmentPlanStatusChange: (String, String, String) -> Unit,
     onSessionDayStatusChange: (String, String, String, String) -> Unit,
     onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
+    onTreatmentSessionEntryDelete: (String, String, String) -> Unit,
     onTreatmentPaymentAdd: (String, String, Double, String, String) -> Unit,
     onTreatmentPlanDelete: (String, String) -> Unit,
     onClinicalNoteAdd: (String, String, String) -> Unit,
@@ -2772,6 +2796,7 @@ private fun DashboardScreen(
                                 onTreatmentPlanStatusChange = onTreatmentPlanStatusChange,
                                 onSessionDayStatusChange = onSessionDayStatusChange,
                                 onTreatmentSessionEntryAdd = onTreatmentSessionEntryAdd,
+                                onTreatmentSessionEntryDelete = onTreatmentSessionEntryDelete,
                                 onTreatmentPaymentAdd = onTreatmentPaymentAdd,
                                 onTreatmentPlanDelete = onTreatmentPlanDelete,
                                 onClinicalNoteAdd = onClinicalNoteAdd,
@@ -4714,6 +4739,7 @@ private fun PatientsTab(
     onTreatmentPlanStatusChange: (String, String, String) -> Unit,
     onSessionDayStatusChange: (String, String, String, String) -> Unit,
     onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
+    onTreatmentSessionEntryDelete: (String, String, String) -> Unit,
     onTreatmentPaymentAdd: (String, String, Double, String, String) -> Unit,
     onTreatmentPlanDelete: (String, String) -> Unit,
     onClinicalNoteAdd: (String, String, String) -> Unit,
@@ -4807,6 +4833,7 @@ private fun PatientsTab(
                     onTreatmentPlanStatusChange = onTreatmentPlanStatusChange,
                     onSessionDayStatusChange = onSessionDayStatusChange,
                     onTreatmentSessionEntryAdd = onTreatmentSessionEntryAdd,
+                    onTreatmentSessionEntryDelete = onTreatmentSessionEntryDelete,
                     onTreatmentPaymentAdd = onTreatmentPaymentAdd,
                     onTreatmentPlanDelete = onTreatmentPlanDelete,
                     onClinicalNoteAdd = onClinicalNoteAdd,
@@ -5662,6 +5689,45 @@ private fun SheetPickerField(
 }
 
 @Composable
+private fun CompactPickerPill(
+    value: String,
+    placeholder: String,
+    icon: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = Color(0xFFFBFCFE),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+        shadowElevation = 1.dp,
+        onClick = onClick,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = icon,
+                color = Color(0xFF2D8A82),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
+            )
+            Text(
+                text = value.ifBlank { placeholder },
+                color = if (value.isBlank()) Color(0xFF94A3B8) else OpwInk,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (value.isBlank()) FontWeight.Normal else FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
 private fun OpwBottomSheetDialog(
     title: String,
     primaryLabel: String,
@@ -5824,6 +5890,7 @@ private fun PatientDetailScreen(
     onTreatmentPlanStatusChange: (String, String, String) -> Unit,
     onSessionDayStatusChange: (String, String, String, String) -> Unit,
     onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
+    onTreatmentSessionEntryDelete: (String, String, String) -> Unit,
     onTreatmentPaymentAdd: (String, String, Double, String, String) -> Unit,
     onTreatmentPlanDelete: (String, String) -> Unit,
     onClinicalNoteAdd: (String, String, String) -> Unit,
@@ -5980,6 +6047,7 @@ private fun PatientDetailScreen(
                             )
                         },
                         onTreatmentSessionEntryAdd = onTreatmentSessionEntryAdd,
+                        onTreatmentSessionEntryDelete = onTreatmentSessionEntryDelete,
                         onDelete = onTreatmentPlanDelete,
                     )
                 }
@@ -6263,6 +6331,7 @@ private fun TreatmentPlansSection(
     onStatusChange: (String, String, String) -> Unit,
     onTreatmentModeChange: (String, String, String) -> Unit,
     onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
+    onTreatmentSessionEntryDelete: (String, String, String) -> Unit,
     onDelete: (String, String) -> Unit,
 ) {
     Card(
@@ -6301,6 +6370,7 @@ private fun TreatmentPlansSection(
                         onStatusChange = onStatusChange,
                         onTreatmentModeChange = onTreatmentModeChange,
                         onTreatmentSessionEntryAdd = onTreatmentSessionEntryAdd,
+                        onTreatmentSessionEntryDelete = onTreatmentSessionEntryDelete,
                         onDelete = onDelete,
                     )
                 }
@@ -6318,17 +6388,25 @@ private fun TreatmentPlanCard(
     onStatusChange: (String, String, String) -> Unit,
     onTreatmentModeChange: (String, String, String) -> Unit,
     onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
+    onTreatmentSessionEntryDelete: (String, String, String) -> Unit,
     onDelete: (String, String) -> Unit,
 ) {
     val planId = plan.text("id")
     val status = plan.text("status", fallback = "active")
     val sessionDays = plan.array("sessionDays").toJsonObjects()
     val activeStaff = users.filter { it.role != "Admin" && it.status != "Inactive" }
+    val treatmentMode = plan.text("treatmentLocation", "serviceLocation", fallback = "clinic")
+        .trim()
+        .lowercase()
+        .ifBlank { "clinic" }
     var entryDate by rememberSaveable(planId) { mutableStateOf(todayDateKey()) }
     var entryTreatmentType by rememberSaveable(planId) { mutableStateOf("") }
     var entryStaffId by rememberSaveable(planId) { mutableStateOf("") }
     var confirmAction by rememberSaveable(planId) { mutableStateOf("") }
+    var deleteDayId by rememberSaveable(planId) { mutableStateOf("") }
     var showEntryDatePicker by rememberSaveable(planId) { mutableStateOf(false) }
+    var showEntryStaffMenu by rememberSaveable(planId) { mutableStateOf(false) }
+    val selectedStaffName = activeStaff.firstOrNull { it.id == entryStaffId }?.name.orEmpty()
 
     if (confirmAction == "complete") {
         ConfirmDeleteDialog(
@@ -6351,6 +6429,18 @@ private fun TreatmentPlanCard(
             onConfirm = {
                 onDelete(patientId, planId)
                 confirmAction = ""
+            },
+        )
+    }
+
+    if (deleteDayId.isNotBlank()) {
+        ConfirmDeleteDialog(
+            title = "Delete session entry?",
+            message = "Delete this treatment done entry? This is allowed only while the session is active.",
+            onDismiss = { deleteDayId = "" },
+            onConfirm = {
+                onTreatmentSessionEntryDelete(patientId, planId, deleteDayId)
+                deleteDayId = ""
             },
         )
     }
@@ -6392,89 +6482,57 @@ private fun TreatmentPlanCard(
                         color = Color(0xFF64748B),
                     )
                 }
-                StatusChip(
-                    label = if (status == "completed") "Completed" else "Active",
-                    background = statusColor(status).copy(alpha = 0.12f),
-                    foreground = statusColor(status),
-                )
-            }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFFF8FAFC), RoundedCornerShape(18.dp))
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                val treatmentMode = plan.text("treatmentLocation", "serviceLocation", fallback = "clinic")
-                    .trim()
-                    .lowercase()
-                Text("Treatment Mode", fontWeight = FontWeight.ExtraBold, color = OpwInk)
                 Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    listOf("clinic" to "Clinic", "home" to "Home").forEach { (mode, label) ->
+                    listOf("clinic" to "🏥", "home" to "⌂").forEach { (mode, icon) ->
                         val selected = treatmentMode == mode
-                        if (selected) {
-                            Button(
-                                onClick = { onTreatmentModeChange(patientId, planId, mode) },
-                                enabled = canEdit && status != "completed",
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D8A82)),
-                            ) {
-                                Text(label)
+                        Surface(
+                            shape = CircleShape,
+                            color = if (selected) Color(0xFFE0FDF8) else Color(0xFFF8FAFC),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (selected) Color(0xFF2D8A82) else Color(0xFFE2E8F0),
+                            ),
+                            onClick = {
+                                if (canEdit && status != "completed") {
+                                    onTreatmentModeChange(patientId, planId, mode)
+                                }
+                            },
+                        ) {
+                            Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+                                Text(icon, fontWeight = FontWeight.ExtraBold, color = Color(0xFF2D8A82))
                             }
-                        } else {
-                            OutlinedButton(
-                                onClick = { onTreatmentModeChange(patientId, planId, mode) },
-                                enabled = canEdit && status != "completed",
+                        }
+                    }
+                    if (canEdit) {
+                        if (status == "active") {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFFDCFCE7),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0)),
+                                onClick = { confirmAction = "complete" },
                             ) {
-                                Text(label)
+                                Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+                                    Text("✓", color = OpwSuccess, fontWeight = FontWeight.ExtraBold)
+                                }
+                            }
+                        }
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFFFFF1F2),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFD5DA)),
+                            onClick = { confirmAction = "delete" },
+                        ) {
+                            Box(modifier = Modifier.size(36.dp), contentAlignment = Alignment.Center) {
+                                Text("🗑", color = OpwDanger, fontWeight = FontWeight.ExtraBold)
                             }
                         }
                     }
                 }
             }
 
-            if (canEdit) {
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (status == "active") {
-                        OutlinedButton(
-                            onClick = { confirmAction = "complete" },
-                        ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(9.dp)
-                                        .background(OpwSuccess, CircleShape),
-                                )
-                                Text("Mark Completed")
-                            }
-                        }
-                    }
-                    OutlinedButton(onClick = { confirmAction = "delete" }) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(9.dp)
-                                    .background(OpwDanger, CircleShape),
-                            )
-                            Text("Delete")
-                        }
-                    }
-                }
-            }
-
-            SectionTitle("Treatment Done Details")
             if (status == "active" && canEdit) {
                 Column(
                     modifier = Modifier
@@ -6483,40 +6541,44 @@ private fun TreatmentPlanCard(
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    SheetPickerField(
-                        label = "Date",
-                        value = appointmentDateLabel(entryDate),
-                        placeholder = "Pick date",
-                        onClick = { showEntryDatePicker = true },
-                    )
-                    ModernPatientTextField(
-                        label = "Treatment Done",
-                        value = entryTreatmentType,
-                        onValueChange = { entryTreatmentType = it },
-                    )
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Done By Staff", fontWeight = FontWeight.ExtraBold, color = OpwInk)
-                        Row(
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            activeStaff.forEach { staff ->
-                                val selected = entryStaffId == staff.id
-                                if (selected) {
-                                    Button(
-                                        onClick = { entryStaffId = staff.id },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D8A82)),
-                                    ) {
-                                        Text(staff.name)
-                                    }
-                                } else {
-                                    OutlinedButton(onClick = { entryStaffId = staff.id }) {
-                                        Text(staff.name)
-                                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        CompactPickerPill(
+                            value = appointmentDateLabel(entryDate),
+                            placeholder = "Pick date",
+                            icon = "📅",
+                            modifier = Modifier.weight(1f),
+                            onClick = { showEntryDatePicker = true },
+                        )
+                        Box(modifier = Modifier.weight(1f)) {
+                            CompactPickerPill(
+                                value = selectedStaffName,
+                                placeholder = "Done by staff",
+                                icon = "⌄",
+                                onClick = { showEntryStaffMenu = true },
+                            )
+                            DropdownMenu(
+                                expanded = showEntryStaffMenu,
+                                onDismissRequest = { showEntryStaffMenu = false },
+                            ) {
+                                activeStaff.forEach { staff ->
+                                    DropdownMenuItem(
+                                        text = { Text(staff.name.ifBlank { staff.email }) },
+                                        onClick = {
+                                            entryStaffId = staff.id
+                                            showEntryStaffMenu = false
+                                        },
+                                    )
                                 }
                             }
                         }
                     }
+                    OutlinedTextField(
+                        value = entryTreatmentType,
+                        onValueChange = { entryTreatmentType = it },
+                        placeholder = { Text("Treatment details") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
                     Button(
                         onClick = {
                             onTreatmentSessionEntryAdd(
@@ -6551,18 +6613,37 @@ private fun TreatmentPlanCard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(day.text("date", fallback = "Date not set"), fontWeight = FontWeight.Bold, color = OpwInk)
                             Text(
                                 day.text("treatmentType", fallback = "Treatment detail not added"),
                                 color = Color(0xFF64748B),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
                             )
                             Text(
                                 day.text("doneByStaffName", fallback = "Staff not added"),
                                 color = OpwSuccess,
                             )
                         }
-                        StatusChip("Added", Color(0xFFDCFCE7), OpwSuccess)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            StatusChip("Session Done", Color(0xFFDCFCE7), OpwSuccess)
+                            if (status == "active" && canEdit) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color(0xFFFFF1F2),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFD5DA)),
+                                    onClick = { deleteDayId = day.text("id") },
+                                ) {
+                                    Box(modifier = Modifier.size(34.dp), contentAlignment = Alignment.Center) {
+                                        Text("🗑", color = OpwDanger, fontWeight = FontWeight.ExtraBold)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -6725,70 +6806,68 @@ private fun PatientPaymentsSection(
                         if (paymentError.isNotBlank()) {
                             StatusBanner(message = paymentError, tone = BannerTone.Error)
                         }
-                        Box {
-                            SheetPickerField(
-                                label = "Choose Treatment",
-                                value = selectedPlan?.let { treatmentTypeText(it) }.orEmpty(),
-                                placeholder = "Select treatment",
-                                onClick = { showPlanMenu = true },
-                            )
-                            DropdownMenu(
-                                expanded = showPlanMenu,
-                                onDismissRequest = { showPlanMenu = false },
-                            ) {
-                                treatmentPlans.forEachIndexed { index, plan ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(
-                                                "Plan ${index + 1} - ${treatmentTypeText(plan)}",
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                            )
-                                        },
-                                        onClick = {
-                                            selectedPlanId = plan.text("id")
-                                            val billing = calculateTreatmentBilling(plan)
-                                            paymentAmount = if (billing.balanceAmount > 0.0) {
-                                                billing.balanceAmount.toLong().toString()
-                                            } else {
-                                                ""
-                                            }
-                                            paymentMethod = plan.text("paymentMethod")
-                                            paymentError = ""
-                                            showPlanMenu = false
-                                        },
-                                    )
+                        if (treatmentPlans.size > 1) {
+                            Box {
+                                CompactPickerPill(
+                                    value = selectedPlan?.let { treatmentTypeText(it) }.orEmpty(),
+                                    placeholder = "Select treatment",
+                                    icon = "⌄",
+                                    onClick = { showPlanMenu = true },
+                                )
+                                DropdownMenu(
+                                    expanded = showPlanMenu,
+                                    onDismissRequest = { showPlanMenu = false },
+                                ) {
+                                    treatmentPlans.forEachIndexed { index, plan ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    "Plan ${index + 1} - ${treatmentTypeText(plan)}",
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            },
+                                            onClick = {
+                                                selectedPlanId = plan.text("id")
+                                                val billing = calculateTreatmentBilling(plan)
+                                                paymentAmount = if (billing.balanceAmount > 0.0) {
+                                                    billing.balanceAmount.toLong().toString()
+                                                } else {
+                                                    ""
+                                                }
+                                                paymentMethod = plan.text("paymentMethod")
+                                                paymentError = ""
+                                                showPlanMenu = false
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         }
-                        selectedPlan?.let { plan ->
-                            val billing = calculateTreatmentBilling(plan)
-                            DetailRow("Due Balance", formatMoney(billing.balanceAmount))
-                            DetailRow("Available Balance", formatMoney(billing.availableBalance))
-                            DetailRow("Days Avail", billing.availableSessionDays.toString())
-                        }
-                        ModernPatientTextField(
-                            label = "Amount",
+                        OutlinedTextField(
                             value = paymentAmount,
                             onValueChange = {
                                 paymentAmount = it.filter { char -> char.isDigit() }
                                 paymentError = ""
                             },
-                            keyboardType = KeyboardType.Number,
+                            placeholder = { Text("Amount") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         )
-                        SheetPickerField(
-                            label = "Payment Date",
+                        CompactPickerPill(
                             value = appointmentDateLabel(paymentDate),
                             placeholder = "Pick payment date",
+                            icon = "📅",
                             onClick = { showPaymentDatePicker = true },
                         )
                         Box {
-                            SheetPickerField(
-                                label = "Payment Method",
+                            CompactPickerPill(
                                 value = paymentMethod.replaceFirstChar {
                                     if (it.isLowerCase()) it.titlecase() else it.toString()
                                 },
                                 placeholder = "Select payment method",
+                                icon = "⌄",
                                 onClick = { showMethodMenu = true },
                             )
                             DropdownMenu(
@@ -8215,7 +8294,6 @@ private fun TreatmentTab(
                         statusColor = OpwSuccess,
                         rows = listOf(
                             "Treatment" to treatmentText,
-                            "Date" to session.text("date", fallback = "Not set"),
                         ),
                     )
                 }
@@ -8454,6 +8532,8 @@ private fun TreatmentTrackerActiveSessionCard(
     var treatmentDone by rememberSaveable(patientId, planId) { mutableStateOf("") }
     var doneByStaffId by rememberSaveable(patientId, planId) { mutableStateOf("") }
     var showEntryDatePicker by rememberSaveable(patientId, planId) { mutableStateOf(false) }
+    var showStaffMenu by rememberSaveable(patientId, planId) { mutableStateOf(false) }
+    val selectedStaffName = staffOptions.firstOrNull { it.id == doneByStaffId }?.name.orEmpty()
 
     if (showEntryDatePicker) {
         AppointmentDatePickerDialog(
@@ -8466,80 +8546,84 @@ private fun TreatmentTrackerActiveSessionCard(
         )
     }
 
-    RecordCard(
-        title = patient.text("patientName", "name", fallback = "Patient"),
-        subtitle = plan?.array("treatmentTypes")?.joinLabels().orEmpty().ifBlank { "Active treatment session" },
-        status = "In Treatment",
-        statusColor = OpwSuccess,
-        rows = listOf(
-            "Mobile" to patient.text("mobile", fallback = "Not provided"),
-        ),
-        actions = if (canEdit && planId.isNotBlank()) {
-            {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFFEFFBFF), RoundedCornerShape(18.dp))
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    SheetPickerField(
-                        label = "Date",
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = Color.White,
+        border = androidx.compose.foundation.BorderStroke(1.dp, OpwBorder),
+        shadowElevation = 2.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = patient.text("patientName", "name", fallback = "Patient"),
+                color = OpwInk,
+                fontWeight = FontWeight.ExtraBold,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            if (canEdit && planId.isNotBlank()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    CompactPickerPill(
                         value = appointmentDateLabel(entryDate),
                         placeholder = "Pick date",
+                        icon = "📅",
+                        modifier = Modifier.weight(1f),
                         onClick = { showEntryDatePicker = true },
                     )
-                    ModernPatientTextField(
-                        label = "Treatment done",
-                        value = treatmentDone,
-                        onValueChange = { treatmentDone = it },
-                    )
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Done by staff", color = OpwInk, fontWeight = FontWeight.ExtraBold)
-                        Row(
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    Box(modifier = Modifier.weight(1f)) {
+                        CompactPickerPill(
+                            value = selectedStaffName,
+                            placeholder = "Done by staff",
+                            icon = "⌄",
+                            onClick = { showStaffMenu = true },
+                        )
+                        DropdownMenu(
+                            expanded = showStaffMenu,
+                            onDismissRequest = { showStaffMenu = false },
                         ) {
                             staffOptions.forEach { staff ->
-                                val selected = doneByStaffId == staff.id
-                                if (selected) {
-                                    Button(
-                                        onClick = { doneByStaffId = staff.id },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D8A82)),
-                                    ) {
-                                        Text(staff.name.ifBlank { staff.email })
-                                    }
-                                } else {
-                                    OutlinedButton(onClick = { doneByStaffId = staff.id }) {
-                                        Text(staff.name.ifBlank { staff.email })
-                                    }
-                                }
+                                DropdownMenuItem(
+                                    text = { Text(staff.name.ifBlank { staff.email }) },
+                                    onClick = {
+                                        doneByStaffId = staff.id
+                                        showStaffMenu = false
+                                    },
+                                )
                             }
                         }
                     }
-                    Button(
-                        onClick = {
-                            onTreatmentSessionEntryAdd(
-                                patientId,
-                                planId,
-                                entryDate,
-                                treatmentDone,
-                                doneByStaffId,
-                            )
-                            entryDate = todayDateKey()
-                            treatmentDone = ""
-                            doneByStaffId = ""
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = treatmentDone.isNotBlank() && doneByStaffId.isNotBlank(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D8A82)),
-                    ) {
-                        Text("Add Treatment Done")
-                    }
+                }
+                OutlinedTextField(
+                    value = treatmentDone,
+                    onValueChange = { treatmentDone = it },
+                    placeholder = { Text("Treatment details") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+                Button(
+                    onClick = {
+                        onTreatmentSessionEntryAdd(
+                            patientId,
+                            planId,
+                            entryDate,
+                            treatmentDone,
+                            doneByStaffId,
+                        )
+                        entryDate = todayDateKey()
+                        treatmentDone = ""
+                        doneByStaffId = ""
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = treatmentDone.isNotBlank() && doneByStaffId.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D8A82)),
+                ) {
+                    Text("Add Treatment Done")
                 }
             }
-        } else null,
-    )
+        }
+    }
 }
 
 @Composable

@@ -183,6 +183,11 @@ class StaffApiService(
             )
         }
 
+    suspend fun deleteTreatmentSessionEntry(token: String, patientId: String, planId: String, dayId: String): JSONObject =
+        withContext(Dispatchers.IO) {
+            JSONObject(request("DELETE", "/patients/$patientId/treatment-plans/$planId/session-days/$dayId", token = token))
+        }
+
     suspend fun addTreatmentPayment(
         token: String,
         patientId: String,

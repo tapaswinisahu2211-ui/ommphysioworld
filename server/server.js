@@ -4415,6 +4415,44 @@ app.post("/api/patients/:id/treatment-plans/:planId/session-days", requireStaffP
   }
 });
 
+app.delete("/api/patients/:id/treatment-plans/:planId/session-days/:dayId", requireStaffPermission("treatment_plans", "edit"), async (req, res) => {
+  try {
+    const patient = await Patient.findById(req.params.id);
+
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found." });
+    }
+
+    const plan = patient.treatmentPlans.id(req.params.planId);
+
+    if (!plan) {
+      return res.status(404).json({ message: "Treatment plan not found." });
+    }
+
+    if ((plan.status || "active") !== "active") {
+      return res.status(400).json({ message: "Completed treatment session entries cannot be deleted." });
+    }
+
+    const sessionDay = plan.sessionDays.id(req.params.dayId);
+
+    if (!sessionDay) {
+      return res.status(404).json({ message: "Session day not found." });
+    }
+
+    plan.sessionDays.pull(req.params.dayId);
+    plan.treatmentTypes = Array.from(
+      new Set((plan.sessionDays || []).map((day) => day.treatmentType).filter(Boolean))
+    );
+    applyTreatmentBilling(plan);
+
+    await patient.save();
+    res.json(await serializePatientWithTreatmentStaff(patient));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to delete treatment done details." });
+  }
+});
+
 app.post("/api/patients/:id/treatment-plans/:planId/payments", requireStaffPermission("payments", "add"), async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);

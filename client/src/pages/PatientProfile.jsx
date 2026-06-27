@@ -87,6 +87,8 @@ const calculateTreatmentBilling = (plan, settingsOverride) => {
         : 0;
   const payableAmount = Math.max(0, sessionSubtotal + consultationCharge - discountAmount);
   const paidAmount = (plan?.payments || []).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const balanceAmount = Math.max(0, payableAmount - paidAmount);
+  const availableBalance = Math.max(0, paidAmount - payableAmount);
 
   return {
     settings,
@@ -97,7 +99,9 @@ const calculateTreatmentBilling = (plan, settingsOverride) => {
     discountAmount,
     payableAmount,
     paidAmount,
-    balanceAmount: Math.max(0, payableAmount - paidAmount),
+    balanceAmount,
+    availableBalance,
+    availableSessionDays: sessionRate > 0 ? Math.ceil(availableBalance / sessionRate) : 0,
   };
 };
 
@@ -197,6 +201,7 @@ export default function PatientProfile() {
   });
   const [billingSettingsModalPlanId, setBillingSettingsModalPlanId] = useState("");
   const [billingSettingsForm, setBillingSettingsForm] = useState(defaultBillingSettings);
+  const [treatmentActionConfirm, setTreatmentActionConfirm] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -561,6 +566,24 @@ export default function PatientProfile() {
     }
   };
 
+  const confirmTreatmentAction = async () => {
+    const action = treatmentActionConfirm;
+    setTreatmentActionConfirm(null);
+
+    if (!action?.planId) {
+      return;
+    }
+
+    if (action.type === "complete") {
+      await handleTreatmentStatus(action.planId, "completed");
+      return;
+    }
+
+    if (action.type === "delete") {
+      await handleDeleteTreatmentPlan(action.planId);
+    }
+  };
+
   const handleAddPlanPayment = async (e) => {
     e.preventDefault();
 
@@ -724,12 +747,21 @@ export default function PatientProfile() {
     (sum, plan) => sum + (plan.payments?.length || 0),
     0
   );
-  const treatmentPaidTotal = treatmentPlans.reduce(
-    (sum, plan) => sum + Number(plan.advanceAmount || 0),
+  const treatmentBillingSummaries = treatmentPlans.map((plan) => calculateTreatmentBilling(plan));
+  const treatmentPaidTotal = treatmentBillingSummaries.reduce(
+    (sum, billing) => sum + billing.paidAmount,
     0
   );
-  const treatmentBalanceTotal = treatmentPlans.reduce(
-    (sum, plan) => sum + Number(plan.balanceAmount || 0),
+  const treatmentBalanceTotal = treatmentBillingSummaries.reduce(
+    (sum, billing) => sum + billing.balanceAmount,
+    0
+  );
+  const treatmentAvailableTotal = treatmentBillingSummaries.reduce(
+    (sum, billing) => sum + billing.availableBalance,
+    0
+  );
+  const treatmentAvailableDays = treatmentBillingSummaries.reduce(
+    (sum, billing) => sum + billing.availableSessionDays,
     0
   );
   const selectedPaymentPlan = treatmentPlans.find((plan) => plan.id === planPaymentForm.planId);
@@ -919,6 +951,61 @@ export default function PatientProfile() {
           </div>
         ) : null}
 
+        {treatmentActionConfirm ? (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 px-3 py-4 backdrop-blur-sm sm:items-center">
+            <div className="w-full max-w-md rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_30px_90px_rgba(15,23,42,0.25)]">
+              <div className="flex items-start gap-3">
+                <div
+                  className={`rounded-2xl p-3 ${
+                    treatmentActionConfirm.type === "delete"
+                      ? "bg-rose-50 text-rose-600"
+                      : "bg-emerald-50 text-emerald-600"
+                  }`}
+                >
+                  {treatmentActionConfirm.type === "delete" ? (
+                    <Trash2 size={20} />
+                  ) : (
+                    <CheckCircle2 size={20} />
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-slate-950">
+                    {treatmentActionConfirm.type === "delete"
+                      ? "Delete treatment session?"
+                      : "Mark session completed?"}
+                  </h3>
+                  <p className="mt-1 text-sm leading-6 text-slate-500">
+                    {treatmentActionConfirm.type === "delete"
+                      ? "This will remove the treatment session from this patient profile."
+                      : "Completed sessions cannot be reactivated. Create a new session when treatment restarts."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setTreatmentActionConfirm(null)}
+                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmTreatmentAction}
+                  className={`rounded-xl px-4 py-2.5 text-sm font-semibold text-white ${
+                    treatmentActionConfirm.type === "delete"
+                      ? "bg-rose-600 hover:bg-rose-700"
+                      : "bg-emerald-600 hover:bg-emerald-700"
+                  }`}
+                >
+                  {treatmentActionConfirm.type === "delete" ? "Delete" : "Mark Completed"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.22),transparent_32%),linear-gradient(120deg,#020617,#0f172a_52%,#075985)] px-4 py-3 text-white shadow-[0_16px_48px_rgba(2,6,23,0.16)]">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-start gap-3">
@@ -1052,15 +1139,18 @@ export default function PatientProfile() {
                           {plan.status === "active" ? (
                             <button
                               type="button"
-                              onClick={() => handleTreatmentStatus(plan.id, "completed")}
-                              className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
+                              onClick={() =>
+                                setTreatmentActionConfirm({ type: "complete", planId: plan.id })
+                              }
+                              className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100"
                             >
+                              <CheckCircle2 size={16} />
                               Mark Completed
                             </button>
                           ) : null}
                           <button
                             type="button"
-                            onClick={() => handleDeleteTreatmentPlan(plan.id)}
+                            onClick={() => setTreatmentActionConfirm({ type: "delete", planId: plan.id })}
                             className="rounded-xl border border-rose-200 bg-rose-50 p-2 text-rose-600 hover:bg-rose-100"
                           >
                             <Trash2 size={16} />
@@ -1298,7 +1388,7 @@ export default function PatientProfile() {
                 </div>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-4">
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
                     Total Paid
@@ -1309,18 +1399,26 @@ export default function PatientProfile() {
                 </div>
                 <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                    Pending Balance
+                    Due Balance
                   </p>
                   <p className="mt-2 text-xl font-semibold text-slate-900">
                     {formatMoney(treatmentBalanceTotal)}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-                    Payment Entries
+                <div className="rounded-2xl border border-cyan-100 bg-cyan-50/70 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-cyan-700">
+                    Available Balance
                   </p>
                   <p className="mt-2 text-xl font-semibold text-slate-900">
-                    {treatmentPaymentCount}
+                    {formatMoney(treatmentAvailableTotal)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                    Days Avail
+                  </p>
+                  <p className="mt-2 text-xl font-semibold text-slate-900">
+                    {treatmentAvailableDays}
                   </p>
                 </div>
               </div>
@@ -1400,9 +1498,8 @@ export default function PatientProfile() {
                         <label className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                           Method
                         </label>
-                        <input
+                        <select
                           className="input mt-2"
-                          placeholder="Cash / UPI / Card"
                           value={planPaymentForm.method}
                           onChange={(e) =>
                             setPlanPaymentForm((current) => ({
@@ -1410,7 +1507,11 @@ export default function PatientProfile() {
                               method: e.target.value,
                             }))
                           }
-                        />
+                        >
+                          <option value="">Select method</option>
+                          <option value="cash">Cash</option>
+                          <option value="online">Online</option>
+                        </select>
                       </div>
                       <button
                         type="submit"
@@ -1421,26 +1522,24 @@ export default function PatientProfile() {
                       </button>
                     </div>
                     {selectedPaymentBilling ? (
-                      <div className="mt-4 grid gap-2 md:grid-cols-5">
+                      <div className="mt-4 grid gap-2 md:grid-cols-3">
                         <div className="rounded-xl bg-cyan-50 px-3 py-2">
-                          <p className="text-[11px] font-semibold uppercase text-cyan-700">Started Days</p>
-                          <p className="text-sm font-bold text-slate-900">{selectedPaymentBilling.sessionCount}</p>
-                        </div>
-                        <div className="rounded-xl bg-slate-50 px-3 py-2">
-                          <p className="text-[11px] font-semibold uppercase text-slate-500">Rate</p>
-                          <p className="text-sm font-bold text-slate-900">{formatMoney(selectedPaymentBilling.sessionRate)}</p>
-                        </div>
-                        <div className="rounded-xl bg-blue-50 px-3 py-2">
-                          <p className="text-[11px] font-semibold uppercase text-blue-700">Consult</p>
-                          <p className="text-sm font-bold text-slate-900">{formatMoney(selectedPaymentBilling.consultationCharge)}</p>
-                        </div>
-                        <div className="rounded-xl bg-rose-50 px-3 py-2">
-                          <p className="text-[11px] font-semibold uppercase text-rose-700">Discount</p>
-                          <p className="text-sm font-bold text-slate-900">{formatMoney(selectedPaymentBilling.discountAmount)}</p>
+                          <p className="text-[11px] font-semibold uppercase text-cyan-700">Due Balance</p>
+                          <p className="text-sm font-bold text-slate-900">
+                            {formatMoney(selectedPaymentBilling.balanceAmount)}
+                          </p>
                         </div>
                         <div className="rounded-xl bg-emerald-50 px-3 py-2">
-                          <p className="text-[11px] font-semibold uppercase text-emerald-700">Payable</p>
-                          <p className="text-sm font-bold text-slate-900">{formatMoney(selectedPaymentBilling.payableAmount)}</p>
+                          <p className="text-[11px] font-semibold uppercase text-emerald-700">Available Balance</p>
+                          <p className="text-sm font-bold text-slate-900">
+                            {formatMoney(selectedPaymentBilling.availableBalance)}
+                          </p>
+                        </div>
+                        <div className="rounded-xl bg-blue-50 px-3 py-2">
+                          <p className="text-[11px] font-semibold uppercase text-blue-700">Days Avail</p>
+                          <p className="text-sm font-bold text-slate-900">
+                            {selectedPaymentBilling.availableSessionDays}
+                          </p>
                         </div>
                       </div>
                     ) : null}
@@ -1473,7 +1572,7 @@ export default function PatientProfile() {
                               {(plan.treatmentTypes || []).join(", ") || "Treatment plan"}
                             </p>
                           </div>
-                          <div className="grid grid-cols-3 gap-2 text-right text-sm">
+                          <div className="grid grid-cols-2 gap-2 text-right text-sm sm:grid-cols-4">
                             <div className="rounded-xl bg-cyan-50 px-3 py-2">
                               <p className="text-[11px] uppercase tracking-wide text-cyan-700">Payable</p>
                               <p className="font-semibold text-slate-900">
@@ -1487,9 +1586,15 @@ export default function PatientProfile() {
                               </p>
                             </div>
                             <div className="rounded-xl bg-slate-50 px-3 py-2">
-                              <p className="text-[11px] uppercase tracking-wide text-slate-400">Balance</p>
+                              <p className="text-[11px] uppercase tracking-wide text-slate-400">Due Balance</p>
                               <p className="font-semibold text-slate-900">
                                 {formatMoney(planBilling.balanceAmount)}
+                              </p>
+                            </div>
+                            <div className="rounded-xl bg-emerald-50 px-3 py-2">
+                              <p className="text-[11px] uppercase tracking-wide text-emerald-700">Avail</p>
+                              <p className="font-semibold text-slate-900">
+                                {formatMoney(planBilling.availableBalance)}
                               </p>
                             </div>
                           </div>

@@ -55,6 +55,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
@@ -154,6 +156,7 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.net.URL
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
@@ -270,6 +273,8 @@ private data class TreatmentBilling(
     val payableAmount: Double,
     val paidAmount: Double,
     val balanceAmount: Double,
+    val availableBalance: Double,
+    val availableSessionDays: Int,
 )
 
 private fun emptyStaffForm() = StaffFormState()
@@ -6038,8 +6043,8 @@ private fun PatientProfileModuleGrid(
     val treatmentPayments = treatmentPlans.flatMap { it.array("payments").toJsonObjects() }
     val paymentCount = directPayments.size + treatmentPayments.size
     val totalPaid = directPayments.sumOf { it.optDouble("amount", 0.0) } +
-        treatmentPlans.sumOf { it.optDouble("advanceAmount", 0.0) }
-    val pendingBalance = treatmentPlans.sumOf { it.optDouble("balanceAmount", 0.0) }
+        treatmentPlans.sumOf { calculateTreatmentBilling(it).paidAmount }
+    val dueBalance = treatmentPlans.sumOf { calculateTreatmentBilling(it).balanceAmount }
     val cards = listOf(
         PatientProfileModule.Appointments to ModuleCardSpec(
             title = "Appointment",
@@ -6057,7 +6062,7 @@ private fun PatientProfileModuleGrid(
         ),
         PatientProfileModule.Payments to ModuleCardSpec(
             title = "Payment",
-            subtitle = "${formatMoney(totalPaid)} paid, ${formatMoney(pendingBalance)} due",
+            subtitle = "${formatMoney(totalPaid)} paid, ${formatMoney(dueBalance)} due",
             count = paymentCount.toString(),
             accent = OpwSuccess,
             tint = Color(0xFFDCFCE7),
@@ -6322,6 +6327,44 @@ private fun TreatmentPlanCard(
     var entryDate by rememberSaveable(planId) { mutableStateOf(todayDateKey()) }
     var entryTreatmentType by rememberSaveable(planId) { mutableStateOf("") }
     var entryStaffId by rememberSaveable(planId) { mutableStateOf("") }
+    var confirmAction by rememberSaveable(planId) { mutableStateOf("") }
+    var showEntryDatePicker by rememberSaveable(planId) { mutableStateOf(false) }
+
+    if (confirmAction == "complete") {
+        ConfirmDeleteDialog(
+            title = "Mark session completed?",
+            message = "Completed sessions cannot be reactivated. Create a new session when treatment restarts.",
+            confirmLabel = "Mark Complete",
+            onDismiss = { confirmAction = "" },
+            onConfirm = {
+                onStatusChange(patientId, planId, "completed")
+                confirmAction = ""
+            },
+        )
+    }
+
+    if (confirmAction == "delete") {
+        ConfirmDeleteDialog(
+            title = "Delete treatment session?",
+            message = "This will remove the treatment session from this patient profile.",
+            onDismiss = { confirmAction = "" },
+            onConfirm = {
+                onDelete(patientId, planId)
+                confirmAction = ""
+            },
+        )
+    }
+
+    if (showEntryDatePicker) {
+        AppointmentDatePickerDialog(
+            selectedDate = entryDate.ifBlank { todayDateKey() },
+            onDismiss = { showEntryDatePicker = false },
+            onDateSelected = {
+                entryDate = it
+                showEntryDatePicker = false
+            },
+        )
+    }
 
     Surface(
         shape = RoundedCornerShape(26.dp),
@@ -6400,13 +6443,33 @@ private fun TreatmentPlanCard(
                 ) {
                     if (status == "active") {
                         OutlinedButton(
-                            onClick = { onStatusChange(patientId, planId, "completed") },
+                            onClick = { confirmAction = "complete" },
                         ) {
-                            Text("Mark Completed")
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(9.dp)
+                                        .background(OpwSuccess, CircleShape),
+                                )
+                                Text("Mark Completed")
+                            }
                         }
                     }
-                    OutlinedButton(onClick = { onDelete(patientId, planId) }) {
-                        Text("Delete")
+                    OutlinedButton(onClick = { confirmAction = "delete" }) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(9.dp)
+                                    .background(OpwDanger, CircleShape),
+                            )
+                            Text("Delete")
+                        }
                     }
                 }
             }
@@ -6420,10 +6483,11 @@ private fun TreatmentPlanCard(
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    ModernPatientTextField(
+                    SheetPickerField(
                         label = "Date",
-                        value = entryDate,
-                        onValueChange = { entryDate = it },
+                        value = appointmentDateLabel(entryDate),
+                        placeholder = "Pick date",
+                        onClick = { showEntryDatePicker = true },
                     )
                     ModernPatientTextField(
                         label = "Treatment Done",
@@ -6588,6 +6652,8 @@ private fun PatientPaymentsSection(
     var paymentDate by rememberSaveable { mutableStateOf(todayDateKey()) }
     var showPaymentDatePicker by rememberSaveable { mutableStateOf(false) }
     var showBillingSettings by rememberSaveable { mutableStateOf(false) }
+    var showPlanMenu by rememberSaveable { mutableStateOf(false) }
+    var showMethodMenu by rememberSaveable { mutableStateOf(false) }
     var paymentError by rememberSaveable { mutableStateOf("") }
     val treatmentPayments = treatmentPlans.flatMap { plan ->
         plan.array("payments").toJsonObjects().map { payment -> plan to payment }
@@ -6595,29 +6661,50 @@ private fun PatientPaymentsSection(
     val selectedPlan = treatmentPlans.firstOrNull { it.text("id") == selectedPlanId }
     val totalPaid = directPayments.sumOf { it.optDouble("amount", 0.0) } +
         treatmentPlans.sumOf { calculateTreatmentBilling(it).paidAmount }
-    val pendingBalance = treatmentPlans.sumOf { calculateTreatmentBilling(it).balanceAmount }
+    val dueBalance = treatmentPlans.sumOf { calculateTreatmentBilling(it).balanceAmount }
+    val availableBalance = treatmentPlans.sumOf { calculateTreatmentBilling(it).availableBalance }
+    val availableSessionDays = treatmentPlans.sumOf { calculateTreatmentBilling(it).availableSessionDays }
 
     SectionCard(
         title = "Payment Summary",
-        actionLabel = if (selectedPlan != null) "Settings" else null,
+        actionLabel = if (selectedPlan != null) "⚙" else null,
         onAction = if (selectedPlan != null) { { showBillingSettings = true } } else null,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            PaymentSummaryTile(
-                title = "Paid",
-                value = formatMoney(totalPaid),
-                accent = OpwSuccess,
-                modifier = Modifier.weight(1f),
-            )
-            PaymentSummaryTile(
-                title = "Balance",
-                value = formatMoney(pendingBalance),
-                accent = OpwWarning,
-                modifier = Modifier.weight(1f),
-            )
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                PaymentSummaryTile(
+                    title = "Paid",
+                    value = formatMoney(totalPaid),
+                    accent = OpwSuccess,
+                    modifier = Modifier.weight(1f),
+                )
+                PaymentSummaryTile(
+                    title = "Due Balance",
+                    value = formatMoney(dueBalance),
+                    accent = OpwWarning,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                PaymentSummaryTile(
+                    title = "Available Balance",
+                    value = formatMoney(availableBalance),
+                    accent = OpwAqua,
+                    modifier = Modifier.weight(1f),
+                )
+                PaymentSummaryTile(
+                    title = "Days Avail",
+                    value = availableSessionDays.toString(),
+                    accent = OpwBlue,
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
 
         if (canAddPayment) {
@@ -6638,48 +6725,47 @@ private fun PatientPaymentsSection(
                         if (paymentError.isNotBlank()) {
                             StatusBanner(message = paymentError, tone = BannerTone.Error)
                         }
-                        Text(
-                            "Choose Treatment",
-                            color = OpwInk,
-                            fontWeight = FontWeight.ExtraBold,
-                            style = MaterialTheme.typography.titleSmall,
-                        )
-                        Row(
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            treatmentPlans.forEach { plan ->
-                                FilterChip(
-                                    selected = plan.text("id") == selectedPlanId,
-                                    onClick = {
-                                        selectedPlanId = plan.text("id")
-                                        val billing = calculateTreatmentBilling(plan)
-                                        paymentAmount = if (billing.balanceAmount > 0.0) {
-                                            billing.balanceAmount.toLong().toString()
-                                        } else {
-                                            ""
-                                        }
-                                        paymentMethod = plan.text("paymentMethod")
-                                        paymentError = ""
-                                    },
-                                    label = {
-                                        Text(
-                                            treatmentTypeText(plan),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    },
-                                )
+                        Box {
+                            SheetPickerField(
+                                label = "Choose Treatment",
+                                value = selectedPlan?.let { treatmentTypeText(it) }.orEmpty(),
+                                placeholder = "Select treatment",
+                                onClick = { showPlanMenu = true },
+                            )
+                            DropdownMenu(
+                                expanded = showPlanMenu,
+                                onDismissRequest = { showPlanMenu = false },
+                            ) {
+                                treatmentPlans.forEachIndexed { index, plan ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                "Plan ${index + 1} - ${treatmentTypeText(plan)}",
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        },
+                                        onClick = {
+                                            selectedPlanId = plan.text("id")
+                                            val billing = calculateTreatmentBilling(plan)
+                                            paymentAmount = if (billing.balanceAmount > 0.0) {
+                                                billing.balanceAmount.toLong().toString()
+                                            } else {
+                                                ""
+                                            }
+                                            paymentMethod = plan.text("paymentMethod")
+                                            paymentError = ""
+                                            showPlanMenu = false
+                                        },
+                                    )
+                                }
                             }
                         }
                         selectedPlan?.let { plan ->
                             val billing = calculateTreatmentBilling(plan)
-                            DetailRow("Started days", billing.sessionCount.toString())
-                            DetailRow("Session rate", formatMoney(billing.sessionRate))
-                            DetailRow("Consultation", formatMoney(billing.consultationCharge))
-                            DetailRow("Discount", formatMoney(billing.discountAmount))
-                            DetailRow("Payable", formatMoney(billing.payableAmount))
-                            DetailRow("Balance", formatMoney(billing.balanceAmount))
+                            DetailRow("Due Balance", formatMoney(billing.balanceAmount))
+                            DetailRow("Available Balance", formatMoney(billing.availableBalance))
+                            DetailRow("Days Avail", billing.availableSessionDays.toString())
                         }
                         ModernPatientTextField(
                             label = "Amount",
@@ -6696,14 +6782,31 @@ private fun PatientPaymentsSection(
                             placeholder = "Pick payment date",
                             onClick = { showPaymentDatePicker = true },
                         )
-                        ModernPatientTextField(
-                            label = "Payment Method",
-                            value = paymentMethod,
-                            onValueChange = {
-                                paymentMethod = it
-                                paymentError = ""
-                            },
-                        )
+                        Box {
+                            SheetPickerField(
+                                label = "Payment Method",
+                                value = paymentMethod.replaceFirstChar {
+                                    if (it.isLowerCase()) it.titlecase() else it.toString()
+                                },
+                                placeholder = "Select payment method",
+                                onClick = { showMethodMenu = true },
+                            )
+                            DropdownMenu(
+                                expanded = showMethodMenu,
+                                onDismissRequest = { showMethodMenu = false },
+                            ) {
+                                listOf("cash" to "Cash", "online" to "Online").forEach { (value, label) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            paymentMethod = value
+                                            paymentError = ""
+                                            showMethodMenu = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
                         Button(
                             onClick = {
                                 val amount = paymentAmount.toDoubleOrNull() ?: 0.0
@@ -7958,6 +8061,7 @@ private fun EmptyStateWithBack(
 private fun ConfirmDeleteDialog(
     title: String,
     message: String,
+    confirmLabel: String = "Delete",
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
@@ -7969,7 +8073,7 @@ private fun ConfirmDeleteDialog(
         },
         confirmButton = {
             Button(onClick = onConfirm) {
-                Text("Delete")
+                Text(confirmLabel)
             }
         },
         dismissButton = {
@@ -8070,54 +8174,47 @@ private fun TreatmentTab(
     val activeStaff = users.filter { it.role != "Admin" && it.status != "Inactive" }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            MetricCard(
-                modifier = Modifier.weight(1f),
-                label = "Requests",
-                value = appointmentRequests.size.toString(),
-                accent = OpwWarning,
-            )
-            MetricCard(
-                modifier = Modifier.weight(1f),
-                label = "Today Appts",
-                value = todaysAppointments.size.toString(),
-                accent = OpwAqua,
-            )
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            MetricCard(
-                modifier = Modifier.weight(1f),
-                label = "Sessions",
-                value = activeSessions.size.toString(),
-                accent = OpwBlue,
-            )
-            MetricCard(
-                modifier = Modifier.weight(1f),
-                label = "Follow-up",
-                value = followUps.size.toString(),
-                accent = Color(0xFFF59E0B),
-            )
+        TreatmentTrackerSection(
+            title = "Session List",
+            subtitle = "Active treatment patients still pending today's session entry.",
+            countLabel = "${activeSessions.size} patients",
+        ) {
+            if (activeSessions.isEmpty()) {
+                InlineEmpty("No active treatment sessions are pending for today.")
+            } else {
+                activeSessions.forEach { patient ->
+                    val plan = patient.objectValue("activeTreatmentPlan")
+                    TreatmentTrackerActiveSessionCard(
+                        patient = patient,
+                        plan = plan,
+                        staffOptions = activeStaff,
+                        canEdit = canEdit,
+                        onTreatmentSessionEntryAdd = onTreatmentSessionEntryAdd,
+                    )
+                }
+            }
         }
 
         TreatmentTrackerSection(
-            title = "Today's Sessions",
-            subtitle = "Patient-wise treatment sessions scheduled for today.",
-            countLabel = "${todaysSessions.size} sessions",
+            title = "Today's Session History",
+            subtitle = "Completed treatment entries added by staff today.",
+            countLabel = "${todaysSessions.size} done",
         ) {
             if (todaysSessions.isEmpty()) {
-                InlineEmpty("No treatment sessions scheduled for today.")
+                InlineEmpty("No completed treatment sessions added today.")
             } else {
                 todaysSessions.forEach { session ->
-                    val status = session.text("status", fallback = "not_done")
-                    val done = status == "done"
+                    val doneBy = session.text("doneByStaffName").ifBlank { "staff" }
+                    val treatmentText = session.text("treatmentType").ifBlank {
+                        session.text("treatmentTypes", "service", fallback = "Treatment done")
+                    }
                     RecordCard(
                         title = session.text("patientName", fallback = "Patient"),
-                        subtitle = session.text("treatmentTypes", "service", fallback = "Treatment session"),
-                        status = if (done) "Added" else "Pending",
-                        statusColor = if (done) OpwSuccess else OpwWarning,
+                        subtitle = "Session done by $doneBy",
+                        status = "Done",
+                        statusColor = OpwSuccess,
                         rows = listOf(
-                            "Mobile" to session.text("patientMobile", fallback = "Not provided"),
+                            "Treatment" to treatmentText,
                             "Date" to session.text("date", fallback = "Not set"),
                         ),
                     )
@@ -8209,27 +8306,6 @@ private fun TreatmentTab(
                             "Mobile" to patient.text("mobile", fallback = "Not provided"),
                             "Service" to (next?.text("service", fallback = "Not set") ?: "Not set"),
                         ),
-                    )
-                }
-            }
-        }
-
-        TreatmentTrackerSection(
-            title = "Session List",
-            subtitle = "Patients with active treatment sessions started from patient profile.",
-            countLabel = "${activeSessions.size} patients",
-        ) {
-            if (activeSessions.isEmpty()) {
-                InlineEmpty("No active treatment sessions found.")
-            } else {
-                activeSessions.forEach { patient ->
-                    val plan = patient.objectValue("activeTreatmentPlan")
-                    TreatmentTrackerActiveSessionCard(
-                        patient = patient,
-                        plan = plan,
-                        staffOptions = activeStaff,
-                        canEdit = canEdit,
-                        onTreatmentSessionEntryAdd = onTreatmentSessionEntryAdd,
                     )
                 }
             }
@@ -8377,8 +8453,18 @@ private fun TreatmentTrackerActiveSessionCard(
     var entryDate by rememberSaveable(patientId, planId) { mutableStateOf(todayDateKey()) }
     var treatmentDone by rememberSaveable(patientId, planId) { mutableStateOf("") }
     var doneByStaffId by rememberSaveable(patientId, planId) { mutableStateOf("") }
-    val startedDays = plan?.optInt("startedDays", plan.array("sessionDays").length()) ?: 0
-    val doneDays = plan?.optInt("doneDays", 0) ?: 0
+    var showEntryDatePicker by rememberSaveable(patientId, planId) { mutableStateOf(false) }
+
+    if (showEntryDatePicker) {
+        AppointmentDatePickerDialog(
+            selectedDate = entryDate.ifBlank { todayDateKey() },
+            onDismiss = { showEntryDatePicker = false },
+            onDateSelected = {
+                entryDate = it
+                showEntryDatePicker = false
+            },
+        )
+    }
 
     RecordCard(
         title = patient.text("patientName", "name", fallback = "Patient"),
@@ -8386,8 +8472,6 @@ private fun TreatmentTrackerActiveSessionCard(
         status = "In Treatment",
         statusColor = OpwSuccess,
         rows = listOf(
-            "Started days" to startedDays.toString(),
-            "Done entries" to doneDays.toString(),
             "Mobile" to patient.text("mobile", fallback = "Not provided"),
         ),
         actions = if (canEdit && planId.isNotBlank()) {
@@ -8399,10 +8483,11 @@ private fun TreatmentTrackerActiveSessionCard(
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    ModernPatientTextField(
+                    SheetPickerField(
                         label = "Date",
-                        value = entryDate,
-                        onValueChange = { entryDate = it },
+                        value = appointmentDateLabel(entryDate),
+                        placeholder = "Pick date",
+                        onClick = { showEntryDatePicker = true },
                     )
                     ModernPatientTextField(
                         label = "Treatment done",
@@ -13665,6 +13750,8 @@ private fun calculateTreatmentBilling(plan: JSONObject): TreatmentBilling {
     }
     val payableAmount = (sessionSubtotal + consultationCharge - discountAmount).coerceAtLeast(0.0)
     val paidAmount = plan.array("payments").toJsonObjects().sumOf { it.optDouble("amount", 0.0) }
+    val balanceAmount = (payableAmount - paidAmount).coerceAtLeast(0.0)
+    val availableBalance = (paidAmount - payableAmount).coerceAtLeast(0.0)
 
     return TreatmentBilling(
         homeVisitCharge = homeVisitCharge,
@@ -13679,7 +13766,9 @@ private fun calculateTreatmentBilling(plan: JSONObject): TreatmentBilling {
         discountAmount = discountAmount,
         payableAmount = payableAmount,
         paidAmount = paidAmount,
-        balanceAmount = (payableAmount - paidAmount).coerceAtLeast(0.0),
+        balanceAmount = balanceAmount,
+        availableBalance = availableBalance,
+        availableSessionDays = if (sessionRate > 0.0) ceil(availableBalance / sessionRate).toInt() else 0,
     )
 }
 

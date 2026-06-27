@@ -1,12 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Activity,
-  CalendarClock,
   CheckCircle2,
   ClipboardList,
   Eye,
-  PhoneCall,
   Plus,
   RotateCcw,
   XCircle,
@@ -55,9 +52,7 @@ function PatientCard({
   const activePlan = patient.activeTreatmentPlan || null;
   const latestSessionText =
     type === "active" && activePlan
-      ? `${formatDate(activePlan.fromDate)} to ${formatDate(
-          activePlan.toDate
-        )}`
+      ? "Active treatment session"
       : patient.latestSession
       ? `${formatDate(patient.latestSession.date)}${
           patient.latestSession.service ? ` • ${patient.latestSession.service}` : ""
@@ -69,9 +64,12 @@ function PatientCard({
       ? activePlan.treatmentTypes.join(", ")
       : patient.disease || "Not added";
 
-  const compactAppointmentText = patient.nextAppointment
-    ? formatDate(patient.nextAppointment.date)
-    : latestSessionText;
+  const compactAppointmentText =
+    type === "active" && activePlan
+      ? conditionText
+      : patient.nextAppointment
+      ? formatDate(patient.nextAppointment.date)
+      : latestSessionText;
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
@@ -147,25 +145,9 @@ function PatientCard({
 
       {type === "active" && activePlan ? (
         <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3">
-          <div className="mb-3 grid gap-2 sm:grid-cols-2">
-            <div className="rounded-xl bg-white px-3 py-2">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                Started days
-              </p>
-              <p className="mt-1 text-lg font-bold text-slate-950">
-                {activePlan.startedDays || activePlan.sessionDays?.length || 0}
-              </p>
-            </div>
-            <div className="rounded-xl bg-white px-3 py-2">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                Done entries
-              </p>
-              <p className="mt-1 text-lg font-bold text-slate-950">
-                {activePlan.doneDays || 0}
-              </p>
-            </div>
-          </div>
-
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+            Add today&apos;s treatment done details
+          </p>
           <div className="grid gap-2 lg:grid-cols-[140px_minmax(160px,1fr)_minmax(160px,1fr)_auto]">
             <input
               type="date"
@@ -448,10 +430,14 @@ function TodayAppointmentCard({
 }
 
 function TodaySessionCard({ session, onOpen }) {
-  const isDone = session.status === "done";
-  const treatmentText = Array.isArray(session.treatmentTypes) && session.treatmentTypes.length
-    ? session.treatmentTypes.join(", ")
-    : "Treatment session";
+  const treatmentText =
+    session.treatmentType ||
+    (Array.isArray(session.treatmentTypes) && session.treatmentTypes.length
+      ? session.treatmentTypes.join(", ")
+      : "Treatment done");
+  const doneByText = session.doneByStaffName
+    ? `Session done by ${session.doneByStaffName}`
+    : "Session done";
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -462,18 +448,16 @@ function TodaySessionCard({ session, onOpen }) {
               {session.patientName || "Patient"}
             </p>
             <span
-              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
-                isDone ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
-              }`}
+              className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700"
             >
-              {isDone ? "Added" : "Pending"}
+              Done
             </span>
           </div>
           <p className="mt-1 truncate text-sm font-medium text-slate-600">
-            {treatmentText} | {formatDate(session.date)}
+            {doneByText}
           </p>
           <p className="mt-0.5 truncate text-xs text-slate-400">
-            {session.patientMobile || session.patientEmail || "No contact"}
+            {treatmentText} | {formatDate(session.date)}
           </p>
         </div>
 
@@ -718,42 +702,6 @@ export default function TreatmentTracker() {
     }
   };
 
-  const stats = useMemo(
-    () => [
-      {
-        label: "Appointment Requests",
-        value: data.appointmentRequests.length,
-        icon: CalendarClock,
-        tone: "bg-sky-50 text-sky-600",
-      },
-      {
-        label: "Today's Appointments",
-        value: data.todaysAppointments.length,
-        icon: CalendarClock,
-        tone: "bg-cyan-50 text-cyan-600",
-      },
-      {
-        label: "Upcoming Appointments",
-        value: data.upcomingAppointments.length,
-        icon: CalendarClock,
-        tone: "bg-blue-50 text-blue-600",
-      },
-      {
-        label: "Active Sessions",
-        value: data.activeSessions.length,
-        icon: Activity,
-        tone: "bg-emerald-50 text-emerald-600",
-      },
-      {
-        label: "Need Follow-up",
-        value: data.followUpNeeded.length,
-        icon: PhoneCall,
-        tone: "bg-amber-50 text-amber-600",
-      },
-    ],
-    [data]
-  );
-
   const openProfile = (patientId) => navigate(`/patients/${patientId}`);
 
   const sections = [
@@ -763,13 +711,6 @@ export default function TreatmentTracker() {
       subtitle: "Patients who already have future appointments scheduled.",
       items: data.upcomingAppointments,
       empty: "No upcoming appointments found.",
-    },
-    {
-      key: "active",
-      title: "Session List",
-      subtitle: "Patients with active treatment sessions started from patient profile.",
-      items: data.activeSessions,
-      empty: "No active treatment sessions found.",
     },
     {
       key: "followup",
@@ -811,44 +752,64 @@ export default function TreatmentTracker() {
           </div>
         )}
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-          {stats.map(({ label, value, icon: Icon, tone }) => (
-            <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-slate-500">{label}</p>
-                  <p className="mt-1 text-2xl font-semibold text-slate-900">
-                    {loading ? "..." : value}
-                  </p>
-                </div>
-                <div className={`rounded-xl p-2.5 ${tone}`}>
-                  <Icon size={20} />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
         <div className="space-y-6">
           <section className={panelClass}>
             <div className="mb-5 flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-xl font-semibold text-slate-900">
-                  Today&apos;s Sessions
-                </h2>
+                <h2 className="text-xl font-semibold text-slate-900">Session List</h2>
                 <p className="text-sm text-slate-500">
-                  Patient-wise treatment sessions scheduled for today.
+                  Active treatment patients still pending today&apos;s session entry.
                 </p>
               </div>
               <div className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-                {loading ? "..." : data.todaysSessions.length} sessions
+                {loading ? "..." : data.activeSessions.length} patients
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {!loading && data.activeSessions.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+                  No active treatment sessions are pending for today.
+                </div>
+              ) : (
+                data.activeSessions.map((patient) => (
+                  <PatientCard
+                    key={`active-${patient.id}`}
+                    patient={patient}
+                    type="active"
+                    onOpen={openProfile}
+                    staffOptions={staffOptions}
+                    sessionForm={
+                      patient.activeTreatmentPlan ? sessionForms[patient.activeTreatmentPlan.id] : null
+                    }
+                    onSessionFormChange={updateSessionForm}
+                    onAddSessionDay={addSessionDayFromTracker}
+                    savingSessionPlanId={savingSessionPlanId}
+                  />
+                ))
+              )}
+            </div>
+          </section>
+
+          <section className={panelClass}>
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-slate-900">
+                  Today&apos;s Session History
+                </h2>
+                <p className="text-sm text-slate-500">
+                  Completed treatment entries added by staff today.
+                </p>
+              </div>
+              <div className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
+                {loading ? "..." : data.todaysSessions.length} done
               </div>
             </div>
 
             <div className="space-y-4">
               {!loading && data.todaysSessions.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
-                  No treatment sessions scheduled for today.
+                  No completed treatment sessions added today.
                 </div>
               ) : (
                 data.todaysSessions.map((session) => (

@@ -2819,9 +2819,19 @@ app.get("/api/treatment-tracker", requireStaffPermission("treatment_tracker", "v
         });
 
       const activeTreatmentPlan = treatmentPlans.find((plan) => plan.status === "active") || null;
+      const hasCompletedSessionToday = Boolean(
+        activeTreatmentPlan?.sessionDays?.some(
+          (day) => day.date === todayKey && (day.status || "") === "done"
+        )
+      );
       const todaysSessions = treatmentPlans.flatMap((plan) =>
         (plan.sessionDays || [])
-          .filter((day) => plan.status === "active" && day.date === todayKey)
+          .filter(
+            (day) =>
+              plan.status === "active" &&
+              day.date === todayKey &&
+              (day.status || "") === "done"
+          )
           .map((day) => ({
             patientId: patient._id.toString(),
             patientName: patient.name,
@@ -2874,6 +2884,7 @@ app.get("/api/treatment-tracker", requireStaffPermission("treatment_tracker", "v
         treatmentPlans,
         todaysSessions,
         activeTreatmentPlan,
+        hasCompletedSessionToday,
         upcomingAppointments: upcomingAppointments.map((appointment) => ({
           id: appointment.id,
           date: appointment.date,
@@ -2915,7 +2926,12 @@ app.get("/api/treatment-tracker", requireStaffPermission("treatment_tracker", "v
           return aDate - bDate;
         }),
       activeSessions: summaries
-        .filter((patient) => patient.activeTreatmentPlan && !patient.followUpNeeded)
+        .filter(
+          (patient) =>
+            patient.activeTreatmentPlan &&
+            !patient.followUpNeeded &&
+            !patient.hasCompletedSessionToday
+        )
         .sort((a, b) => {
           const aDate = parseDateValue(a.activeTreatmentPlan?.fromDate)?.getTime() || 0;
           const bDate = parseDateValue(b.activeTreatmentPlan?.fromDate)?.getTime() || 0;

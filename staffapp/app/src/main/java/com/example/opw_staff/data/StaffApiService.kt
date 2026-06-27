@@ -22,6 +22,7 @@ class StaffApiService(
             val body = JSONObject()
                 .put("email", email.trim())
                 .put("password", password)
+                .put("clientType", "mobile_app")
             val response = JSONObject(request("POST", "/admin/login", body = body))
             AdminSession(
                 token = response.optString("token").trim(),

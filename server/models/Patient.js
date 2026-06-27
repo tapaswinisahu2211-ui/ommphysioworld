@@ -158,6 +158,7 @@ const treatmentPlanSchema = new mongoose.Schema(
 );
 
 const patientSchema = new mongoose.Schema({
+  patientId: { type: String, trim: true, unique: true, sparse: true },
   name: { type: String, required: true, trim: true },
   email: { type: String, required: true, trim: true, lowercase: true },
   mobile: { type: String, required: true, trim: true },
@@ -182,6 +183,29 @@ const patientSchema = new mongoose.Schema({
   archivedByRole: { type: String, default: "", trim: true },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
+});
+
+const buildPatientIdPrefix = (date = new Date()) => `OPW${date.getFullYear()}`;
+
+patientSchema.pre("validate", async function assignPatientId() {
+  if (this.patientId) {
+    return;
+  }
+
+  const prefix = buildPatientIdPrefix(this.createdAt || new Date());
+  const existingIds = await this.constructor
+    .find({ patientId: { $regex: `^${prefix}\\d+$` } })
+    .setOptions({ includeArchived: true })
+    .select("patientId")
+    .lean();
+
+  const nextSequence =
+    existingIds.reduce((max, patient) => {
+      const suffix = Number(String(patient.patientId || "").slice(prefix.length));
+      return Number.isFinite(suffix) ? Math.max(max, suffix) : max;
+    }, 0) + 1;
+
+  this.patientId = `${prefix}${String(nextSequence).padStart(3, "0")}`;
 });
 
 patientSchema.pre("save", function updateTimestamp() {

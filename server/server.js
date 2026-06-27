@@ -259,6 +259,7 @@ const serializePatientAppointments = (appointments = []) => {
 
 const serializePatient = (patient) => ({
   id: patient._id.toString(),
+  patientId: patient.patientId || "",
   name: patient.name,
   email: patient.email,
   mobile: patient.mobile,
@@ -419,6 +420,22 @@ const populatePatientTreatmentStaff = (patient) =>
 
 const serializePatientWithTreatmentStaff = async (patient) =>
   serializePatient(await populatePatientTreatmentStaff(patient));
+
+const backfillMissingPatientIds = async () => {
+  const patients = await Patient.find({
+    $or: [{ patientId: { $exists: false } }, { patientId: "" }, { patientId: null }],
+  })
+    .setOptions({ includeArchived: true })
+    .sort({ createdAt: 1 });
+
+  for (const patient of patients) {
+    await patient.save();
+  }
+
+  if (patients.length) {
+    console.log(`Backfilled ${patients.length} patient ID(s).`);
+  }
+};
 
 const DEFAULT_ADMIN_CREATED_PATIENT_PASSWORD = "123456";
 
@@ -6958,6 +6975,7 @@ const startServer = async () => {
   try {
     await connectDB();
     await ensureDefaultAdmin();
+    await backfillMissingPatientIds();
     cleanupOldPatientNotifications().catch((error) => {
       console.log("Failed to clean notification history:", error.message);
     });

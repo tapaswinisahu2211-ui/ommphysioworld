@@ -60,6 +60,9 @@ const isMobileAppAuthRequest = (req) => {
 const createPatientAuthToken = (req, payload) =>
   createSessionToken(payload, isMobileAppAuthRequest(req) ? null : undefined);
 
+const createStaffAuthToken = (req, payload) =>
+  createSessionToken(payload, isMobileAppAuthRequest(req) ? null : undefined);
+
 const generateTemporaryPassword = () =>
   `OPW${Math.random().toString(36).slice(-4).toUpperCase()}${Date.now()
     .toString()
@@ -190,7 +193,7 @@ const adminLogin = async (req, res) => {
       await admin.save();
 
       return res.json({
-        token: createSessionToken({
+        token: createStaffAuthToken(req, {
           sub: admin._id.toString(),
           type: "staff",
           role: admin.role,
@@ -214,7 +217,7 @@ const adminLogin = async (req, res) => {
     await user.save();
 
     return res.json({
-      token: createSessionToken({
+      token: createStaffAuthToken(req, {
         sub: user._id.toString(),
         type: "staff",
         role: user.role,

@@ -779,7 +779,7 @@ export default function PatientProfile() {
   const summaryCards = [
     {
       label: "Patient ID",
-      value: `#${patient.id.slice(-6)}`,
+      value: patient.patientId || "Not assigned",
       icon: UserCircle2,
       tone: "bg-blue-50 text-blue-600",
     },

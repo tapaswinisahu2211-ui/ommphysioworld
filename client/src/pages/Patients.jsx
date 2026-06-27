@@ -106,7 +106,7 @@ export default function Patients() {
 
     const validationError = firstValidationError([
       !form.name.trim() ? "Patient name is required." : "",
-      validateEmailField(form.email),
+      validateEmailField(form.email, false),
       validatePhoneField(form.mobile),
     ]);
 
@@ -121,7 +121,7 @@ export default function Patients() {
     const duplicatePatient = patients.find(
       (patient) =>
         patient.id !== form.id &&
-        (cleanEmail(patient.email) === normalizedEmail ||
+        ((normalizedEmail && cleanEmail(patient.email) === normalizedEmail) ||
           cleanPhone(patient.mobile) === normalizedMobile)
     );
 
@@ -136,6 +136,15 @@ export default function Patients() {
     }
 
     try {
+      const patientPayload = {
+        name: form.name.trim(),
+        mobile: normalizedMobile,
+        address: form.address.trim(),
+      };
+      if (normalizedEmail) {
+        patientPayload.email = normalizedEmail;
+      }
+
       if (form.id) {
         await API.put(`/patients/${form.id}`, {
           name: form.name.trim(),
@@ -144,12 +153,7 @@ export default function Patients() {
           address: form.address.trim(),
         });
       } else {
-        await API.post("/patients", {
-          name: form.name.trim(),
-          email: normalizedEmail,
-          mobile: normalizedMobile,
-          address: form.address.trim(),
-        });
+        await API.post("/patients", patientPayload);
       }
 
       await loadPatients();
@@ -447,7 +451,7 @@ export default function Patients() {
                                 {patient.name}
                               </p>
                               <p className="text-sm text-slate-500">
-                                ID #{patient.id.slice(-6)}
+                                ID {patient.patientId || "Not assigned"}
                               </p>
                               {patient.address ? (
                                 <p className="mt-0.5 max-w-xs truncate text-xs text-slate-400">
@@ -458,7 +462,7 @@ export default function Patients() {
                           </div>
                         </td>
                         <td className="px-5 py-4 text-slate-600">
-                          {patient.email}
+                          {patient.email || "Not provided"}
                         </td>
                         <td className="px-5 py-4 text-slate-600">
                           {patient.mobile}
@@ -547,7 +551,6 @@ export default function Patients() {
                   className="input"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  required
                 />
 
                 <input

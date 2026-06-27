@@ -98,6 +98,50 @@ const requireStaffPermission = (moduleKey, action = "view") => async (req, res, 
   }
 };
 
+const requireStaffAnyPermission = (requirements = []) => async (req, res, next) => {
+  try {
+    if (req.authError) {
+      return res.status(401).json({ message: req.authError });
+    }
+
+    if (!req.auth || req.auth.type !== "staff") {
+      return res.status(401).json({ message: "Staff authentication is required." });
+    }
+
+    const user = await User.findById(String(req.auth.sub || "").trim());
+
+    if (!user) {
+      return res.status(401).json({ message: "Staff account not found." });
+    }
+
+    if (user.status === "Inactive") {
+      return res.status(403).json({ message: "This staff account is inactive." });
+    }
+
+    req.staffUser = user;
+
+    if (user.role === "Admin") {
+      return next();
+    }
+
+    const permissions = normalizePermissions(user.permissions || [], user.role);
+    const allowed = requirements.some(({ module: moduleKey, action = "view" }) => {
+      const permission = permissions.find((item) => item.module === moduleKey);
+      return Boolean(permission?.[action]);
+    });
+
+    if (!allowed) {
+      return res.status(403).json({
+        message: "You do not have permission to access this module.",
+      });
+    }
+
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const requireAdminAuth = (req, res, next) => {
   if (req.authError) {
     return res.status(401).json({ message: req.authError });
@@ -194,5 +238,6 @@ module.exports = {
   requirePatientOrStaffAuth,
   requirePatientRecordAccess,
   requireStaffAuth,
+  requireStaffAnyPermission,
   requireStaffPermission,
 };

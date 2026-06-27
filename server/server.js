@@ -16,6 +16,7 @@ const {
   requirePatientOrStaffAuth,
   requirePatientRecordAccess,
   requireStaffAuth,
+  requireStaffAnyPermission,
   requireStaffPermission,
 } = require("./middleware/auth");
 const { createRateLimiter, securityHeaders } = require("./middleware/security");
@@ -121,6 +122,33 @@ const hasChatPermission = (user) => {
 
   return (user.permissions || []).some(
     (permission) => permission.module === "chat" && Boolean(permission.view)
+  );
+};
+
+const hasAnyStaffDirectoryPermission = (user) => {
+  if (!user) {
+    return false;
+  }
+
+  if (user.role === "Admin") {
+    return true;
+  }
+
+  const allowedModules = new Set([
+    "staff",
+    "patients",
+    "treatment_tracker",
+    "treatment_plans",
+    "payments",
+    "reports",
+    "finance",
+    "payroll",
+  ]);
+  const permissions = normalizePermissions(user.permissions || [], user.role);
+  return permissions.some(
+    (permission) =>
+      allowedModules.has(permission.module) &&
+      (permission.view || permission.add || permission.edit)
   );
 };
 
@@ -437,6 +465,20 @@ const backfillMissingPatientIds = async () => {
   }
 };
 
+const dropObsoletePatientEmailIndex = async () => {
+  try {
+    const hasEmailIndex = await Patient.collection.indexExists("email_1");
+    if (!hasEmailIndex) {
+      return;
+    }
+
+    await Patient.collection.dropIndex("email_1");
+    console.log("Dropped obsolete patients.email unique index.");
+  } catch (error) {
+    console.log("Skipped obsolete patient email index cleanup:", error.message);
+  }
+};
+
 const DEFAULT_ADMIN_CREATED_PATIENT_PASSWORD = "123456";
 
 const getPatientIdentityConflict = async ({ email, mobile, excludePatientId = null }) => {
@@ -490,6 +532,10 @@ const getPatientIdentityConflict = async ({ email, mobile, excludePatientId = nu
 };
 
 const syncAdminCreatedPatientPortalAccount = async (patient) => {
+  if (!patient.email) {
+    return null;
+  }
+
   const existingUser = await PublicUser.findOne({ email: patient.email });
 
   if (existingUser) {
@@ -654,9 +700,13 @@ const parseDateValue = (value) => {
 };
 
 const getTodayKey = () => {
-  const now = new Date();
-  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-  return localDate.toISOString().slice(0, 10);
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return formatter.format(new Date());
 };
 
 const parseDateKey = (value) => {
@@ -3761,11 +3811,11 @@ app.post("/api/patients", requireStaffPermission("patients", "add"), async (req,
     const mobile = cleanPhone(req.body.mobile);
     const address = cleanText(req.body.address);
 
-    if (!name || !email || !mobile) {
-      return res.status(400).json({ message: "Name, email, and mobile are required." });
+    if (!name || !mobile) {
+      return res.status(400).json({ message: "Name and mobile are required." });
     }
 
-    if (!isValidEmail(email)) {
+    if (email && !isValidEmail(email)) {
       return res.status(400).json({ message: "Please enter a valid email address." });
     }
 
@@ -3823,7 +3873,7 @@ app.put("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
       });
     }
 
-    if (email !== undefined && !isValidEmail(email)) {
+    if (email !== undefined && email && !isValidEmail(email)) {
       return res.status(400).json({ message: "Please enter a valid email address." });
     }
 
@@ -3854,17 +3904,17 @@ app.put("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
 
     await patient.save();
 
-    await PublicUser.updateMany(
-      { patientId: patient._id },
-      {
-        $set: {
-          name: patient.name,
-          email: patient.email,
-          mobile: patient.mobile,
-          address: patient.address || "",
-        },
-      }
-    );
+    const portalAccountUpdate = {
+      name: patient.name,
+      mobile: patient.mobile,
+      address: patient.address || "",
+    };
+
+    if (patient.email) {
+      portalAccountUpdate.email = patient.email;
+    }
+
+    await PublicUser.updateMany({ patientId: patient._id }, { $set: portalAccountUpdate });
 
     res.json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
@@ -3951,9 +4001,14 @@ app.patch("/api/patients/:id/restore", requireStaffPermission("archived_patients
       return res.status(404).json({ message: "Archived patient not found." });
     }
 
+    const restoreIdentityFilters = [{ mobile: patient.mobile }];
+    if (patient.email) {
+      restoreIdentityFilters.push({ email: patient.email });
+    }
+
     const conflictingPatient = await Patient.findOne({
       _id: { $ne: patient._id },
-      $or: [{ email: patient.email }, { mobile: patient.mobile }],
+      $or: restoreIdentityFilters,
     });
 
     if (conflictingPatient) {
@@ -4328,7 +4383,14 @@ app.patch("/api/patients/:id/treatment-plans/:planId/session-days/:dayId", requi
   }
 });
 
-app.post("/api/patients/:id/treatment-plans/:planId/session-days", requireStaffPermission("treatment_plans", "edit"), async (req, res) => {
+app.post(
+  "/api/patients/:id/treatment-plans/:planId/session-days",
+  requireStaffAnyPermission([
+    { module: "treatment_plans", action: "edit" },
+    { module: "treatment_tracker", action: "add" },
+    { module: "treatment_tracker", action: "edit" },
+  ]),
+  async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
 
@@ -6261,8 +6323,17 @@ app.get("/api/therapy-resources/:id/download", requireStaffPermission("therapy",
   }
 });
 
-app.get("/api/users", requireStaffPermission("staff", "view"), async (req, res) => {
+app.get("/api/users", requireStaffAuth, async (req, res) => {
   try {
+    const requester = req.staffUser || (await User.findById(String(req.auth?.sub || "").trim()));
+    if (!requester || requester.status === "Inactive") {
+      return res.status(403).json({ message: "This staff account is inactive." });
+    }
+
+    if (!hasAnyStaffDirectoryPermission(requester)) {
+      return res.status(403).json({ message: "You do not have permission to access staff directory." });
+    }
+
     const users = await User.find().sort({ createdAt: -1 });
     res.json(users.map(serializeUser));
   } catch (error) {
@@ -6975,6 +7046,7 @@ const startServer = async () => {
   try {
     await connectDB();
     await ensureDefaultAdmin();
+    await dropObsoletePatientEmailIndex();
     await backfillMissingPatientIds();
     cleanupOldPatientNotifications().catch((error) => {
       console.log("Failed to clean notification history:", error.message);

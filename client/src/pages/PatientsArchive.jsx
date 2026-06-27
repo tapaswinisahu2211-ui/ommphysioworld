@@ -252,13 +252,13 @@ export default function PatientsArchive() {
                                 {patient.name}
                               </p>
                               <p className="text-sm text-slate-500">
-                                ID #{patient.id.slice(-6)}
+                                ID {patient.patientId || "Not assigned"}
                               </p>
                             </div>
                           </div>
                         </td>
                         <td className="px-5 py-4 text-slate-600">
-                          {patient.email}
+                          {patient.email || "Not provided"}
                         </td>
                         <td className="px-5 py-4 text-slate-600">
                           {patient.mobile}

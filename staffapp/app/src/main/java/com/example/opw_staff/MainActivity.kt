@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Patterns
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -473,6 +474,7 @@ private fun OpwLogoMark(
 @Composable
 private fun StaffAdminApp() {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val focusManager = LocalFocusManager.current
     val sessionStore = remember { StaffSessionStore(context.applicationContext) }
     val api = remember { StaffApiService() }
     val scope = rememberCoroutineScope()
@@ -500,6 +502,7 @@ private fun StaffAdminApp() {
     var apiTestLoading by remember { mutableStateOf(false) }
     var apiTestMessage by remember { mutableStateOf("") }
     var apiTestIsSuccess by remember { mutableStateOf(false) }
+    var lastBackPressAt by remember { mutableStateOf(0L) }
 
     fun showMessage(message: String) {
         scope.launch {
@@ -563,9 +566,19 @@ private fun StaffAdminApp() {
             }
             val isAdmin = resolvedAdmin.role == "Admin"
             fun canView(tab: AdminTab): Boolean = canOpenAdminTab(resolvedAdmin, tab)
+            val needsStaffDirectory =
+                canView(AdminTab.Team) ||
+                    canView(AdminTab.Patients) ||
+                    canView(AdminTab.Treatment) ||
+                    canView(AdminTab.Reports) ||
+                    canView(AdminTab.Finance) ||
+                    canView(AdminTab.Payroll) ||
+                    hasModulePermission(resolvedAdmin, "treatment_plans", "add") ||
+                    hasModulePermission(resolvedAdmin, "treatment_plans", "edit") ||
+                    hasModulePermission(resolvedAdmin, "payments", "add")
             val snapshot = AdminDashboardSnapshot(
                 admin = resolvedAdmin,
-                users = if (canView(AdminTab.Team)) loadOptional("staff", emptyList()) {
+                users = if (needsStaffDirectory) loadOptional("staff", emptyList()) {
                     api.getUsers(activeSession.token)
                 } else emptyList(),
                 applications = if (hasModulePermission(resolvedAdmin, "staff_applications")) loadOptional("applications", emptyList()) {
@@ -2108,6 +2121,21 @@ private fun StaffAdminApp() {
         }
     }
 
+    BackHandler(enabled = route == AppRoute.Dashboard) {
+        if (selectedTab != AdminTab.Overview) {
+            selectedTab = AdminTab.Overview
+            return@BackHandler
+        }
+
+        val now = System.currentTimeMillis()
+        if (now - lastBackPressAt < 1800) {
+            (context as? ComponentActivity)?.finish()
+        } else {
+            lastBackPressAt = now
+            showMessage("Press back again to exit.")
+        }
+    }
+
     Scaffold(
         containerColor = OpwMist,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -2115,7 +2143,17 @@ private fun StaffAdminApp() {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding)
+                .pointerInput(focusManager) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Final)
+                            if (event.type == PointerEventType.Release && event.changes.none { it.isConsumed }) {
+                                focusManager.clearFocus()
+                            }
+                        }
+                    }
+                },
         ) {
             when (route) {
                 AppRoute.Loading -> LoadingScreen()
@@ -2841,7 +2879,8 @@ private fun DashboardScreen(
                         onAppointmentRequestDecision = onPatientAppointmentRequestDecision,
                         onAppointmentStatusChange = onAppointmentStatusChange,
                         onTreatmentSessionEntryAdd = onTreatmentSessionEntryAdd,
-                        canEdit = canEditAdminTab(currentUser, AdminTab.Treatment),
+                        canEdit = canAddAdminTab(currentUser, AdminTab.Treatment) ||
+                            canEditAdminTab(currentUser, AdminTab.Treatment),
                     )
                     AdminTab.Mailbox -> MailboxTab(
                         items = state.mailboxItems,
@@ -4757,6 +4796,17 @@ private fun PatientsTab(
     val selectedPatient = patients.firstOrNull { it.text("id") == selectedPatientId }
     val editingPatient = patients.firstOrNull { it.text("id") == editingPatientId }
 
+    BackHandler(enabled = showPatientDialog || panel != PatientPanel.List) {
+        when {
+            showPatientDialog -> {
+                showPatientDialog = false
+                editingPatientId = ""
+            }
+            panel == PatientPanel.Detail -> panel = PatientPanel.List
+            panel == PatientPanel.Archive -> panel = PatientPanel.List
+        }
+    }
+
     if (showPatientDialog) {
         PatientFormDialog(
             patient = editingPatient,
@@ -5435,25 +5485,30 @@ private fun PatientFormDialog(
         val normalizedMobile = mobile.trim()
         val duplicatePatient = existingPatients.firstOrNull { existing ->
             existing.text("id") != currentPatientId &&
-                (existing.text("email").trim().lowercase() == normalizedEmail ||
+                ((normalizedEmail.isNotBlank() && existing.text("email").trim().lowercase() == normalizedEmail) ||
                     existing.text("mobile").trim() == normalizedMobile)
         }
 
         when {
             name.trim().length < 2 -> error = "Patient name must be at least 2 characters."
-            !Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() -> error = "Enter a valid email."
+            normalizedEmail.isNotBlank() && !Patterns.EMAIL_ADDRESS.matcher(normalizedEmail).matches() -> error = "Enter a valid email."
             !mobile.trim().matches(Regex("\\d{10}")) -> error = "Enter a valid 10-digit mobile."
             duplicatePatient != null && duplicatePatient.text("mobile").trim() == normalizedMobile ->
                 error = "A patient with this mobile number already exists."
             duplicatePatient != null -> error = "A patient with this email address already exists."
-            else -> onSave(
-                patient?.text("id")?.takeIf { it.isNotBlank() },
-                JSONObject()
+            else -> {
+                val payload = JSONObject()
                     .put("name", name.trim())
-                    .put("email", normalizedEmail)
                     .put("mobile", normalizedMobile)
-                    .put("address", address.trim()),
-            )
+                    .put("address", address.trim())
+                if (normalizedEmail.isNotBlank()) {
+                    payload.put("email", normalizedEmail)
+                }
+                onSave(
+                    patient?.text("id")?.takeIf { it.isNotBlank() },
+                    payload,
+                )
+            }
         }
     }
 
@@ -5553,7 +5608,7 @@ private fun PatientFormDialog(
                             },
                         )
                         SheetPatientField(
-                            label = "Email",
+                            label = "Email (optional)",
                             value = email,
                             onValueChange = {
                                 email = it
@@ -5696,12 +5751,6 @@ private fun SheetPickerField(
                     color = if (value.isBlank()) Color(0xFF94A3B8) else OpwInk,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = if (value.isBlank()) FontWeight.Normal else FontWeight.SemiBold,
-                )
-                Text(
-                    text = "Pick",
-                    color = Color(0xFF2D8A82),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.ExtraBold,
                 )
             }
         }
@@ -5950,6 +5999,14 @@ private fun PatientDetailScreen(
         request.text("id") !in linkedRequestIds && request.text("status", fallback = "pending") == "pending"
     }
 
+    BackHandler(enabled = true) {
+        if (selectedModule == PatientProfileModule.Overview) {
+            onBack()
+        } else {
+            selectedModuleName = PatientProfileModule.Overview.name
+        }
+    }
+
     if (showTreatmentDialog) {
         TreatmentPlanDialog(
             plan = treatmentPlans.firstOrNull { it.text("id") == editingPlanId },
@@ -6034,7 +6091,6 @@ private fun PatientDetailScreen(
                 )
 
                 PatientProfileModule.Appointments -> {
-                    SimpleScreenHeader(title = "Appointments", onBack = { selectedModuleName = PatientProfileModule.Overview.name })
                     PatientAppointmentsSection(
                         patientId = patientId,
                         activeAppointments = activeAppointments,
@@ -6048,7 +6104,6 @@ private fun PatientDetailScreen(
                 }
 
                 PatientProfileModule.Treatment -> {
-                    SimpleScreenHeader(title = "Treatment", onBack = { selectedModuleName = PatientProfileModule.Overview.name })
                     TreatmentPlansSection(
                         patientId = patientId,
                         plans = treatmentPlans,
@@ -6073,7 +6128,6 @@ private fun PatientDetailScreen(
                 }
 
                 PatientProfileModule.Payments -> {
-                    SimpleScreenHeader(title = "Payment", onBack = { selectedModuleName = PatientProfileModule.Overview.name })
                     PatientPaymentsSection(
                         patientId = patientId,
                         treatmentPlans = treatmentPlans,
@@ -6091,7 +6145,6 @@ private fun PatientDetailScreen(
                 }
 
                 PatientProfileModule.Condition -> {
-                    SimpleScreenHeader(title = "Clinical Notes", onBack = { selectedModuleName = PatientProfileModule.Overview.name })
                     ClinicalNotesSection(
                         patientId = patientId,
                         disease = patient.text("disease"),
@@ -6103,7 +6156,6 @@ private fun PatientDetailScreen(
                 }
 
                 PatientProfileModule.Therapy -> {
-                    SimpleScreenHeader(title = "Therapy", onBack = { selectedModuleName = PatientProfileModule.Overview.name })
                     TherapyRecommendationsSection(
                         patientId = patientId,
                         recommendations = therapyRecommendations,
@@ -6307,12 +6359,8 @@ private fun PatientProfileHeader(
             ) {
                 AccentOrb(accent = OpwBlue, label = patient.text("name", fallback = "P"))
                 Column(modifier = Modifier.weight(1f)) {
-                    val rawPatientId = patient.text("patientId", "id", fallback = "")
-                    val displayPatientId = rawPatientId.takeIf { it.isNotBlank() }
-                        ?.takeLast(6)
-                        ?.uppercase()
-                        ?.let { "#$it" }
-                        ?: "Not assigned"
+                    val displayPatientId = patient.text("patientId", fallback = "")
+                        .ifBlank { "Not assigned" }
                     Text(
                         text = patient.text("name", fallback = "Patient"),
                         style = MaterialTheme.typography.headlineSmall,
@@ -14025,7 +14073,7 @@ private fun statusColor(status: String): Color =
     }
 
 private fun todayDateKey(): String =
-    LocalDate.now().toString()
+    LocalDate.now(ZoneId.of("Asia/Kolkata")).toString()
 
 private fun allFinanceStartDateKey(): String = "2000-01-01"
 

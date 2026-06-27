@@ -21,6 +21,7 @@ const serializePublicUser = (user) => ({
   name: user.name,
   email: user.email,
   mobile: user.mobile,
+  address: user.address || "",
   createdFrom: user.createdFrom || "website",
   patientId: user.patientId ? user.patientId.toString() : "",
   createdAt: user.createdAt,
@@ -127,6 +128,7 @@ const findOrCreatePatientForPublicUser = async ({
   name,
   email,
   mobile,
+  address,
   createdFrom,
 }) => {
   const resolvedCreatedFrom = normalizeCreatedFrom(createdFrom, "website");
@@ -142,6 +144,11 @@ const findOrCreatePatientForPublicUser = async ({
 
     if (!existingPatient.mobile && mobile) {
       existingPatient.mobile = mobile;
+      shouldSave = true;
+    }
+
+    if (!existingPatient.address && address) {
+      existingPatient.address = address;
       shouldSave = true;
     }
 
@@ -161,6 +168,7 @@ const findOrCreatePatientForPublicUser = async ({
     name,
     email,
     mobile,
+    address,
     createdFrom: resolvedCreatedFrom,
     notes: `Created from ${formatCreatedFromLabel(resolvedCreatedFrom)} registration.`,
   });
@@ -224,6 +232,7 @@ const registerPublicUser = async (req, res) => {
     const name = cleanText(req.body.name);
     const email = cleanEmail(req.body.email);
     const mobile = cleanPhone(req.body.mobile);
+    const address = cleanText(req.body.address);
     const password = String(req.body.password || "");
     const createdFrom = normalizeCreatedFrom(req.body.createdFrom, "website");
 
@@ -263,6 +272,7 @@ const registerPublicUser = async (req, res) => {
       name,
       email,
       mobile,
+      address,
       passwordHash: hashPassword(password),
       createdFrom,
     });
@@ -270,6 +280,7 @@ const registerPublicUser = async (req, res) => {
       name,
       email,
       mobile,
+      address,
       createdFrom,
     });
 
@@ -482,6 +493,7 @@ const registerPublicUserWithWhatsAppOtp = async (req, res) => {
     const name = cleanText(req.body.name);
     const email = cleanEmail(req.body.email);
     const mobile = cleanPhone(req.body.mobile || tokenPayload.mobile);
+    const address = cleanText(req.body.address);
     const password = String(req.body.password || "");
     const createdFrom = normalizeCreatedFrom(req.body.createdFrom, "website");
 
@@ -525,6 +537,7 @@ const registerPublicUserWithWhatsAppOtp = async (req, res) => {
       name,
       email,
       mobile,
+      address,
       passwordHash: hashPassword(password),
       createdFrom,
     });
@@ -532,6 +545,7 @@ const registerPublicUserWithWhatsAppOtp = async (req, res) => {
       name,
       email,
       mobile,
+      address,
       createdFrom,
     });
 

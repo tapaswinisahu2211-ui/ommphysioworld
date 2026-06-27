@@ -40,13 +40,14 @@ class AppApiService(
         )
     }
 
-    suspend fun register(name: String, email: String, mobile: String, password: String): JsonMap {
+    suspend fun register(name: String, email: String, mobile: String, address: String, password: String): JsonMap {
         return postJson(
             "/auth/register",
             mapOf(
                 "name" to name,
                 "email" to email,
                 "mobile" to mobile,
+                "address" to address,
                 "password" to password,
                 "createdFrom" to "mobile_app",
             ),
@@ -85,6 +86,7 @@ class AppApiService(
         name: String,
         email: String,
         mobile: String,
+        address: String,
         password: String,
         verificationToken: String,
     ): JsonMap {
@@ -94,6 +96,7 @@ class AppApiService(
                 "name" to name,
                 "email" to email,
                 "mobile" to mobile,
+                "address" to address,
                 "password" to password,
                 "verificationToken" to verificationToken,
                 "clientType" to "mobile_app",
@@ -140,6 +143,7 @@ class AppApiService(
         patientId: String,
         name: String,
         mobile: String,
+        address: String,
         disease: String,
     ): JsonMap {
         return putJson(
@@ -147,6 +151,7 @@ class AppApiService(
             mapOf(
                 "name" to name,
                 "mobile" to mobile,
+                "address" to address,
                 "disease" to disease,
             ),
         )

@@ -146,6 +146,7 @@ export default function PatientProfile() {
     name: "",
     email: "",
     mobile: "",
+    address: "",
   });
   const [editBasic, setEditBasic] = useState(false);
   const [showClinicalNoteModal, setShowClinicalNoteModal] = useState(false);
@@ -243,6 +244,7 @@ export default function PatientProfile() {
         name: response.data.name,
         email: response.data.email,
         mobile: response.data.mobile,
+        address: response.data.address || "",
       });
       setError("");
     } catch (loadError) {
@@ -333,6 +335,7 @@ export default function PatientProfile() {
         name: form.name,
         email: form.email,
         mobile: form.mobile,
+        address: form.address,
       });
       setPatient(response.data);
       setForm((current) => ({ ...current, ...response.data }));
@@ -1038,6 +1041,11 @@ export default function PatientProfile() {
                     <Phone size={14} />
                     {patient.mobile}
                   </span>
+                  {patient.address ? (
+                    <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1">
+                      {patient.address}
+                    </span>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -2212,6 +2220,12 @@ export default function PatientProfile() {
                   placeholder="Mobile number"
                   value={form.mobile}
                   onChange={(e) => setForm({ ...form, mobile: e.target.value })}
+                />
+                <textarea
+                  className="input min-h-[96px] resize-none"
+                  placeholder="Address"
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
                 />
                 <button className="w-full rounded-xl bg-slate-900 px-4 py-3 font-medium text-white hover:bg-slate-800">
                   Save Changes

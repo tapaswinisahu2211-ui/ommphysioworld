@@ -25,6 +25,7 @@ export default function PatientAuthPage({ mode = "login" }) {
     name: "",
     email: "",
     mobile: "",
+    address: "",
     password: "",
   });
   const [submitting, setSubmitting] = useState(false);
@@ -36,6 +37,7 @@ export default function PatientAuthPage({ mode = "login" }) {
   const [whatsappPassword, setWhatsappPassword] = useState("");
   const [whatsappName, setWhatsappName] = useState("");
   const [whatsappEmail, setWhatsappEmail] = useState("");
+  const [whatsappAddress, setWhatsappAddress] = useState("");
   const [whatsappConfirmPassword, setWhatsappConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -147,6 +149,7 @@ export default function PatientAuthPage({ mode = "login" }) {
               name: form.name.trim(),
               email: cleanEmail(form.email),
               mobile: cleanPhone(form.mobile),
+              address: form.address.trim(),
               password: form.password,
               createdFrom: "website",
             }
@@ -277,6 +280,7 @@ export default function PatientAuthPage({ mode = "login" }) {
         name: whatsappName.trim(),
         email: cleanEmail(whatsappEmail),
         mobile: cleanPhone(whatsappMobile),
+        address: whatsappAddress.trim(),
         password: whatsappPassword,
         verificationToken: whatsappVerificationToken,
         createdFrom: "website",
@@ -386,6 +390,14 @@ export default function PatientAuthPage({ mode = "login" }) {
                     }
                     required
                   />
+                  <textarea
+                    className="input min-h-[96px] resize-none rounded-2xl border-slate-200 bg-slate-50"
+                    placeholder="Address"
+                    value={form.address}
+                    onChange={(event) =>
+                      setForm({ ...form, address: event.target.value })
+                    }
+                  />
                 </>
               ) : null}
               <input
@@ -494,6 +506,12 @@ export default function PatientAuthPage({ mode = "login" }) {
                         placeholder="Email Address"
                         value={whatsappEmail}
                         onChange={(event) => setWhatsappEmail(event.target.value)}
+                      />
+                      <textarea
+                        className="input min-h-[88px] resize-none rounded-2xl border-emerald-200 bg-white"
+                        placeholder="Address"
+                        value={whatsappAddress}
+                        onChange={(event) => setWhatsappAddress(event.target.value)}
                       />
                       <input
                         type="password"

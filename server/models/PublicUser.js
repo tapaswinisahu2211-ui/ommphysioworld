@@ -21,6 +21,7 @@ const publicUserSchema = new mongoose.Schema({
     unique: true,
   },
   mobile: { type: String, required: true, trim: true },
+  address: { type: String, default: "", trim: true },
   passwordHash: { type: String, required: true },
   createdFrom: {
     type: String,

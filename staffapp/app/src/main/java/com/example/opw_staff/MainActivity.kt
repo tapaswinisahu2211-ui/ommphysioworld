@@ -4868,7 +4868,7 @@ private fun PatientListScreen(
             patients
         } else {
             patients.filter { patient ->
-                listOf("name", "email", "mobile", "disease").any { field ->
+                listOf("name", "email", "mobile", "address", "disease").any { field ->
                     patient.text(field).lowercase().contains(keyword)
                 }
             }
@@ -5003,8 +5003,8 @@ private fun CompactPatientCard(
     val thresholdPx = with(LocalDensity.current) { 92.dp.toPx() }
     val patientName = patient.text("name", fallback = "this patient")
     val listPlan = patientListTreatmentPlan(patient)
-    val assignedStaff = assignedStaffText(listPlan, users)
     val visitLocation = patientVisitLocationText(patient, listPlan)
+    val doneDays = doneSessionCount(listPlan)
 
     if (confirmArchive) {
         ConfirmArchiveDialog(
@@ -5094,18 +5094,21 @@ private fun CompactPatientCard(
                             color = OpwSlate,
                             style = MaterialTheme.typography.bodySmall,
                         )
-                        Text(
-                            text = "Staff: $assignedStaff",
-                            color = Color(0xFF64748B),
-                            style = MaterialTheme.typography.bodySmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        StatusChip(
-                            label = visitLocation,
-                            background = OpwAqua.copy(alpha = 0.12f),
-                            foreground = OpwAqua,
-                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            StatusChip(
+                                label = visitLocation,
+                                background = OpwAqua.copy(alpha = 0.12f),
+                                foreground = OpwAqua,
+                            )
+                            StatusChip(
+                                label = "$doneDays days done",
+                                background = Color(0xFFDCFCE7),
+                                foreground = OpwSuccess,
+                            )
+                        }
                     }
                 }
             }
@@ -5121,8 +5124,8 @@ private fun OngoingTreatmentPatientCard(
     onView: () -> Unit,
 ) {
     val shape = RoundedCornerShape(24.dp)
-    val assignedStaff = assignedStaffText(plan, users)
     val visitLocation = patientVisitLocationText(patient, plan)
+    val doneDays = doneSessionCount(plan)
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -5175,18 +5178,21 @@ private fun OngoingTreatmentPatientCard(
                         color = OpwSlate,
                         style = MaterialTheme.typography.bodySmall,
                     )
-                    Text(
-                        text = "Staff: $assignedStaff",
-                        color = Color(0xFF64748B),
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    StatusChip(
-                        label = visitLocation,
-                        background = OpwAqua.copy(alpha = 0.12f),
-                        foreground = OpwAqua,
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        StatusChip(
+                            label = visitLocation,
+                            background = OpwAqua.copy(alpha = 0.12f),
+                            foreground = OpwAqua,
+                        )
+                        StatusChip(
+                            label = "$doneDays days done",
+                            background = Color(0xFFDCFCE7),
+                            foreground = OpwSuccess,
+                        )
+                    }
                     Text(
                         text = treatmentTypeText(plan),
                         color = OpwInk,
@@ -5409,6 +5415,9 @@ private fun PatientFormDialog(
     var mobile by rememberSaveable(patient?.text("id").orEmpty()) {
         mutableStateOf(patient?.text("mobile").orEmpty())
     }
+    var address by rememberSaveable(patient?.text("id").orEmpty()) {
+        mutableStateOf(patient?.text("address").orEmpty())
+    }
     var error by rememberSaveable { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
 
@@ -5416,6 +5425,7 @@ private fun PatientFormDialog(
         name = patient?.text("name").orEmpty()
         email = patient?.text("email").orEmpty()
         mobile = patient?.text("mobile").orEmpty()
+        address = patient?.text("address").orEmpty()
         error = ""
     }
 
@@ -5441,7 +5451,8 @@ private fun PatientFormDialog(
                 JSONObject()
                     .put("name", name.trim())
                     .put("email", normalizedEmail)
-                    .put("mobile", normalizedMobile),
+                    .put("mobile", normalizedMobile)
+                    .put("address", address.trim()),
             )
         }
     }
@@ -5558,6 +5569,15 @@ private fun PatientFormDialog(
                                 error = ""
                             },
                             keyboardType = KeyboardType.Phone,
+                        )
+                        SheetPatientField(
+                            label = "Address",
+                            value = address,
+                            onValueChange = {
+                                address = it
+                                error = ""
+                            },
+                            minLines = 3,
                         )
                     }
 
@@ -6486,7 +6506,7 @@ private fun TreatmentPlanCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    listOf("clinic" to "🏥", "home" to "⌂").forEach { (mode, icon) ->
+                    listOf("clinic" to "🩺", "home" to "⌂").forEach { (mode, icon) ->
                         val selected = treatmentMode == mode
                         Surface(
                             shape = CircleShape,
@@ -6621,10 +6641,12 @@ private fun TreatmentPlanCard(
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                             )
-                            Text(
-                                day.text("doneByStaffName", fallback = "Staff not added"),
-                                color = OpwSuccess,
-                            )
+                            day.text("doneByStaffName").takeIf { it.isNotBlank() }?.let { staffName ->
+                                Text(
+                                    staffName,
+                                    color = OpwSuccess,
+                                )
+                            }
                         }
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -13695,24 +13717,17 @@ private fun treatmentTypeText(plan: JSONObject): String =
         plan.text("treatmentTypes", "service", fallback = "Treatment session")
     }
 
+private fun doneSessionCount(plan: JSONObject?): Int =
+    plan?.array("sessionDays")
+        ?.toJsonObjects()
+        ?.count { day ->
+            day.text("date").isNotBlank() && day.text("status", fallback = "done") == "done"
+        }
+        ?: 0
+
 private fun patientListTreatmentPlan(patient: JSONObject): JSONObject? =
     ongoingTreatmentPlan(patient)
         ?: patient.array("treatmentPlans").toJsonObjects().firstOrNull()
-
-private fun assignedStaffText(plan: JSONObject?, users: List<StaffUser>): String {
-    if (plan == null) return "Staff not assigned"
-
-    val populatedName = plan.text("assignedStaffName", "staffName", "assignedStaff", fallback = "")
-    if (populatedName.isNotBlank()) return populatedName
-
-    val staffIdValue = plan.opt("assignedStaffId")
-    val staffId = when (staffIdValue) {
-        is JSONObject -> staffIdValue.text("id", "_id", fallback = "")
-        else -> staffIdValue?.toString().orEmpty()
-    }.trim()
-
-    return users.firstOrNull { it.id == staffId }?.name ?: "Staff not assigned"
-}
 
 private fun patientVisitLocationText(patient: JSONObject, plan: JSONObject?): String {
     val planLocation = if (plan != null) {

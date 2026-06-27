@@ -262,6 +262,7 @@ const serializePatient = (patient) => ({
   name: patient.name,
   email: patient.email,
   mobile: patient.mobile,
+  address: patient.address || "",
   createdFrom: patient.createdFrom || "admin",
   disease: patient.disease || "",
   notes: patient.notes || "",
@@ -478,6 +479,7 @@ const syncAdminCreatedPatientPortalAccount = async (patient) => {
     existingUser.name = patient.name;
     existingUser.email = patient.email;
     existingUser.mobile = patient.mobile;
+    existingUser.address = patient.address || "";
     existingUser.createdFrom = "admin";
     existingUser.patientId = patient._id;
     existingUser.passwordHash = hashPassword(DEFAULT_ADMIN_CREATED_PATIENT_PASSWORD);
@@ -489,6 +491,7 @@ const syncAdminCreatedPatientPortalAccount = async (patient) => {
     name: patient.name,
     email: patient.email,
     mobile: patient.mobile,
+    address: patient.address || "",
     passwordHash: hashPassword(DEFAULT_ADMIN_CREATED_PATIENT_PASSWORD),
     createdFrom: "admin",
     patientId: patient._id,
@@ -3729,6 +3732,7 @@ app.post("/api/patients", requireStaffPermission("patients", "add"), async (req,
     const name = cleanText(req.body.name);
     const email = cleanEmail(req.body.email);
     const mobile = cleanPhone(req.body.mobile);
+    const address = cleanText(req.body.address);
 
     if (!name || !email || !mobile) {
       return res.status(400).json({ message: "Name, email, and mobile are required." });
@@ -3754,6 +3758,7 @@ app.post("/api/patients", requireStaffPermission("patients", "add"), async (req,
       name,
       email,
       mobile,
+      address,
       createdFrom: "admin",
       notes: "Created from Admin registration.",
     });
@@ -3772,6 +3777,7 @@ app.put("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
     const name = req.body.name !== undefined ? cleanText(req.body.name) : undefined;
     const email = req.body.email !== undefined ? cleanEmail(req.body.email) : undefined;
     const mobile = req.body.mobile !== undefined ? cleanPhone(req.body.mobile) : undefined;
+    const address = req.body.address !== undefined ? cleanText(req.body.address) : undefined;
     const disease = req.body.disease !== undefined ? cleanText(req.body.disease) : undefined;
     const notes = req.body.notes !== undefined ? cleanText(req.body.notes) : undefined;
     const patient = await Patient.findById(req.params.id);
@@ -3815,6 +3821,7 @@ app.put("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
     }
     patient.name = name ?? patient.name;
     patient.mobile = mobile ?? patient.mobile;
+    patient.address = address ?? patient.address;
     patient.disease = disease ?? patient.disease;
     patient.notes = notes ?? patient.notes;
 
@@ -3827,6 +3834,7 @@ app.put("/api/patients/:id", requirePatientRecordAccess, async (req, res) => {
           name: patient.name,
           email: patient.email,
           mobile: patient.mobile,
+          address: patient.address || "",
         },
       }
     );

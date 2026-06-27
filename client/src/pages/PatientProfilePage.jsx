@@ -6,6 +6,7 @@ import {
   Phone,
   Save,
   ShieldCheck,
+  MapPin,
   UserCircle2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -41,6 +42,7 @@ export default function PatientProfilePage() {
     name: "",
     email: "",
     mobile: "",
+    address: "",
     disease: "",
   });
   const [passwordForm, setPasswordForm] = useState({
@@ -91,6 +93,7 @@ export default function PatientProfilePage() {
         name: response.data.name || "",
         email: response.data.email || "",
         mobile: response.data.mobile || "",
+        address: response.data.address || "",
         disease: response.data.disease || "",
       });
       setStatus({ type: "", message: "" });
@@ -143,6 +146,7 @@ export default function PatientProfilePage() {
       const response = await API.put(`/patients/${patientId}`, {
         name: form.name.trim(),
         mobile: cleanPhone(form.mobile),
+        address: form.address.trim(),
         disease: form.disease.trim(),
       });
       setPatient(response.data);
@@ -151,6 +155,7 @@ export default function PatientProfilePage() {
         name: response.data.name,
         email: response.data.email,
         mobile: response.data.mobile,
+        address: response.data.address || "",
         createdFrom: response.data.createdFrom,
       };
       savePatientUser(nextUser);
@@ -340,6 +345,7 @@ export default function PatientProfilePage() {
               <div className="mt-5 grid gap-2 text-sm">
                 <InfoPill icon={Mail} label={patient?.email || "Email not added"} />
                 <InfoPill icon={Phone} label={patient?.mobile || "Mobile not added"} />
+                <InfoPill icon={MapPin} label={patient?.address || "Address not added"} />
                 <InfoPill
                   icon={CalendarDays}
                   label={`Joined ${formatDate(patient?.createdAt)}`}
@@ -382,6 +388,12 @@ export default function PatientProfilePage() {
                     value={form.mobile}
                     onChange={(event) => setForm({ ...form, mobile: event.target.value })}
                     required
+                  />
+                  <textarea
+                    className="input min-h-[96px] resize-none rounded-2xl border-slate-200 bg-slate-50 md:col-span-2"
+                    placeholder="Address"
+                    value={form.address}
+                    onChange={(event) => setForm({ ...form, address: event.target.value })}
                   />
                   <input
                     className="input rounded-2xl border-slate-200 bg-slate-50"

@@ -734,6 +734,7 @@ private fun LoginScreen(
     var whatsappVerificationToken by rememberSaveable { mutableStateOf("") }
     var whatsappName by rememberSaveable { mutableStateOf("") }
     var whatsappEmail by rememberSaveable { mutableStateOf("") }
+    var whatsappAddress by rememberSaveable { mutableStateOf("") }
     var whatsappPassword by rememberSaveable { mutableStateOf("") }
     var whatsappConfirmPassword by rememberSaveable { mutableStateOf("") }
     var whatsappSubmitting by remember { mutableStateOf(false) }
@@ -882,6 +883,7 @@ private fun LoginScreen(
                             whatsappStep = "mobile"
                             whatsappOtp = ""
                             whatsappVerificationToken = ""
+                            whatsappAddress = ""
                             whatsappPassword = ""
                             whatsappConfirmPassword = ""
                         },
@@ -900,6 +902,7 @@ private fun LoginScreen(
                                     whatsappStep = "mobile"
                                     whatsappOtp = ""
                                     whatsappVerificationToken = ""
+                                    whatsappAddress = ""
                                     whatsappPassword = ""
                                     whatsappConfirmPassword = ""
                                 },
@@ -938,6 +941,15 @@ private fun LoginScreen(
                                     placeholder = "Email Address",
                                     keyboardType = KeyboardType.Email,
                                     imeAction = ImeAction.Next,
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                ModernRoundedField(
+                                    value = whatsappAddress,
+                                    onValueChange = { whatsappAddress = it },
+                                    placeholder = "Address",
+                                    keyboardType = KeyboardType.Text,
+                                    imeAction = ImeAction.Next,
+                                    minLines = 3,
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
                                 ModernRoundedField(
@@ -1003,6 +1015,7 @@ private fun LoginScreen(
                                                             name = whatsappName.trim(),
                                                             email = whatsappEmail.trim().lowercase(),
                                                             mobile = FormValidators.cleanPhone(whatsappMobile),
+                                                            address = whatsappAddress.trim(),
                                                             password = whatsappPassword,
                                                             verificationToken = whatsappVerificationToken,
                                                         )
@@ -1061,6 +1074,7 @@ private fun RegisterScreen(
     var name by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
+    var address by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var confirmPassword by rememberSaveable { mutableStateOf("") }
     var passwordHidden by rememberSaveable { mutableStateOf(true) }
@@ -1091,6 +1105,15 @@ private fun RegisterScreen(
                 ModernRoundedField(value = email, onValueChange = { email = it }, placeholder = "Enter your Email", keyboardType = KeyboardType.Email, imeAction = ImeAction.Next)
                 Spacer(modifier = Modifier.height(16.dp))
                 ModernRoundedField(value = phone, onValueChange = { phone = it }, placeholder = "Enter your Phone Number", keyboardType = KeyboardType.Phone, imeAction = ImeAction.Next)
+                Spacer(modifier = Modifier.height(16.dp))
+                ModernRoundedField(
+                    value = address,
+                    onValueChange = { address = it },
+                    placeholder = "Enter your Address",
+                    keyboardType = KeyboardType.Text,
+                    imeAction = ImeAction.Next,
+                    minLines = 3,
+                )
                 Spacer(modifier = Modifier.height(16.dp))
                 ModernRoundedField(
                     value = password,
@@ -1143,6 +1166,7 @@ private fun RegisterScreen(
                                     name = name.trim(),
                                     email = email.trim().lowercase(),
                                     mobile = FormValidators.cleanPhone(phone),
+                                    address = address.trim(),
                                     password = password,
                                 )
                                 val user = response["user"].asJsonMap()
@@ -1777,6 +1801,7 @@ private fun ProfileScreen(
     var name by rememberSaveable { mutableStateOf(user.string("name")) }
     var email by rememberSaveable { mutableStateOf(user.string("email")) }
     var mobile by rememberSaveable { mutableStateOf(user.string("mobile")) }
+    var address by rememberSaveable { mutableStateOf(user.string("address")) }
     var disease by rememberSaveable { mutableStateOf("") }
     var oldPassword by rememberSaveable { mutableStateOf("") }
     var newPassword by rememberSaveable { mutableStateOf("") }
@@ -1818,6 +1843,7 @@ private fun ProfileScreen(
                 name = response.string("name")
                 email = response.string("email")
                 mobile = response.string("mobile")
+                address = response.string("address")
                 disease = response.string("disease")
             } catch (error: ApiException) {
                 onAuthError(error)
@@ -1907,6 +1933,8 @@ private fun ProfileScreen(
                 Spacer(modifier = Modifier.height(12.dp))
                 AppTextField(value = mobile, onValueChange = { mobile = it }, label = "Mobile Number", keyboardType = KeyboardType.Phone)
                 Spacer(modifier = Modifier.height(12.dp))
+                AppTextField(value = address, onValueChange = { address = it }, label = "Address", minLines = 3)
+                Spacer(modifier = Modifier.height(12.dp))
                 AppTextField(value = disease, onValueChange = { disease = it }, label = "Disease / Concern")
                 Spacer(modifier = Modifier.height(12.dp))
                 LabelValue(label = "Created From", value = createdFromLabel(patient.stringOrNull("createdFrom") ?: user.string("createdFrom")))
@@ -1931,6 +1959,7 @@ private fun ProfileScreen(
                                     patientId = patientId,
                                     name = name.trim(),
                                     mobile = FormValidators.cleanPhone(mobile),
+                                    address = address.trim(),
                                     disease = disease.trim(),
                                 )
                                 patient = updated
@@ -1938,6 +1967,7 @@ private fun ProfileScreen(
                                     "name" to updated["name"],
                                     "email" to updated["email"],
                                     "mobile" to updated["mobile"],
+                                    "address" to updated["address"],
                                     "patientId" to updated["id"],
                                     "createdFrom" to updated["createdFrom"],
                                 )
@@ -3942,6 +3972,7 @@ private fun ModernRoundedField(
     placeholder: String,
     keyboardType: KeyboardType,
     imeAction: ImeAction,
+    minLines: Int = 1,
     hidden: Boolean = false,
     onToggleHidden: (() -> Unit)? = null,
 ) {
@@ -3955,7 +3986,8 @@ private fun ModernRoundedField(
                 color = Color(0xFF64748B),
             )
         },
-        singleLine = true,
+        singleLine = minLines == 1,
+        minLines = minLines,
         shape = CircleShape,
         keyboardOptions = KeyboardOptions(
             keyboardType = keyboardType,

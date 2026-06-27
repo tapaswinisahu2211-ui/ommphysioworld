@@ -39,6 +39,9 @@ const getTreatmentTypeText = (plan) =>
     ? plan.treatmentTypes.join(", ")
     : "Treatment session";
 
+const getDoneSessionCount = (plan) =>
+  (plan?.sessionDays || []).filter((day) => day?.date && (day.status || "done") === "done").length;
+
 export default function Patients() {
   const PAGE_SIZE = 10;
   const navigate = useNavigate();
@@ -55,6 +58,7 @@ export default function Patients() {
     name: "",
     email: "",
     mobile: "",
+    address: "",
   });
   const [showModal, setShowModal] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
@@ -78,7 +82,7 @@ export default function Patients() {
   }, []);
 
   const resetForm = () => {
-    setForm({ id: null, name: "", email: "", mobile: "" });
+    setForm({ id: null, name: "", email: "", mobile: "", address: "" });
   };
 
   const closeModal = () => {
@@ -137,12 +141,14 @@ export default function Patients() {
           name: form.name.trim(),
           email: normalizedEmail,
           mobile: normalizedMobile,
+          address: form.address.trim(),
         });
       } else {
         await API.post("/patients", {
           name: form.name.trim(),
           email: normalizedEmail,
           mobile: normalizedMobile,
+          address: form.address.trim(),
         });
       }
 
@@ -179,7 +185,8 @@ export default function Patients() {
       return (
         patient.name.toLowerCase().includes(keyword) ||
         patient.email.toLowerCase().includes(keyword) ||
-        patient.mobile.includes(keyword)
+        patient.mobile.includes(keyword) ||
+        (patient.address || "").toLowerCase().includes(keyword)
       );
     });
   }, [patients, search]);
@@ -354,6 +361,9 @@ export default function Patients() {
                       <p className="mt-3 line-clamp-2 text-sm font-medium text-slate-800">
                         {getTreatmentTypeText(patient.ongoingPlan)}
                       </p>
+                      <p className="mt-1 text-xs font-semibold text-emerald-700">
+                        {getDoneSessionCount(patient.ongoingPlan)} days done
+                      </p>
                       <p className="mt-1 text-xs text-slate-500">
                         {formatTreatmentPeriod(patient.ongoingPlan)}
                       </p>
@@ -439,6 +449,11 @@ export default function Patients() {
                               <p className="text-sm text-slate-500">
                                 ID #{patient.id.slice(-6)}
                               </p>
+                              {patient.address ? (
+                                <p className="mt-0.5 max-w-xs truncate text-xs text-slate-400">
+                                  {patient.address}
+                                </p>
+                              ) : null}
                             </div>
                           </div>
                         </td>
@@ -542,6 +557,13 @@ export default function Patients() {
                   value={form.mobile}
                   onChange={(e) => setForm({ ...form, mobile: e.target.value })}
                   required
+                />
+
+                <textarea
+                  placeholder="Address"
+                  className="input min-h-[96px] resize-none"
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
                 />
 
                 <div className="flex justify-end gap-3 pt-2">

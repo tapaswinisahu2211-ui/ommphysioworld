@@ -366,6 +366,27 @@ const serializePatient = (patient) => ({
       downloadUrl: `/patients/${patient._id.toString()}/clinical-notes/${entry._id.toString()}/documents/${document._id.toString()}`,
     })),
   })),
+  clinicalDocuments: [
+    ...(patient.clinicalDocuments || []).map((document) => ({
+      id: document._id.toString(),
+      name: document.name || "",
+      mimeType: document.mimeType || "application/octet-stream",
+      uploadedAt: document.uploadedAt,
+      downloadUrl: `/patients/${patient._id.toString()}/clinical-documents/${document._id.toString()}`,
+      source: "clinical_document",
+    })),
+    ...(patient.clinicalNotes || []).flatMap((entry) =>
+      (entry.documents || []).map((document) => ({
+        id: document._id.toString(),
+        name: document.name || "",
+        mimeType: document.mimeType || "application/octet-stream",
+        uploadedAt: document.uploadedAt,
+        downloadUrl: `/patients/${patient._id.toString()}/clinical-notes/${entry._id.toString()}/documents/${document._id.toString()}`,
+        source: "legacy_note_document",
+        noteTitle: entry.title || "",
+      }))
+    ),
+  ],
   therapyRecommendations: (patient.therapyRecommendations || []).map((entry) => ({
     id: entry._id.toString(),
     serviceId: entry.serviceId ? entry.serviceId.toString() : "",
@@ -4715,25 +4736,34 @@ app.post("/api/patients/:id/clinical-notes", requireClinicalNoteCreateAccess, up
       return res.status(404).json({ message: "Patient not found." });
     }
 
-    if (!title && !note && !(req.files || []).length) {
-      return res.status(400).json({ message: "Add a title, note, or at least one document." });
+    if (!title || !note) {
+      return res.status(400).json({ message: "Choose a clinical note type and add note details." });
     }
 
-    patient.clinicalNotes.unshift({
-      title,
-      note,
-      addedByType,
-      addedByLabel,
-      documents: (req.files || []).map((file) => ({
-        name: file.originalname,
-        mimeType: file.mimetype,
-        data: file.buffer,
-      })),
-    });
+    const existingNote = (patient.clinicalNotes || []).find(
+      (entry) => String(entry.title || "").trim().toLowerCase() === title.toLowerCase()
+    );
+
+    if (existingNote) {
+      existingNote.note = note;
+      existingNote.addedByType = addedByType;
+      existingNote.addedByLabel = addedByLabel;
+      existingNote.createdAt = new Date();
+    } else {
+      patient.clinicalNotes.unshift({
+        title,
+        note,
+        addedByType,
+        addedByLabel,
+        documents: [],
+      });
+    }
 
     await patient.save();
     if (addedByType === "opw") {
-      const createdNote = patient.clinicalNotes[0];
+      const createdNote = (patient.clinicalNotes || []).find(
+        (entry) => String(entry.title || "").trim().toLowerCase() === title.toLowerCase()
+      );
       await createPatientNotification({
         patient,
         category: "clinical_note",
@@ -4743,13 +4773,41 @@ app.post("/api/patients/:id/clinical-notes", requireClinicalNoteCreateAccess, up
         entityType: "clinical_note",
         entityId: createdNote?._id?.toString() || "",
         actionUrl: "therapy",
-        metadata: { documentCount: (req.files || []).length },
+        metadata: { documentCount: 0 },
       });
     }
     res.status(201).json(await serializePatientWithTreatmentStaff(patient));
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to save clinical note." });
+  }
+});
+
+app.post("/api/patients/:id/clinical-documents", requireClinicalNoteCreateAccess, upload.array("documents", 10), async (req, res) => {
+  try {
+    const patient = await Patient.findById(req.params.id);
+
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found." });
+    }
+
+    if (!(req.files || []).length) {
+      return res.status(400).json({ message: "Please upload at least one clinical document." });
+    }
+
+    patient.clinicalDocuments.push(
+      ...(req.files || []).map((file) => ({
+        name: file.originalname,
+        mimeType: file.mimetype,
+        data: file.buffer,
+      }))
+    );
+
+    await patient.save();
+    res.status(201).json(await serializePatientWithTreatmentStaff(patient));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to upload clinical document." });
   }
 });
 
@@ -4772,6 +4830,16 @@ app.put("/api/patients/:id/clinical-notes/:noteId", requireStaffPermission("clin
 
     if (!title && !note) {
       return res.status(400).json({ message: "Add a title or note details." });
+    }
+
+    const duplicateNote = (patient.clinicalNotes || []).find(
+      (entry) =>
+        entry._id.toString() !== req.params.noteId &&
+        String(entry.title || "").trim().toLowerCase() === title.toLowerCase()
+    );
+
+    if (duplicateNote) {
+      return res.status(409).json({ message: "This clinical note type already exists. Please edit the existing note." });
     }
 
     clinicalNote.title = title;
@@ -4804,6 +4872,52 @@ app.delete("/api/patients/:id/clinical-notes/:noteId", requireStaffPermission("c
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to delete clinical note." });
+  }
+});
+
+app.get("/api/patients/:id/clinical-documents/:documentId", requirePatientRecordAccess, async (req, res) => {
+  try {
+    const patient = await Patient.findById(req.params.id);
+
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found." });
+    }
+
+    const document = patient.clinicalDocuments.id(req.params.documentId);
+
+    if (!document) {
+      return res.status(404).json({ message: "Clinical document not found." });
+    }
+
+    res.setHeader("Content-Type", document.mimeType || "application/octet-stream");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="${encodeURIComponent(document.name)}"`
+    );
+    res.send(document.data);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to load clinical document." });
+  }
+});
+
+app.delete("/api/patients/:id/clinical-documents/:documentId", requireStaffPermission("clinical_notes", "edit"), async (req, res) => {
+  try {
+    const patient = await Patient.findById(req.params.id);
+
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found." });
+    }
+
+    patient.clinicalDocuments = (patient.clinicalDocuments || []).filter(
+      (document) => document._id.toString() !== req.params.documentId
+    );
+
+    await patient.save();
+    res.json(await serializePatientWithTreatmentStaff(patient));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to delete clinical document." });
   }
 });
 
@@ -6964,8 +7078,20 @@ app.post("/api/users/:id/joining-documents", requireStaffPermission("staff", "ad
   }
 });
 
-app.post("/api/users/:id/profile-image", requireStaffPermission("staff", "edit"), upload.single("image"), async (req, res) => {
+app.post("/api/users/:id/profile-image", requireStaffAuth, upload.single("image"), async (req, res) => {
   try {
+    const requester = req.staffUser || (await User.findById(String(req.auth?.sub || "").trim()));
+    const isSelf = String(req.params.id || "") === String(req.auth?.sub || "");
+    const canEditStaff =
+      requester?.role === "Admin" ||
+      normalizePermissions(requester?.permissions || [], requester?.role).some(
+        (permission) => permission.module === "staff" && permission.edit
+      );
+
+    if (!isSelf && !canEditStaff) {
+      return res.status(403).json({ message: "You do not have permission to update this staff profile." });
+    }
+
     const user = await User.findById(req.params.id);
 
     if (!user) {
@@ -7055,9 +7181,46 @@ app.get("/api/admin/profile", requireStaffAuth, async (req, res) => {
   }
 });
 
+app.put("/api/admin/profile", requireStaffAuth, async (req, res) => {
+  try {
+    const { name, email, mobile } = req.body;
+    const user = await User.findById(String(req.auth?.sub || "").trim());
+
+    if (!user) {
+      return res.status(404).json({ message: "Staff profile not found." });
+    }
+
+    const cleanName = name !== undefined ? cleanText(name) : undefined;
+    const cleanUserEmail = email !== undefined ? cleanEmail(email) : undefined;
+    const cleanUserMobile = mobile !== undefined ? cleanPhone(mobile) : undefined;
+
+    if (cleanName !== undefined && !cleanName) {
+      return res.status(400).json({ message: "Name is required." });
+    }
+
+    if (cleanUserEmail !== undefined && !isValidEmail(cleanUserEmail)) {
+      return res.status(400).json({ message: "Please enter a valid email address." });
+    }
+
+    if (cleanUserMobile !== undefined && !isValidPhone(cleanUserMobile)) {
+      return res.status(400).json({ message: "Please enter a valid 10-digit mobile number." });
+    }
+
+    user.name = cleanName ?? user.name;
+    user.email = cleanUserEmail ?? user.email;
+    user.mobile = cleanUserMobile ?? user.mobile;
+    await user.save();
+
+    res.json(serializeUser(user));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to update profile." });
+  }
+});
+
 app.put("/api/admin/profile/:id", requireAdminAuth, async (req, res) => {
   try {
-    const { name, email, mobile, chatEnabled, workType } = req.body;
+    const { name, email, mobile } = req.body;
     const admin = await User.findById(req.params.id);
 
     if (!admin) {
@@ -7083,8 +7246,6 @@ app.put("/api/admin/profile/:id", requireAdminAuth, async (req, res) => {
     admin.name = cleanName ?? admin.name;
     admin.email = cleanAdminEmail ?? admin.email;
     admin.mobile = cleanAdminMobile ?? admin.mobile;
-    admin.chatEnabled = chatEnabled !== undefined ? Boolean(chatEnabled) : admin.chatEnabled;
-    admin.workType = workType !== undefined ? String(workType || "").trim() : admin.workType;
     admin.role = "Admin";
     await admin.save();
 

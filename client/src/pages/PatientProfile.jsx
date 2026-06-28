@@ -150,6 +150,7 @@ export default function PatientProfile() {
   });
   const [editBasic, setEditBasic] = useState(false);
   const [showClinicalNoteModal, setShowClinicalNoteModal] = useState(false);
+  const [showClinicalDocumentModal, setShowClinicalDocumentModal] = useState(false);
   const [showTherapyModal, setShowTherapyModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showTreatmentModal, setShowTreatmentModal] = useState(false);
@@ -168,8 +169,8 @@ export default function PatientProfile() {
   const [clinicalNoteForm, setClinicalNoteForm] = useState({
     title: CLINICAL_NOTE_TYPES[0],
     note: "",
-    documents: [],
   });
+  const [clinicalDocumentFiles, setClinicalDocumentFiles] = useState([]);
   const [therapyForm, setTherapyForm] = useState({
     serviceId: "",
     note: "",
@@ -290,6 +291,7 @@ export default function PatientProfile() {
   const closeDrawer = () => {
     setEditBasic(false);
     setShowClinicalNoteModal(false);
+    setShowClinicalDocumentModal(false);
     setShowTherapyModal(false);
     setShowAppointmentModal(false);
     setShowTreatmentModal(false);
@@ -306,8 +308,8 @@ export default function PatientProfile() {
     setClinicalNoteForm({
       title: CLINICAL_NOTE_TYPES[0],
       note: "",
-      documents: [],
     });
+    setClinicalDocumentFiles([]);
     setTherapyForm({
       serviceId: "",
       note: "",
@@ -355,9 +357,6 @@ export default function PatientProfile() {
       payload.append("note", clinicalNoteForm.note);
       payload.append("addedByType", "opw");
       payload.append("addedByLabel", "OPW");
-      clinicalNoteForm.documents.forEach((file) => {
-        payload.append("documents", file);
-      });
 
       const response = await API.post(`/patients/${id}/clinical-notes`, payload, {
         headers: {
@@ -369,12 +368,50 @@ export default function PatientProfile() {
       setClinicalNoteForm({
         title: CLINICAL_NOTE_TYPES[0],
         note: "",
-        documents: [],
       });
       setShowClinicalNoteModal(false);
       setError("");
     } catch (saveError) {
       setError(saveError.response?.data?.message || "Failed to save clinical note.");
+    }
+  };
+
+  const handleAddClinicalDocuments = async (e) => {
+    e.preventDefault();
+
+    if (!clinicalDocumentFiles.length) {
+      setError("Please choose at least one image or PDF document.");
+      return;
+    }
+
+    try {
+      const payload = new FormData();
+      clinicalDocumentFiles.forEach((file) => {
+        payload.append("documents", file);
+      });
+
+      const response = await API.post(`/patients/${id}/clinical-documents`, payload, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      setPatient(response.data);
+      setClinicalDocumentFiles([]);
+      setShowClinicalDocumentModal(false);
+      setError("");
+    } catch (saveError) {
+      setError(saveError.response?.data?.message || "Failed to upload clinical documents.");
+    }
+  };
+
+  const handleDeleteClinicalDocument = async (documentId) => {
+    try {
+      const response = await API.delete(`/patients/${id}/clinical-documents/${documentId}`);
+      setPatient(response.data);
+      setError("");
+    } catch (deleteError) {
+      setError(deleteError.response?.data?.message || "Failed to delete clinical document.");
     }
   };
 
@@ -1660,16 +1697,25 @@ export default function PatientProfile() {
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">Clinical Notes</h2>
                   <p className="text-sm text-slate-500">
-                    Add multiple notes with multiple images or PDF documents.
+                    Keep each clinical note type once, then update it as treatment progresses.
                   </p>
                 </div>
-                <button
-                  onClick={() => setShowClinicalNoteModal(true)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-                >
-                  <Plus size={15} />
-                  Add Note
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setShowClinicalDocumentModal(true)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    <Files size={15} />
+                    Add Document
+                  </button>
+                  <button
+                    onClick={() => setShowClinicalNoteModal(true)}
+                    className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                  >
+                    <Plus size={15} />
+                    Add Note
+                  </button>
+                </div>
               </div>
 
               {patient.disease ? (
@@ -1726,33 +1772,54 @@ export default function PatientProfile() {
                         {entry.note || "No note text added."}
                       </p>
 
-                      <div className="mt-2">
-                        {entry.documents?.length ? (
-                          <div className="flex flex-wrap gap-2">
-                            {entry.documents.map((document) => {
-                              const isImage = document.mimeType?.startsWith("image/");
-                              return (
-                                <a
-                                  key={document.id}
-                                  href={`${API.defaults.baseURL}${document.downloadUrl}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-white"
-                                >
-                                  {isImage ? <Image size={14} /> : <Download size={14} />}
-                                  {document.name}
-                                </a>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-slate-400">
-                            No documents uploaded for this note.
-                          </p>
-                        )}
-                      </div>
                     </div>
                   ))
+                )}
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold text-slate-900">Clinical Documents</h3>
+                    <p className="text-xs text-slate-500">Images and PDF files saved separately.</p>
+                  </div>
+                </div>
+                {patient.clinicalDocuments?.length ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {patient.clinicalDocuments.map((document) => {
+                      const isImage = document.mimeType?.startsWith("image/");
+                      const canDeleteDocument = document.source !== "legacy_note_document";
+                      return (
+                        <div
+                          key={`${document.source}-${document.id}`}
+                          className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2"
+                        >
+                          <a
+                            href={`${API.defaults.baseURL}${document.downloadUrl}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex min-w-0 items-center gap-2 text-sm font-medium text-slate-700 hover:text-blue-700"
+                          >
+                            {isImage ? <Image size={15} /> : <Download size={15} />}
+                            <span className="truncate">{document.name}</span>
+                          </a>
+                          {canDeleteDocument ? (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteClinicalDocument(document.id)}
+                              className="shrink-0 rounded-lg p-1.5 text-rose-500 hover:bg-rose-50"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-5 text-center text-sm text-slate-500">
+                    No clinical documents uploaded yet.
+                  </p>
                 )}
               </div>
             </section>
@@ -2150,7 +2217,7 @@ export default function PatientProfile() {
         </div>
       </div>
 
-      {[editBasic, showClinicalNoteModal, showTherapyModal, showAppointmentModal, showTreatmentModal].some(Boolean) && (
+      {[editBasic, showClinicalNoteModal, showClinicalDocumentModal, showTherapyModal, showAppointmentModal, showTreatmentModal].some(Boolean) && (
         <div
           className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/50 px-4 py-6 backdrop-blur-sm"
           onClick={closeDrawer}
@@ -2176,6 +2243,7 @@ export default function PatientProfile() {
                 <h3 className={`text-2xl font-semibold ${showTreatmentModal ? "text-white" : "text-slate-900"}`}>
                   {editBasic && "Edit Patient"}
                   {showClinicalNoteModal && "Clinical Notes"}
+                  {showClinicalDocumentModal && "Clinical Documents"}
                   {showTherapyModal && "Recommended Therapy"}
                   {showAppointmentModal && "Add Appointment"}
                   {showTreatmentModal && (editingPlanId ? "Edit Session" : "Session Start")}
@@ -2315,6 +2383,14 @@ export default function PatientProfile() {
                     }))
                   }
                 />
+                <button className="w-full rounded-xl bg-slate-900 px-4 py-3 font-medium text-white hover:bg-slate-800">
+                  Save Note
+                </button>
+              </form>
+            )}
+
+            {showClinicalDocumentModal && (
+              <form onSubmit={handleAddClinicalDocuments} className="space-y-4">
                 <div className="rounded-2xl border border-dashed border-slate-300 p-4">
                   <label className="block text-sm font-medium text-slate-700">
                     Upload images or PDF files
@@ -2324,16 +2400,11 @@ export default function PatientProfile() {
                     accept="image/*,.pdf,application/pdf"
                     multiple
                     className="mt-3 block w-full text-sm text-slate-600"
-                    onChange={(e) =>
-                      setClinicalNoteForm((current) => ({
-                        ...current,
-                        documents: Array.from(e.target.files || []),
-                      }))
-                    }
+                    onChange={(e) => setClinicalDocumentFiles(Array.from(e.target.files || []))}
                   />
-                  {clinicalNoteForm.documents.length ? (
+                  {clinicalDocumentFiles.length ? (
                     <div className="mt-3 space-y-2">
-                      {clinicalNoteForm.documents.map((file) => (
+                      {clinicalDocumentFiles.map((file) => (
                         <p key={`${file.name}-${file.size}`} className="text-sm text-slate-500">
                           {file.name}
                         </p>
@@ -2342,7 +2413,7 @@ export default function PatientProfile() {
                   ) : null}
                 </div>
                 <button className="w-full rounded-xl bg-slate-900 px-4 py-3 font-medium text-white hover:bg-slate-800">
-                  Save Note
+                  Save Documents
                 </button>
               </form>
             )}

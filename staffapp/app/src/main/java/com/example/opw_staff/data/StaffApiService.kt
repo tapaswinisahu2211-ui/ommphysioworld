@@ -43,6 +43,37 @@ class StaffApiService(
             JSONObject(request("GET", "/admin/profile", token = token)).toStaffUser()
         }
 
+    suspend fun updateMyProfile(token: String, name: String, email: String, mobile: String): StaffUser =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("name", name.trim())
+                .put("email", email.trim())
+                .put("mobile", mobile.trim())
+            JSONObject(request("PUT", "/admin/profile", token = token, body = body)).toStaffUser()
+        }
+
+    suspend fun uploadProfileImage(
+        token: String,
+        userId: String,
+        fileName: String,
+        mimeType: String,
+        fileBytes: ByteArray,
+    ): StaffUser =
+        withContext(Dispatchers.IO) {
+            JSONObject(
+                requestMultipart(
+                    method = "POST",
+                    path = "/users/$userId/profile-image",
+                    token = token,
+                    fields = emptyMap(),
+                    fileField = "image",
+                    fileName = fileName,
+                    mimeType = mimeType,
+                    fileBytes = fileBytes,
+                ),
+            ).toStaffUser()
+        }
+
     suspend fun getUsers(token: String): List<StaffUser> =
         withContext(Dispatchers.IO) {
             val response = JSONArray(request("GET", "/users", token = token))
@@ -215,9 +246,6 @@ class StaffApiService(
         patientId: String,
         title: String,
         note: String,
-        documentName: String?,
-        documentMimeType: String?,
-        documentBytes: ByteArray?,
     ): JSONObject =
         withContext(Dispatchers.IO) {
             JSONObject(
@@ -231,7 +259,29 @@ class StaffApiService(
                         "addedByType" to "opw",
                         "addedByLabel" to "OPW",
                     ),
-                    fileField = if (documentBytes != null) "documents" else null,
+                    fileField = null,
+                    fileName = null,
+                    mimeType = null,
+                    fileBytes = null,
+                ),
+            )
+        }
+
+    suspend fun addClinicalDocument(
+        token: String,
+        patientId: String,
+        documentName: String,
+        documentMimeType: String,
+        documentBytes: ByteArray,
+    ): JSONObject =
+        withContext(Dispatchers.IO) {
+            JSONObject(
+                requestMultipart(
+                    method = "POST",
+                    path = "/patients/$patientId/clinical-documents",
+                    token = token,
+                    fields = emptyMap(),
+                    fileField = "documents",
                     fileName = documentName,
                     mimeType = documentMimeType,
                     fileBytes = documentBytes,
@@ -250,6 +300,11 @@ class StaffApiService(
     suspend fun deleteClinicalNote(token: String, patientId: String, noteId: String): JSONObject =
         withContext(Dispatchers.IO) {
             JSONObject(request("DELETE", "/patients/$patientId/clinical-notes/$noteId", token = token))
+        }
+
+    suspend fun deleteClinicalDocument(token: String, patientId: String, documentId: String): JSONObject =
+        withContext(Dispatchers.IO) {
+            JSONObject(request("DELETE", "/patients/$patientId/clinical-documents/$documentId", token = token))
         }
 
     suspend fun saveTherapyRecommendation(

@@ -1678,7 +1678,7 @@ private fun DashboardScreen(
                                 )
                                 TextButton(
                                     onClick = {
-                                        context.openUrl("https://ommphysioworld.com")
+                                        context.openUrl("http://ommphysioworld.com/")
                                         scope.launch { drawerState.close() }
                                     },
                                     modifier = Modifier.fillMaxWidth(),

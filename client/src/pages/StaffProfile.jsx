@@ -142,10 +142,16 @@ export default function StaffProfile() {
     setSaving(true);
 
     try {
-      const response = await API.put(`/users/${profileId}`, {
-        ...form,
-        permissions,
-      });
+      const response = isSelfProfile
+        ? await API.put("/admin/profile", {
+            name: form.name,
+            email: form.email,
+            mobile: form.mobile,
+          })
+        : await API.put(`/users/${profileId}`, {
+            ...form,
+            permissions,
+          });
       setStaff(response.data);
       setPermissions(response.data.permissions || []);
       setJoiningDocuments(response.data.joiningDocuments || []);
@@ -329,23 +335,37 @@ export default function StaffProfile() {
             <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
               <h2 className="text-xl font-semibold text-slate-900">Basic Details</h2>
               <p className="mt-1 text-sm text-slate-500">
-                View your staff account details.
+                Edit your name, email, and mobile number.
               </p>
 
-              <div className="mt-6 grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Name</p>
-                  <p className="mt-2 font-medium text-slate-900">{staff.name}</p>
-                </div>
-                <div className="rounded-2xl bg-slate-50 p-4">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Email</p>
-                  <p className="mt-2 font-medium text-slate-900">{staff.email}</p>
-                </div>
-                <div className="rounded-2xl bg-slate-50 p-4 md:col-span-2">
-                  <p className="text-xs uppercase tracking-wide text-slate-400">Phone</p>
-                  <p className="mt-2 font-medium text-slate-900">{staff.mobile}</p>
-                </div>
-              </div>
+              <form onSubmit={handleSave} className="mt-6 space-y-4">
+                <input
+                  className="input"
+                  placeholder="Name"
+                  value={form.name}
+                  onChange={(e) => setForm((current) => ({ ...current, name: e.target.value }))}
+                />
+                <input
+                  className="input"
+                  placeholder="Email"
+                  value={form.email}
+                  onChange={(e) => setForm((current) => ({ ...current, email: e.target.value }))}
+                />
+                <input
+                  className="input"
+                  placeholder="Mobile"
+                  value={form.mobile}
+                  onChange={(e) => setForm((current) => ({ ...current, mobile: e.target.value }))}
+                />
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+                >
+                  <Save size={16} />
+                  {saving ? "Saving..." : "Save Profile"}
+                </button>
+              </form>
             </section>
           </div>
         </div>
@@ -437,7 +457,11 @@ export default function StaffProfile() {
             <form id="staff-profile-form" onSubmit={handleSave} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-5">
               <h2 className="text-xl font-semibold text-slate-900">Staff Details</h2>
-              <p className="text-sm text-slate-500">Update basic contact information and role.</p>
+              <p className="text-sm text-slate-500">
+                {isSelfProfile
+                  ? "Update basic contact information."
+                  : "Update basic contact information and role."}
+              </p>
             </div>
 
             <div className="space-y-4">
@@ -462,19 +486,21 @@ export default function StaffProfile() {
                 disabled={!canEditStaff}
                 onChange={(e) => setForm((current) => ({ ...current, mobile: e.target.value }))}
               />
-              <select
-                className="input"
-                value={form.workType}
-                disabled={!canEditStaff}
-                onChange={(e) => setForm((current) => ({ ...current, workType: e.target.value }))}
-              >
-                <option value="">Select work type</option>
-                {STAFF_TYPE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
+              {!isSelfProfile ? (
+                <select
+                  className="input"
+                  value={form.workType}
+                  disabled={!canEditStaff}
+                  onChange={(e) => setForm((current) => ({ ...current, workType: e.target.value }))}
+                >
+                  <option value="">Select work type</option>
+                  {STAFF_TYPE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
               {canManageSalary ? (
                 <input
                   className="input"
@@ -506,17 +532,19 @@ export default function StaffProfile() {
                 <option>Active</option>
                 <option>Inactive</option>
               </select>
-              <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={Boolean(form.chatEnabled)}
-                  disabled={!canEditStaff}
-                  onChange={(e) =>
-                    setForm((current) => ({ ...current, chatEnabled: e.target.checked }))
-                  }
-                />
-                Enable website chat for this staff
-              </label>
+              {!isSelfProfile ? (
+                <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(form.chatEnabled)}
+                    disabled={!canEditStaff}
+                    onChange={(e) =>
+                      setForm((current) => ({ ...current, chatEnabled: e.target.checked }))
+                    }
+                  />
+                  Enable website chat for this staff
+                </label>
+              ) : null}
               <input
                 type="date"
                 className="input"

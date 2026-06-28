@@ -1,6 +1,7 @@
 package com.example.opw_staff
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Patterns
@@ -1280,26 +1281,44 @@ private fun StaffAdminApp() {
         }
     }
 
-    fun saveClinicalNote(patientId: String, noteId: String?, title: String, note: String, document: PickedUploadFile?) {
+    fun saveClinicalNote(patientId: String, noteId: String?, title: String, note: String) {
         val activeSession = session ?: return
         if (patientId.isBlank()) return
         scope.launch {
             try {
                 val updated = if (noteId.isNullOrBlank()) {
-                    api.addClinicalNote(
-                        activeSession.token,
-                        patientId,
-                        title,
-                        note,
-                        document?.name,
-                        document?.mimeType,
-                        document?.bytes,
-                    )
+                    api.addClinicalNote(activeSession.token, patientId, title, note)
                 } else {
                     api.updateClinicalNote(activeSession.token, patientId, noteId, title, note)
                 }
                 applyUpdatedPatient(updated)
                 showMessage(if (noteId.isNullOrBlank()) "Clinical note added." else "Clinical note updated.")
+            } catch (error: ApiException) {
+                if (error.statusCode == 401 || error.statusCode == 403) {
+                    clearToLogin("Your session ended. Please log in again.")
+                } else {
+                    showMessage(error.message)
+                }
+            } catch (error: Exception) {
+                showMessage(networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error))
+            }
+        }
+    }
+
+    fun saveClinicalDocument(patientId: String, document: PickedUploadFile) {
+        val activeSession = session ?: return
+        if (patientId.isBlank()) return
+        scope.launch {
+            try {
+                val updated = api.addClinicalDocument(
+                    activeSession.token,
+                    patientId,
+                    document.name,
+                    document.mimeType,
+                    document.bytes,
+                )
+                applyUpdatedPatient(updated)
+                showMessage("Clinical document uploaded.")
             } catch (error: ApiException) {
                 if (error.statusCode == 401 || error.statusCode == 403) {
                     clearToLogin("Your session ended. Please log in again.")
@@ -1320,6 +1339,26 @@ private fun StaffAdminApp() {
                 val updated = api.deleteClinicalNote(activeSession.token, patientId, noteId)
                 applyUpdatedPatient(updated)
                 showMessage("Clinical note deleted.")
+            } catch (error: ApiException) {
+                if (error.statusCode == 401 || error.statusCode == 403) {
+                    clearToLogin("Your session ended. Please log in again.")
+                } else {
+                    showMessage(error.message)
+                }
+            } catch (error: Exception) {
+                showMessage(networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error))
+            }
+        }
+    }
+
+    fun deleteClinicalDocument(patientId: String, documentId: String) {
+        val activeSession = session ?: return
+        if (patientId.isBlank() || documentId.isBlank()) return
+        scope.launch {
+            try {
+                val updated = api.deleteClinicalDocument(activeSession.token, patientId, documentId)
+                applyUpdatedPatient(updated)
+                showMessage("Clinical document deleted.")
             } catch (error: ApiException) {
                 if (error.statusCode == 401 || error.statusCode == 403) {
                     clearToLogin("Your session ended. Please log in again.")
@@ -2058,6 +2097,72 @@ private fun StaffAdminApp() {
         }
     }
 
+    fun saveOwnProfile(user: StaffUser, form: StaffFormState) {
+        val activeSession = session ?: return
+        val validationError = validateCreateStaffForm(form, requirePassword = false)
+        if (validationError != null) {
+            createError = validationError
+            return
+        }
+
+        createLoading = true
+        createError = ""
+        scope.launch {
+            try {
+                val saved = api.updateMyProfile(activeSession.token, form.name, form.email, form.mobile)
+                dashboardState = dashboardState.copy(
+                    admin = saved,
+                    users = dashboardState.users.map { current -> if (current.id == saved.id) saved else current },
+                )
+                val updatedSession = activeSession.copy(user = saved)
+                session = updatedSession
+                sessionStore.saveSession(updatedSession)
+                showMessage("Profile updated.")
+            } catch (error: ApiException) {
+                if (error.statusCode == 401 || error.statusCode == 403) {
+                    clearToLogin("Your session ended. Please log in again.")
+                } else {
+                    createError = error.message
+                }
+            } catch (error: Exception) {
+                createError = networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error)
+            } finally {
+                createLoading = false
+            }
+        }
+    }
+
+    fun uploadOwnProfileImage(user: StaffUser, photo: PickedUploadFile) {
+        val activeSession = session ?: return
+        scope.launch {
+            try {
+                val saved = api.uploadProfileImage(
+                    activeSession.token,
+                    user.id,
+                    photo.name,
+                    photo.mimeType,
+                    photo.bytes,
+                )
+                dashboardState = dashboardState.copy(
+                    admin = saved,
+                    users = dashboardState.users.map { current -> if (current.id == saved.id) saved else current },
+                )
+                val updatedSession = activeSession.copy(user = saved)
+                session = updatedSession
+                sessionStore.saveSession(updatedSession)
+                showMessage("Profile picture updated.")
+            } catch (error: ApiException) {
+                if (error.statusCode == 401 || error.statusCode == 403) {
+                    clearToLogin("Your session ended. Please log in again.")
+                } else {
+                    showMessage(error.message)
+                }
+            } catch (error: Exception) {
+                showMessage(networkErrorMessage(StaffApiService.DEFAULT_BASE_URL, error))
+            }
+        }
+    }
+
     fun deleteStaffMember(user: StaffUser) {
         val activeSession = session ?: return
         if (user.id.isBlank()) return
@@ -2299,7 +2404,9 @@ private fun StaffAdminApp() {
                     onTreatmentPaymentAdd = ::addTreatmentPayment,
                     onTreatmentPlanDelete = ::deleteTreatmentPlan,
                     onClinicalNoteSave = ::saveClinicalNote,
+                    onClinicalDocumentSave = ::saveClinicalDocument,
                     onClinicalNoteDelete = ::deleteClinicalNote,
+                    onClinicalDocumentDelete = ::deleteClinicalDocument,
                     onTherapyRecommendationSave = ::saveTherapyRecommendation,
                     onTherapyRecommendationDelete = ::deleteTherapyRecommendation,
                     onPatientAppointmentAdd = ::addPatientAppointment,
@@ -2329,6 +2436,8 @@ private fun StaffAdminApp() {
                             creationMessage = ""
                         }
                     },
+                    onProfileSave = ::saveOwnProfile,
+                    onProfileImageUpload = ::uploadOwnProfileImage,
                     onStaffSave = ::saveStaffMember,
                     onStaffStatusChange = ::updateStaffMemberStatus,
                     onStaffDelete = ::deleteStaffMember,
@@ -2511,8 +2620,10 @@ private fun DashboardScreen(
     onTreatmentSessionEntryDelete: (String, String, String) -> Unit,
     onTreatmentPaymentAdd: (String, String, Double, String, String) -> Unit,
     onTreatmentPlanDelete: (String, String) -> Unit,
-    onClinicalNoteSave: (String, String?, String, String, PickedUploadFile?) -> Unit,
+    onClinicalNoteSave: (String, String?, String, String) -> Unit,
+    onClinicalDocumentSave: (String, PickedUploadFile) -> Unit,
     onClinicalNoteDelete: (String, String) -> Unit,
+    onClinicalDocumentDelete: (String, String) -> Unit,
     onTherapyRecommendationSave: (String, String, String, List<String>) -> Unit,
     onTherapyRecommendationDelete: (String, String) -> Unit,
     onPatientAppointmentAdd: (String, String, String, String) -> Unit,
@@ -2536,6 +2647,8 @@ private fun DashboardScreen(
     onMarketingReferralAdd: (JSONObject, JSONObject) -> Unit,
     onMarketingReferralDelete: (JSONObject, JSONObject) -> Unit,
     onFormChange: (StaffFormState) -> Unit,
+    onProfileSave: (StaffUser, StaffFormState) -> Unit,
+    onProfileImageUpload: (StaffUser, PickedUploadFile) -> Unit,
     onStaffSave: (String?, StaffFormState) -> Unit,
     onStaffStatusChange: (StaffUser, String) -> Unit,
     onStaffDelete: (StaffUser) -> Unit,
@@ -2546,6 +2659,7 @@ private fun DashboardScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val currentUser = state.admin ?: session?.user
+    val context = LocalContext.current
     val isAdmin = currentUser?.role == "Admin"
     val visibleTabs = AdminTab.entries.filter { tab ->
         tab !in listOf(AdminTab.Appointments, AdminTab.Create, AdminTab.Profile) &&
@@ -2753,14 +2867,21 @@ private fun DashboardScreen(
                             },
                         )
                         Spacer(modifier = Modifier.height(22.dp))
-                        Text(
-                            text = "Check our website",
+                        TextButton(
+                            onClick = {
+                                openExternalUrl(context, "http://ommphysioworld.com/")
+                                scope.launch { drawerState.close() }
+                            },
                             modifier = Modifier.fillMaxWidth(),
-                            color = OpwBlue,
-                            fontWeight = FontWeight.Black,
-                            style = MaterialTheme.typography.titleMedium,
-                            textAlign = TextAlign.Center,
-                        )
+                        ) {
+                            Text(
+                                text = "Check our website",
+                                color = OpwBlue,
+                                fontWeight = FontWeight.Black,
+                                style = MaterialTheme.typography.titleMedium,
+                                textAlign = TextAlign.Center,
+                            )
+                        }
                     }
                 }
             }
@@ -2850,7 +2971,9 @@ private fun DashboardScreen(
                                 onTreatmentPaymentAdd = onTreatmentPaymentAdd,
                                 onTreatmentPlanDelete = onTreatmentPlanDelete,
                                 onClinicalNoteSave = onClinicalNoteSave,
+                                onClinicalDocumentSave = onClinicalDocumentSave,
                                 onClinicalNoteDelete = onClinicalNoteDelete,
+                                onClinicalDocumentDelete = onClinicalDocumentDelete,
                                 onTherapyRecommendationSave = onTherapyRecommendationSave,
                                 onTherapyRecommendationDelete = onTherapyRecommendationDelete,
                                 onPatientAppointmentAdd = onPatientAppointmentAdd,
@@ -3054,7 +3177,8 @@ private fun DashboardScreen(
                         token = session?.token,
                         error = formError,
                         loading = formLoading,
-                        onSave = { user, draft -> onStaffSave(user.id, draft) },
+                        onSave = onProfileSave,
+                        onUploadImage = onProfileImageUpload,
                     )
                     }
                         }
@@ -4793,8 +4917,10 @@ private fun PatientsTab(
     onTreatmentSessionEntryDelete: (String, String, String) -> Unit,
     onTreatmentPaymentAdd: (String, String, Double, String, String) -> Unit,
     onTreatmentPlanDelete: (String, String) -> Unit,
-    onClinicalNoteSave: (String, String?, String, String, PickedUploadFile?) -> Unit,
+    onClinicalNoteSave: (String, String?, String, String) -> Unit,
+    onClinicalDocumentSave: (String, PickedUploadFile) -> Unit,
     onClinicalNoteDelete: (String, String) -> Unit,
+    onClinicalDocumentDelete: (String, String) -> Unit,
     onTherapyRecommendationSave: (String, String, String, List<String>) -> Unit,
     onTherapyRecommendationDelete: (String, String) -> Unit,
     onPatientAppointmentAdd: (String, String, String, String) -> Unit,
@@ -4899,7 +5025,9 @@ private fun PatientsTab(
                     onTreatmentPaymentAdd = onTreatmentPaymentAdd,
                     onTreatmentPlanDelete = onTreatmentPlanDelete,
                     onClinicalNoteSave = onClinicalNoteSave,
+                    onClinicalDocumentSave = onClinicalDocumentSave,
                     onClinicalNoteDelete = onClinicalNoteDelete,
+                    onClinicalDocumentDelete = onClinicalDocumentDelete,
                     onTherapyRecommendationSave = onTherapyRecommendationSave,
                     onTherapyRecommendationDelete = onTherapyRecommendationDelete,
                     onPatientAppointmentAdd = onPatientAppointmentAdd,
@@ -5974,8 +6102,10 @@ private fun PatientDetailScreen(
     onTreatmentSessionEntryDelete: (String, String, String) -> Unit,
     onTreatmentPaymentAdd: (String, String, Double, String, String) -> Unit,
     onTreatmentPlanDelete: (String, String) -> Unit,
-    onClinicalNoteSave: (String, String?, String, String, PickedUploadFile?) -> Unit,
+    onClinicalNoteSave: (String, String?, String, String) -> Unit,
+    onClinicalDocumentSave: (String, PickedUploadFile) -> Unit,
     onClinicalNoteDelete: (String, String) -> Unit,
+    onClinicalDocumentDelete: (String, String) -> Unit,
     onTherapyRecommendationSave: (String, String, String, List<String>) -> Unit,
     onTherapyRecommendationDelete: (String, String) -> Unit,
     onPatientAppointmentAdd: (String, String, String, String) -> Unit,
@@ -5998,6 +6128,7 @@ private fun PatientDetailScreen(
     val treatmentPlans = patient.array("treatmentPlans").toJsonObjects()
     val activeTreatmentCount = treatmentPlans.count { it.text("status", fallback = "active") == "active" }
     val clinicalNotes = patient.array("clinicalNotes").toJsonObjects()
+    val clinicalDocuments = patient.array("clinicalDocuments").toJsonObjects()
     val therapyRecommendations = patient.array("therapyRecommendations").toJsonObjects()
     val appointments = patient.array("appointments").toJsonObjects()
     val directPayments = patient.array("payments").toJsonObjects()
@@ -6042,8 +6173,8 @@ private fun PatientDetailScreen(
                 showNoteDialog = false
                 editingNoteId = ""
             },
-            onSave = { title, note, document ->
-                onClinicalNoteSave(patientId, editingNoteId.takeIf { it.isNotBlank() }, title, note, document)
+            onSave = { title, note ->
+                onClinicalNoteSave(patientId, editingNoteId.takeIf { it.isNotBlank() }, title, note)
                 showNoteDialog = false
                 editingNoteId = ""
             },
@@ -6168,15 +6299,18 @@ private fun PatientDetailScreen(
                         disease = patient.text("disease"),
                         notes = patient.text("notes"),
                         clinicalNotes = clinicalNotes,
+                        clinicalDocuments = clinicalDocuments,
                         onAdd = if (canAddClinicalNote) { {
                             editingNoteId = ""
                             showNoteDialog = true
                         } } else null,
+                        onAddDocument = if (canAddClinicalNote) onClinicalDocumentSave else null,
                         onEdit = if (canEditClinicalNote) { { note ->
                             editingNoteId = note.text("id")
                             showNoteDialog = true
                         } } else null,
                         onDelete = if (canEditClinicalNote) onClinicalNoteDelete else null,
+                        onDeleteDocument = if (canEditClinicalNote) onClinicalDocumentDelete else null,
                     )
                 }
 
@@ -7544,10 +7678,27 @@ private fun ClinicalNotesSection(
     disease: String,
     notes: String,
     clinicalNotes: List<JSONObject>,
+    clinicalDocuments: List<JSONObject>,
     onAdd: (() -> Unit)?,
+    onAddDocument: ((String, PickedUploadFile) -> Unit)?,
     onEdit: ((JSONObject) -> Unit)?,
     onDelete: ((String, String) -> Unit)?,
+    onDeleteDocument: ((String, String) -> Unit)?,
 ) {
+    val context = LocalContext.current
+    var documentError by rememberSaveable { mutableStateOf("") }
+    val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            val picked = readPickedUploadFile(context, uri)
+            if (picked == null) {
+                documentError = "Unable to read selected document."
+            } else {
+                documentError = ""
+                onAddDocument?.invoke(patientId, picked)
+            }
+        }
+    }
+
     SectionCard(
         title = "Clinical Notes",
         actionLabel = "Add Note",
@@ -7576,6 +7727,53 @@ private fun ClinicalNotesSection(
                         StatusChip(
                             formatTimestamp(note.text("createdAt")).ifBlank { note.text("addedByLabel", fallback = "OPW") },
                             Color(0xFFEFF6FF),
+                            OpwBlue,
+                        )
+                    },
+                )
+            }
+        }
+
+        DividerLine()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SectionTitle("Documents")
+            if (onAddDocument != null) {
+                OutlinedButton(
+                    onClick = { documentPicker.launch("*/*") },
+                    shape = RoundedCornerShape(14.dp),
+                ) {
+                    Text("Add Document")
+                }
+            }
+        }
+        if (documentError.isNotBlank()) {
+            StatusBanner(message = documentError, tone = BannerTone.Error)
+        }
+        if (clinicalDocuments.isEmpty()) {
+            InlineEmpty("No clinical documents uploaded yet.")
+        } else {
+            clinicalDocuments.forEach { document ->
+                val documentId = document.text("id")
+                val canDelete = document.text("source") != "legacy_note_document"
+                SwipeDeleteModuleCard(
+                    title = document.text("name", fallback = "Clinical document"),
+                    subtitle = formatTimestamp(document.text("uploadedAt")),
+                    accent = OpwAqua,
+                    deleteTitle = "Delete clinical document?",
+                    deleteMessage = "This will remove this uploaded clinical document.",
+                    onClick = {
+                        openApiAsset(context, document.text("downloadUrl"))
+                    },
+                    onDelete = { onDeleteDocument?.invoke(patientId, documentId) },
+                    swipeEnabled = canDelete && onDeleteDocument != null && documentId.isNotBlank(),
+                    actions = {
+                        StatusChip(
+                            if (document.text("mimeType").startsWith("image/")) "Image" else "Document",
+                            Color(0xFFE0F2FE),
                             OpwBlue,
                         )
                     },
@@ -7692,9 +7890,8 @@ private fun TreatmentPlanDialog(
 private fun ClinicalNoteDialog(
     note: JSONObject?,
     onDismiss: () -> Unit,
-    onSave: (String, String, PickedUploadFile?) -> Unit,
+    onSave: (String, String) -> Unit,
 ) {
-    val context = LocalContext.current
     val noteKey = note?.text("id").orEmpty()
     var title by rememberSaveable(noteKey) {
         mutableStateOf(note?.text("title").orEmpty().ifBlank { ClinicalNoteTypes.first() })
@@ -7702,19 +7899,7 @@ private fun ClinicalNoteDialog(
     var noteText by rememberSaveable(noteKey) {
         mutableStateOf(note?.text("note").orEmpty())
     }
-    var pickedDocument by remember { mutableStateOf<PickedUploadFile?>(null) }
     var error by rememberSaveable { mutableStateOf("") }
-    val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
-            val picked = readPickedUploadFile(context, uri)
-            if (picked == null) {
-                error = "Unable to read selected document."
-            } else {
-                pickedDocument = picked
-                error = ""
-            }
-        }
-    }
 
     OpwBottomSheetDialog(
         title = if (note == null) "Clinical Note" else "Edit Clinical Note",
@@ -7724,13 +7909,12 @@ private fun ClinicalNoteDialog(
             if (noteText.isBlank()) {
                 error = "Add note details."
             } else {
-                onSave(title.trim(), noteText.trim(), pickedDocument)
+                onSave(title.trim(), noteText.trim())
             }
         },
         onReset = {
             title = note?.text("title").orEmpty().ifBlank { ClinicalNoteTypes.first() }
             noteText = note?.text("note").orEmpty()
-            pickedDocument = null
             error = ""
         },
     ) {
@@ -7755,27 +7939,6 @@ private fun ClinicalNoteDialog(
             },
             minLines = 5,
         )
-        if (note == null) {
-            Text("Document", fontWeight = FontWeight.Bold, color = OpwInk)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                OutlinedButton(
-                    onClick = { documentPicker.launch("*/*") },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    Text(pickedDocument?.name ?: "Add Document")
-                }
-                if (pickedDocument != null) {
-                    TextButton(onClick = { pickedDocument = null }) {
-                        Text("Clear")
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -13024,6 +13187,7 @@ private fun ProfileTab(
     error: String,
     loading: Boolean,
     onSave: (StaffUser, StaffFormState) -> Unit,
+    onUploadImage: (StaffUser, PickedUploadFile) -> Unit,
 ) {
     if (user == null) {
         EmptyStateCard(
@@ -13034,6 +13198,19 @@ private fun ProfileTab(
     }
 
     var showEditDialog by rememberSaveable { mutableStateOf(false) }
+    var photoError by rememberSaveable { mutableStateOf("") }
+    val context = LocalContext.current
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            val picked = readPickedUploadFile(context, uri)
+            if (picked == null || !picked.mimeType.startsWith("image/")) {
+                photoError = "Choose a valid profile image."
+            } else {
+                photoError = ""
+                onUploadImage(user, picked)
+            }
+        }
+    }
 
     if (showEditDialog) {
         ProfileEditDialog(
@@ -13058,13 +13235,21 @@ private fun ProfileTab(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(66.dp)
-                    .background(OpwBlue.copy(alpha = 0.12f), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                ProfilePhotoContent(user = user, token = token, modifier = Modifier.size(66.dp))
+            Box(contentAlignment = Alignment.BottomEnd) {
+                Box(
+                    modifier = Modifier
+                        .size(66.dp)
+                        .background(OpwBlue.copy(alpha = 0.12f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    ProfilePhotoContent(user = user, token = token, modifier = Modifier.size(66.dp))
+                }
+                ModuleIconButton(color = OpwBlue, onClick = { photoPicker.launch("image/*") }) {
+                    TinyEditGlyph(Color.White)
+                }
+            }
+            if (photoError.isNotBlank()) {
+                StatusBanner(message = photoError, tone = BannerTone.Error)
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -13087,10 +13272,6 @@ private fun ProfileTab(
             DetailRow("Role", user.role)
             DetailRow("Email", user.email)
             DetailRow("Mobile", user.mobile)
-            DetailRow("Work type", user.workType.ifBlank { "Not set" })
-            DetailRow("Chat enabled", if (user.chatEnabled) "Yes" else "No")
-            DetailRow("Created", formatTimestamp(user.createdAt))
-            DetailRow("Updated", formatTimestamp(user.updatedAt))
         }
     }
 }
@@ -13138,25 +13319,6 @@ private fun ProfileEditDialog(
             },
             keyboardType = KeyboardType.Phone,
         )
-        SheetPatientField("Work Type", draft.workType, { draft = draft.copy(workType = it) })
-        Surface(color = OpwMist, shape = RoundedCornerShape(20.dp)) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Website chat", color = OpwInk, fontWeight = FontWeight.Bold)
-                    Text("Show this profile for live chat when enabled.", color = Color(0xFF64748B), style = MaterialTheme.typography.bodySmall)
-                }
-                Switch(
-                    checked = draft.chatEnabled,
-                    onCheckedChange = { draft = draft.copy(chatEnabled = it) },
-                )
-            }
-        }
     }
 }
 
@@ -14082,6 +14244,22 @@ private fun absoluteProfileImageUrl(value: String): String {
 
 private fun absoluteApiAssetUrl(value: String): String =
     absoluteProfileImageUrl(value)
+
+private fun openApiAsset(context: Context, value: String) {
+    val url = absoluteApiAssetUrl(value)
+    if (url.isBlank()) return
+    runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    }
+}
+
+private fun openExternalUrl(context: Context, url: String) {
+    val trimmed = url.trim()
+    if (trimmed.isBlank()) return
+    runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(trimmed)))
+    }
+}
 
 private fun normalizePhone(value: String): String =
     value.filter(Char::isDigit)

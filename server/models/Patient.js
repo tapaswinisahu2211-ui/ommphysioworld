@@ -174,6 +174,7 @@ const patientSchema = new mongoose.Schema({
   profileImageMimeType: { type: String, default: "" },
   profileImageUpdatedAt: { type: Date, default: null },
   clinicalNotes: { type: [clinicalNoteSchema], default: [] },
+  clinicalDocuments: { type: [clinicalDocumentSchema], default: [] },
   therapyRecommendations: { type: [therapyRecommendationSchema], default: [] },
   treatmentPlans: { type: [treatmentPlanSchema], default: [] },
   appointments: { type: [appointmentEntrySchema], default: [] },

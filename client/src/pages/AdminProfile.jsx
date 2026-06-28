@@ -18,8 +18,6 @@ export default function AdminProfile() {
     email: "",
     mobile: "",
     role: "Admin",
-    workType: "",
-    chatEnabled: false,
   });
   const [editOpen, setEditOpen] = useState(false);
   const [error, setError] = useState("");
@@ -63,8 +61,6 @@ export default function AdminProfile() {
         name: form.name.trim(),
         email: cleanEmail(form.email),
         mobile: cleanPhone(form.mobile),
-        workType: form.workType,
-        chatEnabled: form.chatEnabled,
       });
       setAdmin(response.data);
       setForm(response.data);
@@ -122,9 +118,6 @@ export default function AdminProfile() {
             <span className="rounded bg-blue-100 px-2 py-1 text-xs text-blue-600">
               {admin.role}
             </span>
-            <span className="ml-2 rounded bg-emerald-100 px-2 py-1 text-xs text-emerald-700">
-              {admin.chatEnabled ? "Website Chat Enabled" : "Website Chat Disabled"}
-            </span>
           </div>
 
           <button onClick={() => setEditOpen(true)} className="btn-primary">
@@ -154,14 +147,6 @@ export default function AdminProfile() {
             <div>
               <p className="text-gray-400">Role</p>
               <p className="font-medium">{admin.role}</p>
-            </div>
-            <div>
-              <p className="text-gray-400">Work Type</p>
-              <p className="font-medium">{admin.workType || "Not set"}</p>
-            </div>
-            <div>
-              <p className="text-gray-400">Website Chat</p>
-              <p className="font-medium">{admin.chatEnabled ? "Enabled" : "Disabled"}</p>
             </div>
           </div>
         </div>
@@ -204,22 +189,6 @@ export default function AdminProfile() {
                   onChange={(e) => setForm({ ...form, mobile: e.target.value })}
                   placeholder="Mobile"
                 />
-
-                <input
-                  className="input"
-                  value={form.workType || ""}
-                  onChange={(e) => setForm({ ...form, workType: e.target.value })}
-                  placeholder="Work type"
-                />
-
-                <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(form.chatEnabled)}
-                    onChange={(e) => setForm({ ...form, chatEnabled: e.target.checked })}
-                  />
-                  Show admin in website chat when online
-                </label>
 
                 <button disabled={saving} className="btn-primary w-full disabled:opacity-60">
                   {saving ? "Saving..." : "Save Changes"}

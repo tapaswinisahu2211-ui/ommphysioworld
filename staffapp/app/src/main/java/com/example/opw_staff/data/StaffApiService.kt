@@ -307,6 +307,11 @@ class StaffApiService(
             JSONObject(request("DELETE", "/patients/$patientId/clinical-documents/$documentId", token = token))
         }
 
+    suspend fun downloadClinicalDocument(token: String, downloadUrl: String): ByteArray =
+        withContext(Dispatchers.IO) {
+            requestBytes(normalizeApiPath(downloadUrl), token)
+        }
+
     suspend fun saveTherapyRecommendation(
         token: String,
         patientId: String,
@@ -759,6 +764,52 @@ class StaffApiService(
         } finally {
             connection.disconnect()
         }
+    }
+
+    private fun requestBytes(path: String, token: String): ByteArray {
+        val connection = (URL("${baseUrl.trimEnd('/')}$path").openConnection() as HttpURLConnection)
+            .apply {
+                requestMethod = "GET"
+                connectTimeout = 15_000
+                readTimeout = 20_000
+                doInput = true
+                setRequestProperty("Authorization", "Bearer $token")
+            }
+
+        try {
+            val statusCode = connection.responseCode
+            val stream = if (statusCode in 200..299) {
+                connection.inputStream
+            } else {
+                connection.errorStream ?: connection.inputStream
+            }
+            val bytes = stream?.use { it.readBytes() } ?: ByteArray(0)
+
+            if (statusCode !in 200..299) {
+                val message = runCatching {
+                    JSONObject(bytes.toString(Charsets.UTF_8)).optString("message").trim()
+                }.getOrDefault("")
+                throw ApiException(
+                    statusCode = statusCode,
+                    message = message.ifBlank { "Download failed with status $statusCode." },
+                )
+            }
+
+            return bytes
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun normalizeApiPath(value: String): String {
+        val trimmed = value.trim()
+        if (trimmed.isBlank()) return "/"
+        if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
+            val marker = "/api/"
+            val markerIndex = trimmed.indexOf(marker, ignoreCase = true)
+            return if (markerIndex >= 0) "/${trimmed.substring(markerIndex + marker.length)}" else "/"
+        }
+        return if (trimmed.startsWith("/api/")) trimmed.removePrefix("/api") else "/${trimmed.trimStart('/')}"
     }
 
     private fun requestMultipartFields(

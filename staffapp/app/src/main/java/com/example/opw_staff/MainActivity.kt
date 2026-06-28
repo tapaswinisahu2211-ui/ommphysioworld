@@ -3,8 +3,11 @@ package com.example.opw_staff
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
+import android.graphics.pdf.PdfRenderer
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import android.util.Patterns
+import androidx.core.content.FileProvider
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -158,6 +161,7 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.net.URL
+import java.io.File
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
@@ -267,6 +271,7 @@ private data class TreatmentBilling(
     val firstConsultationCharge: Double,
     val discountType: String,
     val discountValue: Double,
+    val extraSessionDays: Int,
     val sessionCount: Int,
     val sessionRate: Double,
     val sessionSubtotal: Double,
@@ -2939,6 +2944,7 @@ private fun DashboardScreen(
                     if (activeTab == AdminTab.Patients) {
                         Box(modifier = Modifier.weight(1f)) {
                             PatientsTab(
+                                token = session?.token,
                                 patients = state.patients,
                                 archivedPatients = state.archivedPatients,
                                 users = state.users,
@@ -4886,6 +4892,7 @@ private val ClinicalNoteTypes = listOf("C/C", "History", "O/E", "D/D", "HEP", "A
 
 @Composable
 private fun PatientsTab(
+    token: String?,
     patients: List<JSONObject>,
     archivedPatients: List<JSONObject>,
     users: List<StaffUser>,
@@ -4998,6 +5005,7 @@ private fun PatientsTab(
                 )
             } else {
                 PatientDetailScreen(
+                    token = token,
                     patient = selectedPatient,
                     users = users,
                     services = services,
@@ -6079,6 +6087,7 @@ private fun ModernPatientTextField(
 
 @Composable
 private fun PatientDetailScreen(
+    token: String?,
     patient: JSONObject,
     users: List<StaffUser>,
     services: List<JSONObject>,
@@ -6169,6 +6178,7 @@ private fun PatientDetailScreen(
     if (showNoteDialog) {
         ClinicalNoteDialog(
             note = clinicalNotes.firstOrNull { it.text("id") == editingNoteId },
+            clinicalNotes = clinicalNotes,
             onDismiss = {
                 showNoteDialog = false
                 editingNoteId = ""
@@ -6300,6 +6310,7 @@ private fun PatientDetailScreen(
                         notes = patient.text("notes"),
                         clinicalNotes = clinicalNotes,
                         clinicalDocuments = clinicalDocuments,
+                        token = token,
                         onAdd = if (canAddClinicalNote) { {
                             editingNoteId = ""
                             showNoteDialog = true
@@ -7211,6 +7222,9 @@ private fun TreatmentBillingSettingsDialog(
     var discountValue by rememberSaveable(plan.text("id")) {
         mutableStateOf(if (billing.discountValue > 0.0) billing.discountValue.toLong().toString() else "")
     }
+    var extraSessionDays by rememberSaveable(plan.text("id")) {
+        mutableStateOf(if (billing.extraSessionDays > 0) billing.extraSessionDays.toString() else "")
+    }
     val previewPlan = remember(
         plan.text("id"),
         homeVisitCharge,
@@ -7218,6 +7232,7 @@ private fun TreatmentBillingSettingsDialog(
         firstConsultationCharge,
         discountType,
         discountValue,
+        extraSessionDays,
     ) {
         JSONObject(plan.toString()).put(
             "billingSettings",
@@ -7227,6 +7242,7 @@ private fun TreatmentBillingSettingsDialog(
                 firstConsultationCharge = firstConsultationCharge,
                 discountType = discountType,
                 discountValue = discountValue,
+                extraSessionDays = extraSessionDays,
             ),
         )
     }
@@ -7244,6 +7260,7 @@ private fun TreatmentBillingSettingsDialog(
                     firstConsultationCharge = firstConsultationCharge,
                     discountType = discountType,
                     discountValue = discountValue,
+                    extraSessionDays = extraSessionDays,
                 ),
             )
         },
@@ -7253,6 +7270,7 @@ private fun TreatmentBillingSettingsDialog(
             firstConsultationCharge = "200"
             discountType = "none"
             discountValue = ""
+            extraSessionDays = ""
         },
     ) {
         ModernPatientTextField(
@@ -7288,6 +7306,12 @@ private fun TreatmentBillingSettingsDialog(
             onValueChange = { discountValue = it.filter(Char::isDigit) },
             keyboardType = KeyboardType.Number,
         )
+        ModernPatientTextField(
+            label = "More days",
+            value = extraSessionDays,
+            onValueChange = { extraSessionDays = it.filter(Char::isDigit) },
+            keyboardType = KeyboardType.Number,
+        )
         Surface(
             color = Color(0xFFEFFBFF),
             shape = RoundedCornerShape(20.dp),
@@ -7302,6 +7326,8 @@ private fun TreatmentBillingSettingsDialog(
                 DetailRow("Consultation", formatMoney(preview.consultationCharge))
                 DetailRow("Discount", formatMoney(preview.discountAmount))
                 DetailRow("Payable", formatMoney(preview.payableAmount))
+                DetailRow("Extra days", preview.extraSessionDays.toString())
+                DetailRow("Days avail", preview.availableSessionDays.toString())
                 if (discountType == "percent") {
                     Text(
                         "Percentage discount applies only to session charges. Consultant charge is not counted.",
@@ -7679,6 +7705,7 @@ private fun ClinicalNotesSection(
     notes: String,
     clinicalNotes: List<JSONObject>,
     clinicalDocuments: List<JSONObject>,
+    token: String?,
     onAdd: (() -> Unit)?,
     onAddDocument: ((String, PickedUploadFile) -> Unit)?,
     onEdit: ((JSONObject) -> Unit)?,
@@ -7686,17 +7713,136 @@ private fun ClinicalNotesSection(
     onDeleteDocument: ((String, String) -> Unit)?,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var documentError by rememberSaveable { mutableStateOf("") }
-    val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
+    var showDocumentSource by rememberSaveable { mutableStateOf(false) }
+    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+    var previewDocument by remember { mutableStateOf<JSONObject?>(null) }
+    var previewBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var previewLoading by rememberSaveable { mutableStateOf(false) }
+    var previewError by rememberSaveable { mutableStateOf("") }
+
+    fun uploadPickedUris(uris: List<Uri>, emptyMessage: String) {
+        if (uris.isEmpty()) {
+            documentError = emptyMessage
+            return
+        }
+        var uploadedCount = 0
+        uris.forEach { uri ->
             val picked = readPickedUploadFile(context, uri)
-            if (picked == null) {
-                documentError = "Unable to read selected document."
-            } else {
-                documentError = ""
+            if (picked != null) {
+                uploadedCount += 1
                 onAddDocument?.invoke(patientId, picked)
             }
         }
+        documentError = if (uploadedCount == 0) "Unable to read selected file." else ""
+    }
+
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        uploadPickedUris(uris, "No photo selected.")
+    }
+    val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        uploadPickedUris(uris, "No document selected.")
+    }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val uri = cameraUri
+        if (success && uri != null) {
+            val picked = readPickedUploadFile(context, uri, fallbackName = "clinical-photo-${System.currentTimeMillis()}.jpg")
+            if (picked == null) {
+                documentError = "Unable to read captured photo."
+            } else {
+                documentError = ""
+                onAddDocument?.invoke(patientId, picked.copy(mimeType = picked.mimeType.ifBlank { "image/jpeg" }))
+            }
+        }
+        cameraUri = null
+    }
+
+    fun openDocument(document: JSONObject) {
+        val activeToken = token.orEmpty()
+        if (activeToken.isBlank()) {
+            previewDocument = document
+            previewBytes = null
+            previewError = "Please log in again to preview this document."
+            return
+        }
+        previewDocument = document
+        previewBytes = null
+        previewError = ""
+        previewLoading = true
+        scope.launch {
+            try {
+                previewBytes = loadClinicalAssetBytes(document.text("downloadUrl"), activeToken)
+                previewError = ""
+            } catch (error: Exception) {
+                previewError = "Unable to open this document inside the app."
+            } finally {
+                previewLoading = false
+            }
+        }
+    }
+
+    if (showDocumentSource) {
+        AlertDialog(
+            onDismissRequest = { showDocumentSource = false },
+            title = { Text("Add Document", fontWeight = FontWeight.ExtraBold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Choose camera, multiple photos, or multiple files.")
+                    OutlinedButton(
+                        onClick = {
+                            showDocumentSource = false
+                            photoPicker.launch("image/*")
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                    ) {
+                        Text("Select Photos")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDocumentSource = false
+                        val uri = createClinicalCaptureUri(context)
+                        cameraUri = uri
+                        if (uri == null) {
+                            documentError = "Camera upload is not available on this device."
+                        } else {
+                            cameraLauncher.launch(uri)
+                        }
+                    },
+                ) {
+                    Text("Camera")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showDocumentSource = false
+                        documentPicker.launch("*/*")
+                    },
+                ) {
+                    Text("Select Files")
+                }
+            },
+        )
+    }
+
+    previewDocument?.let { document ->
+        ClinicalDocumentPreviewDialog(
+            document = document,
+            bytes = previewBytes,
+            loading = previewLoading,
+            error = previewError,
+            onDismiss = {
+                previewDocument = null
+                previewBytes = null
+                previewError = ""
+                previewLoading = false
+            },
+        )
     }
 
     SectionCard(
@@ -7743,7 +7889,7 @@ private fun ClinicalNotesSection(
             SectionTitle("Documents")
             if (onAddDocument != null) {
                 OutlinedButton(
-                    onClick = { documentPicker.launch("*/*") },
+                    onClick = { showDocumentSource = true },
                     shape = RoundedCornerShape(14.dp),
                 ) {
                     Text("Add Document")
@@ -7765,9 +7911,7 @@ private fun ClinicalNotesSection(
                     accent = OpwAqua,
                     deleteTitle = "Delete clinical document?",
                     deleteMessage = "This will remove this uploaded clinical document.",
-                    onClick = {
-                        openApiAsset(context, document.text("downloadUrl"))
-                    },
+                    onClick = { openDocument(document) },
                     onDelete = { onDeleteDocument?.invoke(patientId, documentId) },
                     swipeEnabled = canDelete && onDeleteDocument != null && documentId.isNotBlank(),
                     actions = {
@@ -7816,6 +7960,132 @@ private fun TherapyRecommendationsSection(
                         }
                     } else null,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ClinicalDocumentPreviewDialog(
+    document: JSONObject,
+    bytes: ByteArray?,
+    loading: Boolean,
+    error: String,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val mimeType = document.text("mimeType").lowercase()
+    val bitmap = remember(bytes, mimeType) {
+        when {
+            bytes == null -> null
+            mimeType.startsWith("image/") -> BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+            mimeType == "application/pdf" -> renderPdfFirstPage(context, bytes)
+            else -> null
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(18.dp),
+            color = Color.White,
+            shape = RoundedCornerShape(28.dp),
+            shadowElevation = 18.dp,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            document.text("name", fallback = "Clinical document"),
+                            color = OpwInk,
+                            fontWeight = FontWeight.ExtraBold,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            when {
+                                mimeType.startsWith("image/") -> "Image preview"
+                                mimeType == "application/pdf" -> "PDF preview"
+                                else -> "Document preview"
+                            },
+                            color = Color(0xFF64748B),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    ModuleIconButton(color = Color(0xFFE2E8F0), onClick = onDismiss) {
+                        CloseGlyph(Color(0xFF64748B))
+                    }
+                }
+
+                when {
+                    loading -> {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = OpwBlue,
+                            trackColor = Color(0xFFE0F2FE),
+                        )
+                    }
+
+                    error.isNotBlank() -> StatusBanner(message = error, tone = BannerTone.Error)
+
+                    bitmap != null -> {
+                        Image(
+                            bitmap = bitmap,
+                            contentDescription = document.text("name", fallback = "Clinical document"),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(420.dp)
+                                .background(Color(0xFFF8FAFC), RoundedCornerShape(20.dp)),
+                            contentScale = ContentScale.Fit,
+                        )
+                    }
+
+                    bytes != null -> {
+                        Surface(
+                            color = Color(0xFFEFFBFF),
+                            shape = RoundedCornerShape(22.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBAE6FD)),
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(18.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Text("Document loaded inside OPW Staff", color = OpwInk, fontWeight = FontWeight.ExtraBold)
+                                Text(
+                                    "${formatBytes(bytes.size.toLong())} • ${document.text("mimeType", fallback = "file")}",
+                                    color = Color(0xFF64748B),
+                                    textAlign = TextAlign.Center,
+                                )
+                                Text(
+                                    "This file is protected and is not opened in an external browser or app.",
+                                    color = OpwBlue,
+                                    textAlign = TextAlign.Center,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                        }
+                    }
+
+                    else -> InlineEmpty("Preparing preview...")
+                }
             }
         }
     }
@@ -7889,15 +8159,21 @@ private fun TreatmentPlanDialog(
 @Composable
 private fun ClinicalNoteDialog(
     note: JSONObject?,
+    clinicalNotes: List<JSONObject>,
     onDismiss: () -> Unit,
     onSave: (String, String) -> Unit,
 ) {
     val noteKey = note?.text("id").orEmpty()
+    fun existingNoteForType(type: String): JSONObject? =
+        clinicalNotes.firstOrNull { it.text("title").equals(type, ignoreCase = true) }
+
     var title by rememberSaveable(noteKey) {
-        mutableStateOf(note?.text("title").orEmpty().ifBlank { ClinicalNoteTypes.first() })
+        mutableStateOf(note?.text("title").orEmpty().ifBlank {
+            clinicalNotes.firstOrNull()?.text("title").orEmpty().ifBlank { ClinicalNoteTypes.first() }
+        })
     }
     var noteText by rememberSaveable(noteKey) {
-        mutableStateOf(note?.text("note").orEmpty())
+        mutableStateOf(note?.text("note").orEmpty().ifBlank { existingNoteForType(title)?.text("note").orEmpty() })
     }
     var error by rememberSaveable { mutableStateOf("") }
 
@@ -7914,7 +8190,7 @@ private fun ClinicalNoteDialog(
         },
         onReset = {
             title = note?.text("title").orEmpty().ifBlank { ClinicalNoteTypes.first() }
-            noteText = note?.text("note").orEmpty()
+            noteText = note?.text("note").orEmpty().ifBlank { existingNoteForType(title)?.text("note").orEmpty() }
             error = ""
         },
     ) {
@@ -7927,6 +8203,9 @@ private fun ClinicalNoteDialog(
             selected = title,
             onSelected = {
                 title = it
+                if (note == null) {
+                    noteText = existingNoteForType(it)?.text("note").orEmpty()
+                }
                 error = ""
             },
         )
@@ -14137,6 +14416,7 @@ private fun billingSettingsPayload(
     firstConsultationCharge: String,
     discountType: String,
     discountValue: String,
+    extraSessionDays: String,
 ): JSONObject =
     JSONObject()
         .put("homeVisitCharge", homeVisitCharge.toDoubleOrNull() ?: 500.0)
@@ -14144,6 +14424,7 @@ private fun billingSettingsPayload(
         .put("firstConsultationCharge", firstConsultationCharge.toDoubleOrNull() ?: 200.0)
         .put("discountType", discountType.ifBlank { "none" })
         .put("discountValue", discountValue.toDoubleOrNull() ?: 0.0)
+        .put("extraSessionDays", extraSessionDays.toIntOrNull()?.coerceAtLeast(0) ?: 0)
 
 private fun calculateTreatmentBilling(plan: JSONObject): TreatmentBilling {
     val settings = plan.optJSONObject("billingSettings") ?: JSONObject()
@@ -14154,6 +14435,7 @@ private fun calculateTreatmentBilling(plan: JSONObject): TreatmentBilling {
         if (it in listOf("percent", "amount")) it else "none"
     }
     val discountValue = settings.optDouble("discountValue", 0.0).takeIf { it > 0.0 } ?: 0.0
+    val extraSessionDays = settings.optInt("extraSessionDays", 0).coerceAtLeast(0)
     val sessionCount = plan.array("sessionDays").toJsonObjects().count { it.text("date").isNotBlank() }
     val isHome = plan.text("treatmentLocation", "serviceLocation", fallback = "clinic").lowercase() == "home"
     val sessionRate = if (isHome) homeVisitCharge else clinicVisitCharge
@@ -14175,6 +14457,7 @@ private fun calculateTreatmentBilling(plan: JSONObject): TreatmentBilling {
         firstConsultationCharge = firstConsultationCharge,
         discountType = discountType,
         discountValue = discountValue,
+        extraSessionDays = extraSessionDays,
         sessionCount = sessionCount,
         sessionRate = sessionRate,
         sessionSubtotal = sessionSubtotal,
@@ -14184,7 +14467,7 @@ private fun calculateTreatmentBilling(plan: JSONObject): TreatmentBilling {
         paidAmount = paidAmount,
         balanceAmount = balanceAmount,
         availableBalance = availableBalance,
-        availableSessionDays = if (sessionRate > 0.0) ceil(availableBalance / sessionRate).toInt() else 0,
+        availableSessionDays = (if (sessionRate > 0.0) ceil(availableBalance / sessionRate).toInt() else 0) + extraSessionDays,
     )
 }
 
@@ -14221,16 +14504,50 @@ private fun formatBytes(value: Long): String =
         else -> "${value / (1024L * 1024L)} MB"
     }
 
-private fun readPickedUploadFile(context: Context, uri: Uri): PickedUploadFile? =
+private fun readPickedUploadFile(context: Context, uri: Uri, fallbackName: String = "therapy-file"): PickedUploadFile? =
     runCatching {
         val resolver = context.contentResolver
         val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
             val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
             if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
-        }.orEmpty().ifBlank { "therapy-file" }
-        val mimeType = resolver.getType(uri).orEmpty().ifBlank { "application/octet-stream" }
+        }.orEmpty().ifBlank { fallbackName }
+        val mimeType = resolver.getType(uri).orEmpty().ifBlank {
+            if (name.endsWith(".jpg", ignoreCase = true) || name.endsWith(".jpeg", ignoreCase = true)) {
+                "image/jpeg"
+            } else {
+                "application/octet-stream"
+            }
+        }
         val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return@runCatching null
         PickedUploadFile(name = name, mimeType = mimeType, bytes = bytes)
+    }.getOrNull()
+
+private fun createClinicalCaptureUri(context: Context): Uri? =
+    runCatching {
+        val folder = File(context.cacheDir, "clinical_captures").apply { mkdirs() }
+        val file = File(folder, "clinical-photo-${System.currentTimeMillis()}.jpg")
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    }.getOrNull()
+
+private fun renderPdfFirstPage(context: Context, bytes: ByteArray): ImageBitmap? =
+    runCatching {
+        val file = File(context.cacheDir, "clinical-preview-${System.currentTimeMillis()}.pdf")
+        file.writeBytes(bytes)
+        ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
+            PdfRenderer(descriptor).use { renderer ->
+                if (renderer.pageCount == 0) return@runCatching null
+                renderer.openPage(0).use { page ->
+                    val width = page.width.coerceAtLeast(1)
+                    val height = page.height.coerceAtLeast(1)
+                    val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                    bitmap.eraseColor(android.graphics.Color.WHITE)
+                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    bitmap.asImageBitmap()
+                }
+            }
+        }.also {
+            file.delete()
+        }
     }.getOrNull()
 
 private fun absoluteProfileImageUrl(value: String): String {
@@ -14297,6 +14614,15 @@ private suspend fun loadProfileImage(url: String, token: String?): ImageBitmap? 
                 BitmapFactory.decodeStream(input)?.asImageBitmap()
             }
         }.getOrNull()
+    }
+
+private suspend fun loadClinicalAssetBytes(downloadUrl: String, token: String): ByteArray =
+    withContext(Dispatchers.IO) {
+        val url = absoluteApiAssetUrl(downloadUrl)
+        if (url.isBlank()) return@withContext ByteArray(0)
+        val connection = URL(url).openConnection()
+        connection.setRequestProperty("Authorization", "Bearer $token")
+        connection.getInputStream().use { input -> input.readBytes() }
     }
 
 private fun statusColor(status: String): Color =

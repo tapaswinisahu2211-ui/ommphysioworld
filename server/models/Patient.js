@@ -39,6 +39,7 @@ const treatmentBillingSettingsSchema = new mongoose.Schema(
       default: "none",
     },
     discountValue: { type: Number, default: 0 },
+    extraSessionDays: { type: Number, default: 0 },
   },
   { _id: false }
 );

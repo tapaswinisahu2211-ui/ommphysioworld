@@ -235,6 +235,7 @@ const DEFAULT_TREATMENT_BILLING_SETTINGS = {
   firstConsultationCharge: 200,
   discountType: "none",
   discountValue: 0,
+  extraSessionDays: 0,
 };
 
 const clampMoney = (value) => {
@@ -256,6 +257,7 @@ const normalizeTreatmentBillingSettings = (value = {}) => {
     ),
     discountType,
     discountValue: clampMoney(source.discountValue),
+    extraSessionDays: Math.max(0, Math.floor(Number(source.extraSessionDays || 0) || 0)),
   };
 };
 
@@ -440,6 +442,7 @@ const serializePatient = (patient) => ({
         firstConsultationCharge: Number(billing.settings.firstConsultationCharge || 0),
         discountType: billing.settings.discountType || "none",
         discountValue: Number(billing.settings.discountValue || 0),
+        extraSessionDays: Number(billing.settings.extraSessionDays || 0),
       },
       billingSummary: {
         sessionCount: Number(billing.summary.sessionCount || 0),

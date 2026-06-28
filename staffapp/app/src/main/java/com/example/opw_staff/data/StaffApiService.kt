@@ -210,10 +210,19 @@ class StaffApiService(
             JSONObject(request("DELETE", "/patients/$patientId/treatment-plans/$planId", token = token))
         }
 
-    suspend fun addClinicalNote(token: String, patientId: String, title: String, note: String): JSONObject =
+    suspend fun addClinicalNote(
+        token: String,
+        patientId: String,
+        title: String,
+        note: String,
+        documentName: String?,
+        documentMimeType: String?,
+        documentBytes: ByteArray?,
+    ): JSONObject =
         withContext(Dispatchers.IO) {
             JSONObject(
-                requestMultipartFields(
+                requestMultipart(
+                    method = "POST",
                     path = "/patients/$patientId/clinical-notes",
                     token = token,
                     fields = mapOf(
@@ -222,8 +231,20 @@ class StaffApiService(
                         "addedByType" to "opw",
                         "addedByLabel" to "OPW",
                     ),
+                    fileField = if (documentBytes != null) "documents" else null,
+                    fileName = documentName,
+                    mimeType = documentMimeType,
+                    fileBytes = documentBytes,
                 ),
             )
+        }
+
+    suspend fun updateClinicalNote(token: String, patientId: String, noteId: String, title: String, note: String): JSONObject =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("title", title)
+                .put("note", note)
+            JSONObject(request("PUT", "/patients/$patientId/clinical-notes/$noteId", token = token, body = body))
         }
 
     suspend fun deleteClinicalNote(token: String, patientId: String, noteId: String): JSONObject =

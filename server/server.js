@@ -152,6 +152,58 @@ const hasAnyStaffDirectoryPermission = (user) => {
   );
 };
 
+const hasStaffModulePermission = (user, moduleKey, action = "view") => {
+  if (!user) {
+    return false;
+  }
+
+  if (user.role === "Admin") {
+    return true;
+  }
+
+  const permissions = normalizePermissions(user.permissions || [], user.role);
+  const permission = permissions.find((item) => item.module === moduleKey);
+  return Boolean(permission?.[action]);
+};
+
+const requireClinicalNoteCreateAccess = async (req, res, next) => {
+  try {
+    if (req.authError) {
+      return res.status(401).json({ message: req.authError });
+    }
+
+    if (!req.auth) {
+      return res.status(401).json({ message: "Authentication is required." });
+    }
+
+    if (req.auth.type === "patient" && req.auth.patientId === String(req.params.id || "").trim()) {
+      return next();
+    }
+
+    if (req.auth.type !== "staff") {
+      return res.status(403).json({ message: "You do not have access to this patient record." });
+    }
+
+    const user = await User.findById(String(req.auth.sub || "").trim());
+    if (!user) {
+      return res.status(401).json({ message: "Staff account not found." });
+    }
+
+    if (user.status === "Inactive") {
+      return res.status(403).json({ message: "This staff account is inactive." });
+    }
+
+    if (!hasStaffModulePermission(user, "clinical_notes", "add")) {
+      return res.status(403).json({ message: "You do not have permission to access this module." });
+    }
+
+    req.staffUser = user;
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const isUserOnlineForChat = (user) => {
   if (!user) {
     return false;
@@ -4650,7 +4702,7 @@ app.delete("/api/patients/:id/treatment-plans/:planId", requireStaffPermission("
   }
 });
 
-app.post("/api/patients/:id/clinical-notes", requirePatientRecordAccess, upload.array("documents", 10), async (req, res) => {
+app.post("/api/patients/:id/clinical-notes", requireClinicalNoteCreateAccess, upload.array("documents", 10), async (req, res) => {
   try {
     const title = String(req.body.title || "").trim();
     const note = String(req.body.note || "").trim();
@@ -4698,6 +4750,40 @@ app.post("/api/patients/:id/clinical-notes", requirePatientRecordAccess, upload.
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to save clinical note." });
+  }
+});
+
+app.put("/api/patients/:id/clinical-notes/:noteId", requireStaffPermission("clinical_notes", "edit"), async (req, res) => {
+  try {
+    const patient = await Patient.findById(req.params.id);
+
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found." });
+    }
+
+    const clinicalNote = patient.clinicalNotes.id(req.params.noteId);
+
+    if (!clinicalNote) {
+      return res.status(404).json({ message: "Clinical note not found." });
+    }
+
+    const title = cleanText(req.body.title);
+    const note = cleanText(req.body.note);
+
+    if (!title && !note) {
+      return res.status(400).json({ message: "Add a title or note details." });
+    }
+
+    clinicalNote.title = title;
+    clinicalNote.note = note;
+    clinicalNote.addedByType = "opw";
+    clinicalNote.addedByLabel = req.staffUser?.name || "OPW";
+
+    await patient.save();
+    res.json(await serializePatientWithTreatmentStaff(patient));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to update clinical note." });
   }
 });
 

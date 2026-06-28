@@ -1280,14 +1280,26 @@ private fun StaffAdminApp() {
         }
     }
 
-    fun addClinicalNote(patientId: String, title: String, note: String) {
+    fun saveClinicalNote(patientId: String, noteId: String?, title: String, note: String, document: PickedUploadFile?) {
         val activeSession = session ?: return
         if (patientId.isBlank()) return
         scope.launch {
             try {
-                val updated = api.addClinicalNote(activeSession.token, patientId, title, note)
+                val updated = if (noteId.isNullOrBlank()) {
+                    api.addClinicalNote(
+                        activeSession.token,
+                        patientId,
+                        title,
+                        note,
+                        document?.name,
+                        document?.mimeType,
+                        document?.bytes,
+                    )
+                } else {
+                    api.updateClinicalNote(activeSession.token, patientId, noteId, title, note)
+                }
                 applyUpdatedPatient(updated)
-                showMessage("Clinical note added.")
+                showMessage(if (noteId.isNullOrBlank()) "Clinical note added." else "Clinical note updated.")
             } catch (error: ApiException) {
                 if (error.statusCode == 401 || error.statusCode == 403) {
                     clearToLogin("Your session ended. Please log in again.")
@@ -2286,7 +2298,7 @@ private fun StaffAdminApp() {
                     onTreatmentSessionEntryDelete = ::deleteTreatmentSessionEntry,
                     onTreatmentPaymentAdd = ::addTreatmentPayment,
                     onTreatmentPlanDelete = ::deleteTreatmentPlan,
-                    onClinicalNoteAdd = ::addClinicalNote,
+                    onClinicalNoteSave = ::saveClinicalNote,
                     onClinicalNoteDelete = ::deleteClinicalNote,
                     onTherapyRecommendationSave = ::saveTherapyRecommendation,
                     onTherapyRecommendationDelete = ::deleteTherapyRecommendation,
@@ -2499,7 +2511,7 @@ private fun DashboardScreen(
     onTreatmentSessionEntryDelete: (String, String, String) -> Unit,
     onTreatmentPaymentAdd: (String, String, Double, String, String) -> Unit,
     onTreatmentPlanDelete: (String, String) -> Unit,
-    onClinicalNoteAdd: (String, String, String) -> Unit,
+    onClinicalNoteSave: (String, String?, String, String, PickedUploadFile?) -> Unit,
     onClinicalNoteDelete: (String, String) -> Unit,
     onTherapyRecommendationSave: (String, String, String, List<String>) -> Unit,
     onTherapyRecommendationDelete: (String, String) -> Unit,
@@ -2837,7 +2849,7 @@ private fun DashboardScreen(
                                 onTreatmentSessionEntryDelete = onTreatmentSessionEntryDelete,
                                 onTreatmentPaymentAdd = onTreatmentPaymentAdd,
                                 onTreatmentPlanDelete = onTreatmentPlanDelete,
-                                onClinicalNoteAdd = onClinicalNoteAdd,
+                                onClinicalNoteSave = onClinicalNoteSave,
                                 onClinicalNoteDelete = onClinicalNoteDelete,
                                 onTherapyRecommendationSave = onTherapyRecommendationSave,
                                 onTherapyRecommendationDelete = onTherapyRecommendationDelete,
@@ -4781,7 +4793,7 @@ private fun PatientsTab(
     onTreatmentSessionEntryDelete: (String, String, String) -> Unit,
     onTreatmentPaymentAdd: (String, String, Double, String, String) -> Unit,
     onTreatmentPlanDelete: (String, String) -> Unit,
-    onClinicalNoteAdd: (String, String, String) -> Unit,
+    onClinicalNoteSave: (String, String?, String, String, PickedUploadFile?) -> Unit,
     onClinicalNoteDelete: (String, String) -> Unit,
     onTherapyRecommendationSave: (String, String, String, List<String>) -> Unit,
     onTherapyRecommendationDelete: (String, String) -> Unit,
@@ -4886,7 +4898,7 @@ private fun PatientsTab(
                     onTreatmentSessionEntryDelete = onTreatmentSessionEntryDelete,
                     onTreatmentPaymentAdd = onTreatmentPaymentAdd,
                     onTreatmentPlanDelete = onTreatmentPlanDelete,
-                    onClinicalNoteAdd = onClinicalNoteAdd,
+                    onClinicalNoteSave = onClinicalNoteSave,
                     onClinicalNoteDelete = onClinicalNoteDelete,
                     onTherapyRecommendationSave = onTherapyRecommendationSave,
                     onTherapyRecommendationDelete = onTherapyRecommendationDelete,
@@ -5962,7 +5974,7 @@ private fun PatientDetailScreen(
     onTreatmentSessionEntryDelete: (String, String, String) -> Unit,
     onTreatmentPaymentAdd: (String, String, Double, String, String) -> Unit,
     onTreatmentPlanDelete: (String, String) -> Unit,
-    onClinicalNoteAdd: (String, String, String) -> Unit,
+    onClinicalNoteSave: (String, String?, String, String, PickedUploadFile?) -> Unit,
     onClinicalNoteDelete: (String, String) -> Unit,
     onTherapyRecommendationSave: (String, String, String, List<String>) -> Unit,
     onTherapyRecommendationDelete: (String, String) -> Unit,
@@ -5979,6 +5991,7 @@ private fun PatientDetailScreen(
     var showTreatmentDialog by rememberSaveable { mutableStateOf(false) }
     var editingPlanId by rememberSaveable { mutableStateOf("") }
     var showNoteDialog by rememberSaveable { mutableStateOf(false) }
+    var editingNoteId by rememberSaveable { mutableStateOf("") }
     var showTherapyDialog by rememberSaveable { mutableStateOf(false) }
     var showAppointmentDialog by rememberSaveable { mutableStateOf(false) }
     val patientId = patient.text("id")
@@ -6024,10 +6037,15 @@ private fun PatientDetailScreen(
 
     if (showNoteDialog) {
         ClinicalNoteDialog(
-            onDismiss = { showNoteDialog = false },
-            onSave = { title, note ->
-                onClinicalNoteAdd(patientId, title, note)
+            note = clinicalNotes.firstOrNull { it.text("id") == editingNoteId },
+            onDismiss = {
                 showNoteDialog = false
+                editingNoteId = ""
+            },
+            onSave = { title, note, document ->
+                onClinicalNoteSave(patientId, editingNoteId.takeIf { it.isNotBlank() }, title, note, document)
+                showNoteDialog = false
+                editingNoteId = ""
             },
         )
     }
@@ -6150,7 +6168,14 @@ private fun PatientDetailScreen(
                         disease = patient.text("disease"),
                         notes = patient.text("notes"),
                         clinicalNotes = clinicalNotes,
-                        onAdd = if (canAddClinicalNote) { { showNoteDialog = true } } else null,
+                        onAdd = if (canAddClinicalNote) { {
+                            editingNoteId = ""
+                            showNoteDialog = true
+                        } } else null,
+                        onEdit = if (canEditClinicalNote) { { note ->
+                            editingNoteId = note.text("id")
+                            showNoteDialog = true
+                        } } else null,
                         onDelete = if (canEditClinicalNote) onClinicalNoteDelete else null,
                     )
                 }
@@ -6223,12 +6248,7 @@ private fun PatientProfileModuleGrid(
         ),
     )
 
-    SectionCard(title = "Patient Modules") {
-        Text(
-            text = "Open each module separately to view and manage patient records.",
-            color = OpwSlate,
-            style = MaterialTheme.typography.bodySmall,
-        )
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         cards.chunked(2).forEach { rowCards ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -6333,56 +6353,50 @@ private fun PatientProfileHeader(
     onBack: () -> Unit,
     onEdit: (() -> Unit)?,
 ) {
+    val displayPatientId = patient.text("patientId", fallback = "").ifBlank { "Not assigned" }
     Surface(
-        shape = RoundedCornerShape(30.dp),
-        color = OpwCard,
+        shape = RoundedCornerShape(26.dp),
+        color = Color.White.copy(alpha = 0.96f),
         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE5EDF7)),
-        shadowElevation = 4.dp,
+        shadowElevation = 2.dp,
     ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                BackCircleButton(onClick = onBack)
-                if (onEdit != null) {
-                    PatientIconActionButton(icon = PatientActionIcon.Edit, onClick = onEdit)
-                }
+            BackCircleButton(onClick = onBack)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = patient.text("name", fallback = "Patient"),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = OpwInk,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = "ID: $displayPatientId",
+                    color = OpwBlue,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                )
+                Text(
+                    text = listOf(
+                        patient.text("mobile", fallback = "Mobile not provided"),
+                        patient.text("email", fallback = "Email not provided"),
+                    ).joinToString("  |  "),
+                    color = Color(0xFF64748B),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AccentOrb(accent = OpwBlue, label = patient.text("name", fallback = "P"))
-                Column(modifier = Modifier.weight(1f)) {
-                    val displayPatientId = patient.text("patientId", fallback = "")
-                        .ifBlank { "Not assigned" }
-                    Text(
-                        text = patient.text("name", fallback = "Patient"),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = OpwInk,
-                    )
-                    Text(
-                        text = "Patient ID: $displayPatientId",
-                        color = OpwBlue,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.ExtraBold,
-                    )
-                    Text(
-                        text = patient.text("mobile", fallback = "Mobile not provided"),
-                        color = Color(0xFF64748B),
-                    )
-                    Text(
-                        text = patient.text("email", fallback = "Email not provided"),
-                        color = Color(0xFF64748B),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
+            if (onEdit != null) {
+                PatientIconActionButton(icon = PatientActionIcon.Edit, onClick = onEdit)
             }
         }
     }
@@ -7531,6 +7545,7 @@ private fun ClinicalNotesSection(
     notes: String,
     clinicalNotes: List<JSONObject>,
     onAdd: (() -> Unit)?,
+    onEdit: ((JSONObject) -> Unit)?,
     onDelete: ((String, String) -> Unit)?,
 ) {
     SectionCard(
@@ -7541,28 +7556,29 @@ private fun ClinicalNotesSection(
         if (disease.isNotBlank()) {
             DetailRow("Primary Condition", disease)
         }
-        if (notes.isNotBlank()) {
-            DetailRow("Legacy Notes", notes)
-        }
         if (clinicalNotes.isEmpty()) {
             InlineEmpty("No clinical notes added yet.")
         } else {
             clinicalNotes.forEach { note ->
-                RecordCard(
-                    title = note.text("title", fallback = "Clinical Note"),
-                    subtitle = formatTimestamp(note.text("createdAt")),
-                    status = note.text("addedByLabel", fallback = "OPW"),
-                    rows = listOf(
-                        "Note" to note.text("note", fallback = "No note text added."),
-                        "Documents" to note.array("documents").length().toString(),
-                    ),
-                    actions = if (onDelete != null) {
-                        {
-                        OutlinedButton(onClick = { onDelete(patientId, note.text("id")) }) {
-                            Text("Delete")
-                        }
-                        }
-                    } else null,
+                val noteId = note.text("id")
+                val noteTitle = note.text("title", fallback = "Clinical Note")
+                val notePreview = note.text("note", fallback = "No note text added.")
+                SwipeDeleteModuleCard(
+                    title = noteTitle,
+                    subtitle = notePreview,
+                    accent = OpwBlue,
+                    deleteTitle = "Delete clinical note?",
+                    deleteMessage = "This will remove this clinical note from the patient profile.",
+                    onClick = onEdit?.let { edit -> { edit(note) } },
+                    onDelete = { onDelete?.invoke(patientId, noteId) },
+                    swipeEnabled = onDelete != null && noteId.isNotBlank(),
+                    actions = {
+                        StatusChip(
+                            formatTimestamp(note.text("createdAt")).ifBlank { note.text("addedByLabel", fallback = "OPW") },
+                            Color(0xFFEFF6FF),
+                            OpwBlue,
+                        )
+                    },
                 )
             }
         }
@@ -7674,27 +7690,47 @@ private fun TreatmentPlanDialog(
 
 @Composable
 private fun ClinicalNoteDialog(
+    note: JSONObject?,
     onDismiss: () -> Unit,
-    onSave: (String, String) -> Unit,
+    onSave: (String, String, PickedUploadFile?) -> Unit,
 ) {
-    var title by rememberSaveable { mutableStateOf(ClinicalNoteTypes.first()) }
-    var note by rememberSaveable { mutableStateOf("") }
+    val context = LocalContext.current
+    val noteKey = note?.text("id").orEmpty()
+    var title by rememberSaveable(noteKey) {
+        mutableStateOf(note?.text("title").orEmpty().ifBlank { ClinicalNoteTypes.first() })
+    }
+    var noteText by rememberSaveable(noteKey) {
+        mutableStateOf(note?.text("note").orEmpty())
+    }
+    var pickedDocument by remember { mutableStateOf<PickedUploadFile?>(null) }
     var error by rememberSaveable { mutableStateOf("") }
+    val documentPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            val picked = readPickedUploadFile(context, uri)
+            if (picked == null) {
+                error = "Unable to read selected document."
+            } else {
+                pickedDocument = picked
+                error = ""
+            }
+        }
+    }
 
     OpwBottomSheetDialog(
-        title = "Clinical Note",
-        primaryLabel = "Save Note",
+        title = if (note == null) "Clinical Note" else "Edit Clinical Note",
+        primaryLabel = if (note == null) "Save Note" else "Update Note",
         onDismiss = onDismiss,
         onPrimary = {
-            if (note.isBlank()) {
+            if (noteText.isBlank()) {
                 error = "Add note details."
             } else {
-                onSave(title.trim(), note.trim())
+                onSave(title.trim(), noteText.trim(), pickedDocument)
             }
         },
         onReset = {
-            title = ClinicalNoteTypes.first()
-            note = ""
+            title = note?.text("title").orEmpty().ifBlank { ClinicalNoteTypes.first() }
+            noteText = note?.text("note").orEmpty()
+            pickedDocument = null
             error = ""
         },
     ) {
@@ -7712,13 +7748,34 @@ private fun ClinicalNoteDialog(
         )
         SheetPatientField(
             label = "Note",
-            value = note,
+            value = noteText,
             onValueChange = {
-                note = it
+                noteText = it
                 error = ""
             },
             minLines = 5,
         )
+        if (note == null) {
+            Text("Document", fontWeight = FontWeight.Bold, color = OpwInk)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedButton(
+                    onClick = { documentPicker.launch("*/*") },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    Text(pickedDocument?.name ?: "Add Document")
+                }
+                if (pickedDocument != null) {
+                    TextButton(onClick = { pickedDocument = null }) {
+                        Text("Clear")
+                    }
+                }
+            }
+        }
     }
 }
 

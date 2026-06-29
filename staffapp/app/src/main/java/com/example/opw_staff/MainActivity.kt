@@ -162,7 +162,9 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.net.URL
 import java.io.File
+import java.io.ByteArrayOutputStream
 import kotlin.math.ceil
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
@@ -14519,8 +14521,44 @@ private fun readPickedUploadFile(context: Context, uri: Uri, fallbackName: Strin
             }
         }
         val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return@runCatching null
-        PickedUploadFile(name = name, mimeType = mimeType, bytes = bytes)
+        val optimized = optimizeUploadFile(name = name, mimeType = mimeType, bytes = bytes)
+        PickedUploadFile(name = optimized.name, mimeType = optimized.mimeType, bytes = optimized.bytes)
     }.getOrNull()
+
+private fun optimizeUploadFile(name: String, mimeType: String, bytes: ByteArray): PickedUploadFile {
+    if (!mimeType.startsWith("image/") || bytes.size <= 850 * 1024) {
+        return PickedUploadFile(name = name, mimeType = mimeType, bytes = bytes)
+    }
+
+    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        ?: return PickedUploadFile(name = name, mimeType = mimeType, bytes = bytes)
+    val largestSide = max(bitmap.width, bitmap.height).coerceAtLeast(1)
+    val scale = (1600f / largestSide).coerceAtMost(1f)
+    val targetWidth = (bitmap.width * scale).roundToInt().coerceAtLeast(1)
+    val targetHeight = (bitmap.height * scale).roundToInt().coerceAtLeast(1)
+    val scaled = if (targetWidth == bitmap.width && targetHeight == bitmap.height) {
+        bitmap
+    } else {
+        android.graphics.Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
+    }
+
+    var quality = 82
+    var outputBytes: ByteArray
+    do {
+        val output = ByteArrayOutputStream()
+        scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, quality, output)
+        outputBytes = output.toByteArray()
+        quality -= 8
+    } while (outputBytes.size > 850 * 1024 && quality >= 50)
+
+    if (scaled !== bitmap) {
+        scaled.recycle()
+    }
+    bitmap.recycle()
+
+    val uploadName = name.substringBeforeLast('.', missingDelimiterValue = name).ifBlank { "clinical-photo" } + ".jpg"
+    return PickedUploadFile(name = uploadName, mimeType = "image/jpeg", bytes = outputBytes)
+}
 
 private fun createClinicalCaptureUri(context: Context): Uri? =
     runCatching {

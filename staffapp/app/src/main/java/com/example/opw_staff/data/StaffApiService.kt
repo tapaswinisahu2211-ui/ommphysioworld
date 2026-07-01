@@ -236,6 +236,23 @@ class StaffApiService(
             JSONObject(request("POST", "/patients/$patientId/treatment-plans/$planId/payments", token = token, body = body))
         }
 
+    suspend fun updateTreatmentPayment(
+        token: String,
+        patientId: String,
+        planId: String,
+        paymentId: String,
+        amount: Double,
+        method: String,
+        paymentDate: String,
+    ): JSONObject =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("amount", amount)
+                .put("method", method)
+                .put("paymentDate", paymentDate)
+            JSONObject(request("PUT", "/patients/$patientId/treatment-plans/$planId/payments/$paymentId", token = token, body = body))
+        }
+
     suspend fun deleteTreatmentPlan(token: String, patientId: String, planId: String): JSONObject =
         withContext(Dispatchers.IO) {
             JSONObject(request("DELETE", "/patients/$patientId/treatment-plans/$planId", token = token))
@@ -720,8 +737,8 @@ class StaffApiService(
         val connection = (URL("${baseUrl.trimEnd('/')}$path").openConnection() as HttpURLConnection)
             .apply {
                 requestMethod = method
-                connectTimeout = 15_000
-                readTimeout = 15_000
+                connectTimeout = 25_000
+                readTimeout = 30_000
                 doInput = true
                 setRequestProperty("Accept", "application/json")
 
@@ -770,8 +787,8 @@ class StaffApiService(
         val connection = (URL("${baseUrl.trimEnd('/')}$path").openConnection() as HttpURLConnection)
             .apply {
                 requestMethod = "GET"
-                connectTimeout = 15_000
-                readTimeout = 20_000
+                connectTimeout = 25_000
+                readTimeout = 45_000
                 doInput = true
                 setRequestProperty("Authorization", "Bearer $token")
             }
@@ -842,8 +859,8 @@ class StaffApiService(
         val connection = (URL("${baseUrl.trimEnd('/')}$path").openConnection() as HttpURLConnection)
             .apply {
                 requestMethod = method
-                connectTimeout = 15_000
-                readTimeout = 15_000
+                connectTimeout = 25_000
+                readTimeout = 60_000
                 doInput = true
                 doOutput = true
                 setRequestProperty("Accept", "application/json")

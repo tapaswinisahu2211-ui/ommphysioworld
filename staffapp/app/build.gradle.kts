@@ -35,8 +35,8 @@ android {
         applicationId = "com.ommphysioworld.staffapp"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.0.3"
+        versionCode = 6
+        versionName = "1.0.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         val apiBaseUrl = providers.gradleProperty("OPW_STAFF_API_BASE_URL")

@@ -846,12 +846,22 @@ const buildSessionDays = (fromDate, toDate, existingDays = []) => {
   return days;
 };
 
+const normalizeManualSessionDays = (sessionDays = []) =>
+  (sessionDays || []).filter((day) => {
+    const date = String(day?.date || "").trim();
+    const treatmentType = String(day?.treatmentType || "").trim();
+    const doneByStaffId = day?.doneByStaffId;
+    const status = String(day?.status || "").trim().toLowerCase();
+    return Boolean(date && (treatmentType || doneByStaffId || status === "done"));
+  });
+
 const ensureTreatmentPlanSessionDays = (patient) => {
   let changed = false;
 
   (patient.treatmentPlans || []).forEach((plan) => {
-    if ((!plan.sessionDays || plan.sessionDays.length === 0) && plan.fromDate && plan.toDate) {
-      plan.sessionDays = buildSessionDays(plan.fromDate, plan.toDate);
+    const manualDays = normalizeManualSessionDays(plan.sessionDays || []);
+    if (manualDays.length !== (plan.sessionDays || []).length) {
+      plan.sessionDays = manualDays;
       changed = true;
     }
   });
@@ -2395,6 +2405,8 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
     const sessions = [];
     const payments = [];
     const staffSessionMap = new Map();
+    const staffPatientWorkMap = new Map();
+    const patientPaymentMap = new Map();
 
     patients.forEach((patient) => {
       const patientId = patient._id.toString();
@@ -2473,6 +2485,24 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
               treatmentType: treatmentType || treatmentTypes,
             });
             staffSessionMap.set(staffKey, current);
+
+            const staffPatientKey = `${staffKey}:${patientId}`;
+            const patientWork = staffPatientWorkMap.get(staffPatientKey) || {
+              staffId: doneByStaffId,
+              staffName: doneByStaffName,
+              patientId,
+              patientName,
+              patientMobile,
+              patientEmail,
+              doneDays: 0,
+              entries: [],
+            };
+            patientWork.doneDays += 1;
+            patientWork.entries.push({
+              date: day.date || "",
+              treatmentType: treatmentType || treatmentTypes,
+            });
+            staffPatientWorkMap.set(staffPatientKey, patientWork);
           }
         });
 
@@ -2497,6 +2527,10 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
             paymentDate: dateKey,
             createdAt: payment.createdAt || null,
           });
+          patientPaymentMap.set(
+            patientId,
+            (patientPaymentMap.get(patientId) || 0) + Number(payment.amount || 0)
+          );
         });
       });
 
@@ -2521,6 +2555,10 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
           paymentDate: dateKey,
           createdAt: payment.createdAt || null,
         });
+        patientPaymentMap.set(
+          patientId,
+          (patientPaymentMap.get(patientId) || 0) + Number(payment.amount || 0)
+        );
       });
     });
 
@@ -2532,6 +2570,34 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
     const staffSessions = Array.from(staffSessionMap.values()).sort(
       (a, b) => b.doneCount - a.doneCount || a.staffName.localeCompare(b.staffName)
     );
+    const staffWorkMap = new Map();
+    Array.from(staffPatientWorkMap.values()).forEach((record) => {
+      const staffKey = record.staffId || record.staffName || "Unassigned";
+      const staffWork = staffWorkMap.get(staffKey) || {
+        staffId: record.staffId,
+        staffName: record.staffName || "Unassigned",
+        totalDoneDays: 0,
+        totalPaidAmount: 0,
+        patients: [],
+      };
+      const paidAmount = Number(patientPaymentMap.get(record.patientId) || 0);
+      staffWork.totalDoneDays += Number(record.doneDays || 0);
+      staffWork.totalPaidAmount += paidAmount;
+      staffWork.patients.push({
+        ...record,
+        paidAmount,
+        entries: (record.entries || []).sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))),
+      });
+      staffWorkMap.set(staffKey, staffWork);
+    });
+    const staffWorkReports = Array.from(staffWorkMap.values())
+      .map((staff) => ({
+        ...staff,
+        patients: staff.patients.sort(
+          (a, b) => Number(b.doneDays || 0) - Number(a.doneDays || 0) || a.patientName.localeCompare(b.patientName)
+        ),
+      }))
+      .sort((a, b) => Number(b.totalDoneDays || 0) - Number(a.totalDoneDays || 0) || a.staffName.localeCompare(b.staffName));
 
     res.json({
       range: {
@@ -2547,12 +2613,14 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
         sessionCount: sessions.length,
         completedSessions: sessions.filter((session) => session.status === "done").length,
         staffDoneSessions: staffSessions.reduce((sum, staff) => sum + staff.doneCount, 0),
+        staffWorkCount: staffWorkReports.length,
         paymentCount: payments.length,
         paymentAmount: payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
       },
       appointments,
       sessions,
       staffSessions,
+      staffWorkReports,
       payments,
     });
   } catch (error) {
@@ -4219,7 +4287,7 @@ app.post("/api/patients/:id/treatment-plans", requireStaffPermission("treatment_
               },
             ]
           : [],
-      sessionDays: fromDate && toDate ? buildSessionDays(fromDate, toDate) : [],
+      sessionDays: [],
       status: "active",
     });
     applyTreatmentBilling(patient.treatmentPlans[0], billingSettings);
@@ -4366,9 +4434,7 @@ app.put("/api/patients/:id/treatment-plans/:planId", requireStaffPermission("tre
     plan.paymentNotes = paymentNotes;
     plan.treatmentLocation = treatmentLocation;
     plan.assignedStaffId = assignedStaffId || null;
-    if (hasDateRange) {
-      plan.sessionDays = buildSessionDays(plan.fromDate, plan.toDate, plan.sessionDays || []);
-    }
+    plan.sessionDays = normalizeManualSessionDays(plan.sessionDays || []);
     applyTreatmentBilling(plan, billingSettings);
 
     await patient.save();
@@ -4703,6 +4769,63 @@ app.post("/api/patients/:id/treatment-plans/:planId/payments", requireStaffPermi
   } catch (error) {
     console.log(error);
     res.status(500).json({ message: "Failed to add treatment payment." });
+  }
+});
+
+app.put("/api/patients/:id/treatment-plans/:planId/payments/:paymentId", requireStaffPermission("payments", "edit"), async (req, res) => {
+  try {
+    const patient = await Patient.findById(req.params.id);
+
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found." });
+    }
+
+    const plan = patient.treatmentPlans.id(req.params.planId);
+
+    if (!plan) {
+      return res.status(404).json({ message: "Treatment plan not found." });
+    }
+
+    const payment = plan.payments.id(req.params.paymentId);
+
+    if (!payment) {
+      return res.status(404).json({ message: "Payment not found." });
+    }
+
+    const amount = Number(req.body.amount || 0);
+    const method = String(req.body.method || "").trim();
+    const paymentDate = String(req.body.paymentDate || payment.paymentDate || getTodayKey()).trim().slice(0, 10);
+    const billingSettings =
+      req.body.billingSettings !== undefined
+        ? normalizeTreatmentBillingSettings(req.body.billingSettings)
+        : normalizeTreatmentBillingSettings(plan.billingSettings || {});
+
+    if (!amount) {
+      return res.status(400).json({ message: "Payment amount is required." });
+    }
+
+    if (amount <= 0) {
+      return res.status(400).json({ message: "Payment amount must be greater than zero." });
+    }
+
+    if (!isValidDateValue(paymentDate)) {
+      return res.status(400).json({ message: "Please select a valid payment date." });
+    }
+
+    payment.amount = amount;
+    payment.method = method;
+    payment.paymentDate = paymentDate;
+    if (method) {
+      plan.paymentMethod = method;
+    }
+
+    applyTreatmentBilling(plan, billingSettings);
+    await patient.save();
+
+    res.json(await serializePatientWithTreatmentStaff(patient));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to update treatment payment." });
   }
 });
 

@@ -12240,8 +12240,12 @@ private fun ReportsTab(
         ?: selectedStaffReport?.text("staffName", fallback = "Select staff").orEmpty()
     val patientRows = selectedStaffReport?.array("patients")?.toJsonObjects().orEmpty()
     val totalDoneDays = selectedStaffReport?.optInt("totalDoneDays", 0) ?: 0
+    val totalClinicDays = selectedStaffReport?.optInt("totalClinicDays", 0) ?: 0
+    val totalHomeVisitDays = selectedStaffReport?.optInt("totalHomeVisitDays", 0) ?: 0
     val totalPaidAmount = selectedStaffReport?.optDouble("totalPaidAmount", 0.0) ?: 0.0
-    val commissionAmount = totalPaidAmount * ((commissionPercent.toDoubleOrNull() ?: 0.0).coerceAtLeast(0.0) / 100.0)
+    val totalCommissionBaseAmount = selectedStaffReport?.optDouble("totalCommissionBaseAmount", totalPaidAmount) ?: totalPaidAmount
+    val commissionRate = (commissionPercent.toDoubleOrNull() ?: 0.0).coerceAtLeast(0.0)
+    val commissionAmount = totalCommissionBaseAmount * (commissionRate / 100.0)
 
     if (showFromDatePicker) {
         AppointmentDatePickerDialog(
@@ -12334,6 +12338,21 @@ private fun ReportsTab(
             )
         }
 
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            MetricCard(
+                modifier = Modifier.weight(1f),
+                label = "Clinic Days",
+                value = totalClinicDays.toString(),
+                accent = OpwBlue,
+            )
+            MetricCard(
+                modifier = Modifier.weight(1f),
+                label = "Home Visits",
+                value = totalHomeVisitDays.toString(),
+                accent = OpwAqua,
+            )
+        }
+
         Surface(
             shape = RoundedCornerShape(28.dp),
             color = Color(0xFFEFFBFF),
@@ -12356,7 +12375,11 @@ private fun ReportsTab(
                 )
                 DetailRow(
                     label = "Formula",
-                    value = "${formatMoney(totalPaidAmount)} x ${commissionPercent.ifBlank { "0" }}%",
+                    value = "${formatMoney(totalCommissionBaseAmount)} x ${commissionPercent.ifBlank { "0" }}%",
+                )
+                DetailRow(
+                    label = "Commission Base",
+                    value = "${formatMoney(totalCommissionBaseAmount)} after consultant charge",
                 )
                 DetailRow(
                     label = "Commission Amount",
@@ -12372,6 +12395,11 @@ private fun ReportsTab(
             accent = OpwAqua,
         ) { patient ->
             val entries = patient.array("entries").toJsonObjects()
+            val patientCommissionBase = patient.optDouble(
+                "commissionBaseAmount",
+                patient.optDouble("paidAmount", 0.0),
+            )
+            val patientCommissionAmount = patientCommissionBase * (commissionRate / 100.0)
             ReportRecordCard(
                 title = patient.text("patientName", fallback = "Patient"),
                 subtitle = patient.text("patientMobile", fallback = "Mobile not provided"),
@@ -12379,6 +12407,10 @@ private fun ReportsTab(
                 statusColor = OpwSuccess,
                 rows = listOf(
                     "Paid by patient" to formatMoney(patient.opt("paidAmount")),
+                    "Clinic days" to patient.optInt("clinicDays", 0).toString(),
+                    "Home visits" to patient.optInt("homeVisitDays", 0).toString(),
+                    "Commission base" to formatMoney(patientCommissionBase),
+                    "Commission" to formatMoney(patientCommissionAmount),
                     "Dates" to entries.take(6).joinToString(", ") { it.text("date", fallback = "-") },
                     "Treatment" to entries.firstOrNull()?.text("treatmentType", fallback = "Treatment").orEmpty(),
                 ) + if (entries.size > 6) {

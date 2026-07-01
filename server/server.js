@@ -2407,6 +2407,7 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
     const staffSessionMap = new Map();
     const staffPatientWorkMap = new Map();
     const patientPaymentMap = new Map();
+    const patientCommissionBaseMap = new Map();
 
     patients.forEach((patient) => {
       const patientId = patient._id.toString();
@@ -2439,6 +2440,8 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
       (patient.treatmentPlans || []).forEach((plan) => {
         const treatmentTypes = (plan.treatmentTypes || []).join(", ") || "Treatment Session";
         const planStatus = plan.status || "active";
+        const treatmentLocation = normalizeServiceLocation(plan.treatmentLocation);
+        const treatmentLocationLabel = formatServiceLocation(treatmentLocation);
 
         (plan.sessionDays || []).forEach((day) => {
           const dateKey = String(day.date || "").slice(0, 10);
@@ -2464,6 +2467,8 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
             doneByStaffId,
             doneByStaffName,
             planStatus,
+            treatmentLocation,
+            treatmentLocationLabel,
             fromDate: plan.fromDate || "",
             toDate: plan.toDate || "",
           });
@@ -2483,6 +2488,8 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
               patientMobile,
               date: day.date || "",
               treatmentType: treatmentType || treatmentTypes,
+              treatmentLocation,
+              treatmentLocationLabel,
             });
             staffSessionMap.set(staffKey, current);
 
@@ -2495,17 +2502,27 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
               patientMobile,
               patientEmail,
               doneDays: 0,
+              clinicDays: 0,
+              homeVisitDays: 0,
               entries: [],
             };
             patientWork.doneDays += 1;
+            if (treatmentLocation === "home") {
+              patientWork.homeVisitDays += 1;
+            } else {
+              patientWork.clinicDays += 1;
+            }
             patientWork.entries.push({
               date: day.date || "",
               treatmentType: treatmentType || treatmentTypes,
+              treatmentLocation,
+              treatmentLocationLabel,
             });
             staffPatientWorkMap.set(staffPatientKey, patientWork);
           }
         });
 
+        let planPaidAmountInRange = 0;
         (plan.payments || []).forEach((payment) => {
           const dateKey = payment.paymentDate || (payment.createdAt ? formatDateKey(new Date(payment.createdAt)) : "");
           if (!isInRange(dateKey)) {
@@ -2531,7 +2548,20 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
             patientId,
             (patientPaymentMap.get(patientId) || 0) + Number(payment.amount || 0)
           );
+          planPaidAmountInRange += Number(payment.amount || 0);
         });
+        if (planPaidAmountInRange > 0) {
+          const billing = calculateTreatmentBilling(plan);
+          const consultationCharge = Number(billing?.summary?.consultationCharge || 0);
+          const commissionBaseAmount = Math.max(
+            0,
+            planPaidAmountInRange - Math.min(planPaidAmountInRange, consultationCharge)
+          );
+          patientCommissionBaseMap.set(
+            patientId,
+            (patientCommissionBaseMap.get(patientId) || 0) + commissionBaseAmount
+          );
+        }
       });
 
       (patient.payments || []).forEach((payment) => {
@@ -2559,6 +2589,10 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
           patientId,
           (patientPaymentMap.get(patientId) || 0) + Number(payment.amount || 0)
         );
+        patientCommissionBaseMap.set(
+          patientId,
+          (patientCommissionBaseMap.get(patientId) || 0) + Number(payment.amount || 0)
+        );
       });
     });
 
@@ -2577,15 +2611,23 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
         staffId: record.staffId,
         staffName: record.staffName || "Unassigned",
         totalDoneDays: 0,
+        totalClinicDays: 0,
+        totalHomeVisitDays: 0,
         totalPaidAmount: 0,
+        totalCommissionBaseAmount: 0,
         patients: [],
       };
       const paidAmount = Number(patientPaymentMap.get(record.patientId) || 0);
+      const commissionBaseAmount = Number(patientCommissionBaseMap.get(record.patientId) || 0);
       staffWork.totalDoneDays += Number(record.doneDays || 0);
+      staffWork.totalClinicDays += Number(record.clinicDays || 0);
+      staffWork.totalHomeVisitDays += Number(record.homeVisitDays || 0);
       staffWork.totalPaidAmount += paidAmount;
+      staffWork.totalCommissionBaseAmount += commissionBaseAmount;
       staffWork.patients.push({
         ...record,
         paidAmount,
+        commissionBaseAmount,
         entries: (record.entries || []).sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))),
       });
       staffWorkMap.set(staffKey, staffWork);

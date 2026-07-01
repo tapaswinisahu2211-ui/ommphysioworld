@@ -6194,12 +6194,14 @@ private fun CompactPickerPill(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = icon,
-                color = Color(0xFF2D8A82),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.ExtraBold,
-            )
+            if (icon.isNotBlank()) {
+                Text(
+                    text = icon,
+                    color = Color(0xFF2D8A82),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+            }
             Text(
                 text = value.ifBlank { placeholder },
                 color = if (value.isBlank()) Color(0xFF94A3B8) else OpwInk,
@@ -7058,7 +7060,7 @@ private fun TreatmentPlanCard(
                             CompactPickerPill(
                                 value = selectedStaffName,
                                 placeholder = "Done by staff",
-                                icon = "⌄",
+                                icon = "",
                                 onClick = { showEntryStaffMenu = true },
                             )
                             DropdownMenu(
@@ -7347,7 +7349,7 @@ private fun PatientPaymentsSection(
                                 CompactPickerPill(
                                     value = selectedPlan?.let { treatmentTypeText(it) }.orEmpty(),
                                     placeholder = "Select treatment",
-                                    icon = "⌄",
+                                    icon = "",
                                     onClick = { showPlanMenu = true },
                                 )
                                 DropdownMenu(
@@ -7403,7 +7405,7 @@ private fun PatientPaymentsSection(
                                     if (it.isLowerCase()) it.titlecase() else it.toString()
                                 },
                                 placeholder = "Select payment method",
-                                icon = "⌄",
+                                icon = "",
                                 onClick = { showMethodMenu = true },
                             )
                             DropdownMenu(
@@ -7715,7 +7717,7 @@ private fun TreatmentPaymentEditDialog(
         CompactPickerPill(
             value = appointmentDateLabel(paymentDate),
             placeholder = "Pick payment date",
-            icon = "ðŸ“…",
+            icon = "",
             onClick = { showDatePicker = true },
         )
         Box {
@@ -7724,7 +7726,7 @@ private fun TreatmentPaymentEditDialog(
                     if (it.isLowerCase()) it.titlecase() else it.toString()
                 },
                 placeholder = "Select payment method",
-                icon = "âŒ„",
+                icon = "",
                 onClick = { showMethodMenu = true },
             )
             DropdownMenu(
@@ -9557,7 +9559,7 @@ private fun TreatmentTrackerActiveSessionCard(
                         CompactPickerPill(
                             value = selectedStaffName,
                             placeholder = "Done by staff",
-                            icon = "⌄",
+                            icon = "",
                             onClick = { showStaffMenu = true },
                         )
                         DropdownMenu(
@@ -12222,7 +12224,8 @@ private fun ReportsTab(
         mutableStateOf(reportStaffOptions.firstOrNull()?.first.orEmpty())
     }
     var showStaffMenu by rememberSaveable { mutableStateOf(false) }
-    var commissionPercent by rememberSaveable { mutableStateOf("") }
+    var clinicCommissionPercent by rememberSaveable { mutableStateOf("") }
+    var homeVisitCommissionPercent by rememberSaveable { mutableStateOf("") }
     var showFromDatePicker by rememberSaveable { mutableStateOf(false) }
     var showToDatePicker by rememberSaveable { mutableStateOf(false) }
 
@@ -12244,8 +12247,19 @@ private fun ReportsTab(
     val totalHomeVisitDays = selectedStaffReport?.optInt("totalHomeVisitDays", 0) ?: 0
     val totalPaidAmount = selectedStaffReport?.optDouble("totalPaidAmount", 0.0) ?: 0.0
     val totalCommissionBaseAmount = selectedStaffReport?.optDouble("totalCommissionBaseAmount", totalPaidAmount) ?: totalPaidAmount
-    val commissionRate = (commissionPercent.toDoubleOrNull() ?: 0.0).coerceAtLeast(0.0)
-    val commissionAmount = totalCommissionBaseAmount * (commissionRate / 100.0)
+    val totalClinicCommissionBaseAmount = selectedStaffReport?.optDouble(
+        "totalClinicCommissionBaseAmount",
+        totalCommissionBaseAmount,
+    ) ?: totalCommissionBaseAmount
+    val totalHomeVisitCommissionBaseAmount = selectedStaffReport?.optDouble(
+        "totalHomeVisitCommissionBaseAmount",
+        0.0,
+    ) ?: 0.0
+    val clinicCommissionRate = (clinicCommissionPercent.toDoubleOrNull() ?: 0.0).coerceAtLeast(0.0)
+    val homeVisitCommissionRate = (homeVisitCommissionPercent.toDoubleOrNull() ?: 0.0).coerceAtLeast(0.0)
+    val clinicCommissionAmount = totalClinicCommissionBaseAmount * (clinicCommissionRate / 100.0)
+    val homeVisitCommissionAmount = totalHomeVisitCommissionBaseAmount * (homeVisitCommissionRate / 100.0)
+    val commissionAmount = clinicCommissionAmount + homeVisitCommissionAmount
 
     if (showFromDatePicker) {
         AppointmentDatePickerDialog(
@@ -12299,7 +12313,7 @@ private fun ReportsTab(
                     CompactPickerPill(
                         value = selectedStaffName,
                         placeholder = "Choose staff",
-                        icon = "âŒ„",
+                        icon = "",
                         onClick = { showStaffMenu = true },
                     )
                     DropdownMenu(
@@ -12364,18 +12378,34 @@ private fun ReportsTab(
             ) {
                 Text("Commission Calculator", color = OpwInk, fontWeight = FontWeight.ExtraBold)
                 OutlinedTextField(
-                    value = commissionPercent,
+                    value = clinicCommissionPercent,
                     onValueChange = { value ->
-                        commissionPercent = value.filter { char -> char.isDigit() || char == '.' }.take(6)
+                        clinicCommissionPercent = value.filter { char -> char.isDigit() || char == '.' }.take(6)
                     },
-                    placeholder = { Text("Commission percentage") },
+                    placeholder = { Text("Clinic commission percentage") },
+                    label = { Text("Clinic %") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                )
+                OutlinedTextField(
+                    value = homeVisitCommissionPercent,
+                    onValueChange = { value ->
+                        homeVisitCommissionPercent = value.filter { char -> char.isDigit() || char == '.' }.take(6)
+                    },
+                    placeholder = { Text("Home visit commission percentage") },
+                    label = { Text("Home visit %") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
                 DetailRow(
-                    label = "Formula",
-                    value = "${formatMoney(totalCommissionBaseAmount)} x ${commissionPercent.ifBlank { "0" }}%",
+                    label = "Clinic Formula",
+                    value = "${formatMoney(totalClinicCommissionBaseAmount)} x ${clinicCommissionPercent.ifBlank { "0" }}%",
+                )
+                DetailRow(
+                    label = "Home Formula",
+                    value = "${formatMoney(totalHomeVisitCommissionBaseAmount)} x ${homeVisitCommissionPercent.ifBlank { "0" }}%",
                 )
                 DetailRow(
                     label = "Commission Base",
@@ -12399,7 +12429,14 @@ private fun ReportsTab(
                 "commissionBaseAmount",
                 patient.optDouble("paidAmount", 0.0),
             )
-            val patientCommissionAmount = patientCommissionBase * (commissionRate / 100.0)
+            val patientClinicCommissionBase = patient.optDouble(
+                "clinicCommissionBaseAmount",
+                patientCommissionBase,
+            )
+            val patientHomeVisitCommissionBase = patient.optDouble("homeVisitCommissionBaseAmount", 0.0)
+            val patientClinicCommission = patientClinicCommissionBase * (clinicCommissionRate / 100.0)
+            val patientHomeVisitCommission = patientHomeVisitCommissionBase * (homeVisitCommissionRate / 100.0)
+            val patientCommissionAmount = patientClinicCommission + patientHomeVisitCommission
             ReportRecordCard(
                 title = patient.text("patientName", fallback = "Patient"),
                 subtitle = patient.text("patientMobile", fallback = "Mobile not provided"),
@@ -12410,6 +12447,10 @@ private fun ReportsTab(
                     "Clinic days" to patient.optInt("clinicDays", 0).toString(),
                     "Home visits" to patient.optInt("homeVisitDays", 0).toString(),
                     "Commission base" to formatMoney(patientCommissionBase),
+                    "Clinic base" to formatMoney(patientClinicCommissionBase),
+                    "Home base" to formatMoney(patientHomeVisitCommissionBase),
+                    "Clinic commission" to formatMoney(patientClinicCommission),
+                    "Home commission" to formatMoney(patientHomeVisitCommission),
                     "Commission" to formatMoney(patientCommissionAmount),
                     "Dates" to entries.take(6).joinToString(", ") { it.text("date", fallback = "-") },
                     "Treatment" to entries.firstOrNull()?.text("treatmentType", fallback = "Treatment").orEmpty(),

@@ -2408,6 +2408,8 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
     const staffPatientWorkMap = new Map();
     const patientPaymentMap = new Map();
     const patientCommissionBaseMap = new Map();
+    const patientClinicCommissionBaseMap = new Map();
+    const patientHomeVisitCommissionBaseMap = new Map();
 
     patients.forEach((patient) => {
       const patientId = patient._id.toString();
@@ -2561,6 +2563,14 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
             patientId,
             (patientCommissionBaseMap.get(patientId) || 0) + commissionBaseAmount
           );
+          const locationCommissionMap =
+            treatmentLocation === "home"
+              ? patientHomeVisitCommissionBaseMap
+              : patientClinicCommissionBaseMap;
+          locationCommissionMap.set(
+            patientId,
+            (locationCommissionMap.get(patientId) || 0) + commissionBaseAmount
+          );
         }
       });
 
@@ -2593,6 +2603,10 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
           patientId,
           (patientCommissionBaseMap.get(patientId) || 0) + Number(payment.amount || 0)
         );
+        patientClinicCommissionBaseMap.set(
+          patientId,
+          (patientClinicCommissionBaseMap.get(patientId) || 0) + Number(payment.amount || 0)
+        );
       });
     });
 
@@ -2615,19 +2629,27 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
         totalHomeVisitDays: 0,
         totalPaidAmount: 0,
         totalCommissionBaseAmount: 0,
+        totalClinicCommissionBaseAmount: 0,
+        totalHomeVisitCommissionBaseAmount: 0,
         patients: [],
       };
       const paidAmount = Number(patientPaymentMap.get(record.patientId) || 0);
       const commissionBaseAmount = Number(patientCommissionBaseMap.get(record.patientId) || 0);
+      const clinicCommissionBaseAmount = Number(patientClinicCommissionBaseMap.get(record.patientId) || 0);
+      const homeVisitCommissionBaseAmount = Number(patientHomeVisitCommissionBaseMap.get(record.patientId) || 0);
       staffWork.totalDoneDays += Number(record.doneDays || 0);
       staffWork.totalClinicDays += Number(record.clinicDays || 0);
       staffWork.totalHomeVisitDays += Number(record.homeVisitDays || 0);
       staffWork.totalPaidAmount += paidAmount;
       staffWork.totalCommissionBaseAmount += commissionBaseAmount;
+      staffWork.totalClinicCommissionBaseAmount += clinicCommissionBaseAmount;
+      staffWork.totalHomeVisitCommissionBaseAmount += homeVisitCommissionBaseAmount;
       staffWork.patients.push({
         ...record,
         paidAmount,
         commissionBaseAmount,
+        clinicCommissionBaseAmount,
+        homeVisitCommissionBaseAmount,
         entries: (record.entries || []).sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))),
       });
       staffWorkMap.set(staffKey, staffWork);

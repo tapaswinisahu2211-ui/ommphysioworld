@@ -41,7 +41,8 @@ export default function ReportsPage() {
   const [fromDate, setFromDate] = useState(getMonthStartKey());
   const [toDate, setToDate] = useState(getTodayKey());
   const [selectedStaffKey, setSelectedStaffKey] = useState("");
-  const [commissionPercent, setCommissionPercent] = useState("");
+  const [clinicCommissionPercent, setClinicCommissionPercent] = useState("");
+  const [homeVisitCommissionPercent, setHomeVisitCommissionPercent] = useState("");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -100,8 +101,18 @@ export default function ReportsPage() {
   const totalCommissionBaseAmount = Number(
     selectedReport?.totalCommissionBaseAmount ?? totalPaidAmount
   );
-  const commissionRate = Math.max(0, Number(commissionPercent || 0));
-  const commissionAmount = (totalCommissionBaseAmount * commissionRate) / 100;
+  const totalClinicCommissionBaseAmount = Number(
+    selectedReport?.totalClinicCommissionBaseAmount ?? totalCommissionBaseAmount
+  );
+  const totalHomeVisitCommissionBaseAmount = Number(
+    selectedReport?.totalHomeVisitCommissionBaseAmount || 0
+  );
+  const clinicCommissionRate = Math.max(0, Number(clinicCommissionPercent || 0));
+  const homeVisitCommissionRate = Math.max(0, Number(homeVisitCommissionPercent || 0));
+  const clinicCommissionAmount = (totalClinicCommissionBaseAmount * clinicCommissionRate) / 100;
+  const homeVisitCommissionAmount =
+    (totalHomeVisitCommissionBaseAmount * homeVisitCommissionRate) / 100;
+  const commissionAmount = clinicCommissionAmount + homeVisitCommissionAmount;
   const activeRange = data?.range || { from: fromDate, to: toDate };
 
   const handleApply = (event) => {
@@ -145,7 +156,7 @@ export default function ReportsPage() {
     {
       label: "Commission",
       value: formatMoney(commissionAmount),
-      note: `${commissionRate || 0}% after excluding consultant charges`,
+      note: `Clinic ${clinicCommissionRate || 0}% + home ${homeVisitCommissionRate || 0}%`,
       icon: Calculator,
       tone: "bg-violet-50 text-violet-700",
     },
@@ -182,7 +193,7 @@ export default function ReportsPage() {
           onSubmit={handleApply}
           className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
         >
-          <div className="grid gap-4 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] lg:items-end">
+          <div className="grid gap-4 lg:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto] lg:items-end">
             <label className="block">
               <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                 From Date
@@ -227,15 +238,29 @@ export default function ReportsPage() {
             </label>
             <label className="block">
               <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Commission %
+                Clinic Commission %
               </span>
               <input
                 type="number"
                 min="0"
                 step="0.01"
-                value={commissionPercent}
-                onChange={(event) => setCommissionPercent(event.target.value)}
-                placeholder="Example: 10"
+                value={clinicCommissionPercent}
+                onChange={(event) => setClinicCommissionPercent(event.target.value)}
+                placeholder="Clinic %"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-cyan-300 focus:bg-white focus:ring-4 focus:ring-cyan-100"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Home Commission %
+              </span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={homeVisitCommissionPercent}
+                onChange={(event) => setHomeVisitCommissionPercent(event.target.value)}
+                placeholder="Home %"
                 className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-cyan-300 focus:bg-white focus:ring-4 focus:ring-cyan-100"
               />
             </label>
@@ -304,7 +329,18 @@ export default function ReportsPage() {
                     const patientCommissionBase = Number(
                       patient.commissionBaseAmount ?? patient.paidAmount ?? 0
                     );
-                    const patientCommissionAmount = (patientCommissionBase * commissionRate) / 100;
+                    const patientClinicCommissionBase = Number(
+                      patient.clinicCommissionBaseAmount ?? patientCommissionBase
+                    );
+                    const patientHomeVisitCommissionBase = Number(
+                      patient.homeVisitCommissionBaseAmount || 0
+                    );
+                    const patientClinicCommission =
+                      (patientClinicCommissionBase * clinicCommissionRate) / 100;
+                    const patientHomeVisitCommission =
+                      (patientHomeVisitCommissionBase * homeVisitCommissionRate) / 100;
+                    const patientCommissionAmount =
+                      patientClinicCommission + patientHomeVisitCommission;
                     const dateSummary = entries
                       .slice(0, 5)
                       .map((entry) => {
@@ -344,10 +380,19 @@ export default function ReportsPage() {
                           <p className="font-semibold text-slate-900">
                             {formatMoney(patientCommissionBase)}
                           </p>
-                          <p className="text-xs text-slate-500">Consultant charge excluded</p>
+                          <p className="text-xs text-slate-500">
+                            Clinic {formatMoney(patientClinicCommissionBase)} | Home{" "}
+                            {formatMoney(patientHomeVisitCommissionBase)}
+                          </p>
                         </td>
-                        <td className="px-3 py-3 font-semibold text-violet-700">
-                          {formatMoney(patientCommissionAmount)}
+                        <td className="px-3 py-3">
+                          <p className="font-semibold text-violet-700">
+                            {formatMoney(patientCommissionAmount)}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            Clinic {formatMoney(patientClinicCommission)} + Home{" "}
+                            {formatMoney(patientHomeVisitCommission)}
+                          </p>
                         </td>
                         <td className="max-w-xl px-3 py-3 text-slate-600">
                           {dateSummary || "-"}

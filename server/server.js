@@ -263,10 +263,16 @@ const normalizeTreatmentBillingSettings = (value = {}) => {
 
 const calculateTreatmentBilling = (plan, billingSettings = null) => {
   const settings = normalizeTreatmentBillingSettings(billingSettings || plan?.billingSettings || {});
-  const treatmentLocation = normalizeServiceLocation(plan?.treatmentLocation);
   const sessionCount = (plan?.sessionDays || []).filter((day) => day?.date).length;
-  const sessionRate = treatmentLocation === "home" ? settings.homeVisitCharge : settings.clinicVisitCharge;
-  const sessionSubtotal = sessionCount * sessionRate;
+  const clinicSessionCount = (plan?.sessionDays || []).filter(
+    (day) => day?.date && normalizeServiceLocation(day?.treatmentLocation || plan?.treatmentLocation) === "clinic"
+  ).length;
+  const homeVisitSessionCount = (plan?.sessionDays || []).filter(
+    (day) => day?.date && normalizeServiceLocation(day?.treatmentLocation || plan?.treatmentLocation) === "home"
+  ).length;
+  const sessionSubtotal =
+    clinicSessionCount * settings.clinicVisitCharge + homeVisitSessionCount * settings.homeVisitCharge;
+  const sessionRate = sessionCount > 0 ? sessionSubtotal / sessionCount : settings.clinicVisitCharge;
   const consultationCharge = settings.firstConsultationCharge;
   const discountAmount =
     settings.discountType === "percent"
@@ -280,6 +286,8 @@ const calculateTreatmentBilling = (plan, billingSettings = null) => {
     settings,
     summary: {
       sessionCount,
+      clinicSessionCount,
+      homeVisitSessionCount,
       sessionRate,
       sessionSubtotal,
       consultationCharge,
@@ -446,6 +454,8 @@ const serializePatient = (patient) => ({
       },
       billingSummary: {
         sessionCount: Number(billing.summary.sessionCount || 0),
+        clinicSessionCount: Number(billing.summary.clinicSessionCount || 0),
+        homeVisitSessionCount: Number(billing.summary.homeVisitSessionCount || 0),
         sessionRate: Number(billing.summary.sessionRate || 0),
         sessionSubtotal: Number(billing.summary.sessionSubtotal || 0),
         consultationCharge: Number(billing.summary.consultationCharge || 0),
@@ -469,6 +479,8 @@ const serializePatient = (patient) => ({
           id: day._id.toString(),
           date: day.date || "",
           treatmentType: day.treatmentType || "",
+          treatmentLocation: normalizeServiceLocation(day.treatmentLocation || plan.treatmentLocation),
+          treatmentLocationLabel: formatServiceLocation(day.treatmentLocation || plan.treatmentLocation),
           doneByStaffId: day.doneByStaffId
             ? doneByStaff
               ? doneByStaff._id.toString()
@@ -821,6 +833,8 @@ const buildSessionDays = (fromDate, toDate, existingDays = []) => {
         status: day.status || "not_done",
         updatedAt: day.updatedAt || null,
         treatmentType: day.treatmentType || "",
+        treatmentLocation: normalizeServiceLocation(day.treatmentLocation || "clinic"),
+        treatmentLocationLabel: formatServiceLocation(day.treatmentLocation || "clinic"),
         doneByStaffId: day.doneByStaffId || null,
         doneByStaffName: day.doneByStaffName || "",
       },
@@ -837,6 +851,7 @@ const buildSessionDays = (fromDate, toDate, existingDays = []) => {
       status: existing?.status || "not_done",
       updatedAt: existing?.updatedAt || null,
       treatmentType: existing?.treatmentType || "",
+      treatmentLocation: normalizeServiceLocation(existing?.treatmentLocation || "clinic"),
       doneByStaffId: existing?.doneByStaffId || null,
       doneByStaffName: existing?.doneByStaffName || "",
     });
@@ -2442,8 +2457,6 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
       (patient.treatmentPlans || []).forEach((plan) => {
         const treatmentTypes = (plan.treatmentTypes || []).join(", ") || "Treatment Session";
         const planStatus = plan.status || "active";
-        const treatmentLocation = normalizeServiceLocation(plan.treatmentLocation);
-        const treatmentLocationLabel = formatServiceLocation(treatmentLocation);
 
         (plan.sessionDays || []).forEach((day) => {
           const dateKey = String(day.date || "").slice(0, 10);
@@ -2455,6 +2468,8 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
           const doneByStaffId = day.doneByStaffId ? day.doneByStaffId.toString() : "";
           const doneByStaffName = cleanText(day.doneByStaffName) || "Unassigned";
           const treatmentType = cleanText(day.treatmentType);
+          const treatmentLocation = normalizeServiceLocation(day.treatmentLocation || plan.treatmentLocation);
+          const treatmentLocationLabel = formatServiceLocation(treatmentLocation);
           sessions.push({
             id: `${patientId}-${plan._id.toString()}-${day._id.toString()}`,
             patientId,
@@ -2559,17 +2574,32 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
             0,
             planPaidAmountInRange - Math.min(planPaidAmountInRange, consultationCharge)
           );
+          const clinicSubtotal =
+            Number(billing?.summary?.clinicSessionCount || 0) *
+            Number(billing?.settings?.clinicVisitCharge || 0);
+          const homeVisitSubtotal =
+            Number(billing?.summary?.homeVisitSessionCount || 0) *
+            Number(billing?.settings?.homeVisitCharge || 0);
+          const splitSubtotal = clinicSubtotal + homeVisitSubtotal;
+          const clinicCommissionBaseAmount =
+            splitSubtotal > 0
+              ? (commissionBaseAmount * clinicSubtotal) / splitSubtotal
+              : commissionBaseAmount;
+          const homeVisitCommissionBaseAmount =
+            splitSubtotal > 0
+              ? commissionBaseAmount - clinicCommissionBaseAmount
+              : 0;
           patientCommissionBaseMap.set(
             patientId,
             (patientCommissionBaseMap.get(patientId) || 0) + commissionBaseAmount
           );
-          const locationCommissionMap =
-            treatmentLocation === "home"
-              ? patientHomeVisitCommissionBaseMap
-              : patientClinicCommissionBaseMap;
-          locationCommissionMap.set(
+          patientClinicCommissionBaseMap.set(
             patientId,
-            (locationCommissionMap.get(patientId) || 0) + commissionBaseAmount
+            (patientClinicCommissionBaseMap.get(patientId) || 0) + clinicCommissionBaseAmount
+          );
+          patientHomeVisitCommissionBaseMap.set(
+            patientId,
+            (patientHomeVisitCommissionBaseMap.get(patientId) || 0) + homeVisitCommissionBaseAmount
           );
         }
       });
@@ -4617,6 +4647,7 @@ app.post(
     const date = String(req.body.date || getTodayKey()).trim().slice(0, 10);
     const treatmentType = String(req.body.treatmentType || "").trim();
     const doneByStaffId = String(req.body.doneByStaffId || "").trim();
+    const treatmentLocation = normalizeServiceLocation(req.body.treatmentLocation || plan.treatmentLocation);
     const sessionDate = parseDateKey(date);
     const todayDate = parseDateKey(getTodayKey());
 
@@ -4648,6 +4679,7 @@ app.post(
       plan.sessionDays.push({
         date,
         treatmentType,
+        treatmentLocation,
         doneByStaffId: doneByStaff._id,
         doneByStaffName: doneByStaff.name,
         status: "done",
@@ -4656,6 +4688,7 @@ app.post(
       sessionDay = plan.sessionDays[plan.sessionDays.length - 1];
     } else {
       sessionDay.treatmentType = treatmentType;
+      sessionDay.treatmentLocation = treatmentLocation;
       sessionDay.doneByStaffId = doneByStaff._id;
       sessionDay.doneByStaffName = doneByStaff.name;
       sessionDay.status = "done";
@@ -4691,6 +4724,8 @@ app.post(
       metadata: {
         date,
         treatmentType,
+        treatmentLocation,
+        treatmentLocationLabel: formatServiceLocation(treatmentLocation),
         doneByStaffId: doneByStaff._id.toString(),
         doneByStaffName: doneByStaff.name,
         status: "done",

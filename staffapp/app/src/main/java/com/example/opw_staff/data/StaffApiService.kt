@@ -198,12 +198,14 @@ class StaffApiService(
         planId: String,
         date: String,
         treatmentType: String,
+        treatmentLocation: String,
         doneByStaffId: String,
     ): JSONObject =
         withContext(Dispatchers.IO) {
             val body = JSONObject()
                 .put("date", date)
                 .put("treatmentType", treatmentType)
+                .put("treatmentLocation", treatmentLocation)
                 .put("doneByStaffId", doneByStaffId)
             JSONObject(
                 request(

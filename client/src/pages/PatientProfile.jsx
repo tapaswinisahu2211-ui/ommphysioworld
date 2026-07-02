@@ -75,9 +75,19 @@ const normalizeBillingSettings = (settings = {}) => ({
 const calculateTreatmentBilling = (plan, settingsOverride) => {
   const settings = normalizeBillingSettings(settingsOverride || plan?.billingSettings);
   const sessionCount = (plan?.sessionDays || []).filter((day) => day.date).length;
-  const isHome = String(plan?.treatmentLocation || "").toLowerCase() === "home";
-  const sessionRate = isHome ? settings.homeVisitCharge : settings.clinicVisitCharge;
-  const sessionSubtotal = sessionCount * sessionRate;
+  const clinicSessionCount = (plan?.sessionDays || []).filter(
+    (day) =>
+      day.date &&
+      String(day.treatmentLocation || plan?.treatmentLocation || "clinic").toLowerCase() !== "home"
+  ).length;
+  const homeVisitSessionCount = (plan?.sessionDays || []).filter(
+    (day) =>
+      day.date &&
+      String(day.treatmentLocation || plan?.treatmentLocation || "clinic").toLowerCase() === "home"
+  ).length;
+  const sessionSubtotal =
+    clinicSessionCount * settings.clinicVisitCharge + homeVisitSessionCount * settings.homeVisitCharge;
+  const sessionRate = sessionCount > 0 ? sessionSubtotal / sessionCount : settings.clinicVisitCharge;
   const consultationCharge = settings.firstConsultationCharge;
   const discountAmount =
     settings.discountType === "percent"
@@ -93,6 +103,8 @@ const calculateTreatmentBilling = (plan, settingsOverride) => {
   return {
     settings,
     sessionCount,
+    clinicSessionCount,
+    homeVisitSessionCount,
     sessionRate,
     sessionSubtotal,
     consultationCharge,
@@ -192,6 +204,7 @@ export default function PatientProfile() {
     planId: "",
     date: getTodayKey(),
     treatmentType: "",
+    treatmentLocation: "clinic",
     doneByStaffId: "",
   });
   const [editingPlanId, setEditingPlanId] = useState("");
@@ -500,6 +513,7 @@ export default function PatientProfile() {
       const response = await API.post(`/patients/${id}/treatment-plans/${planId}/session-days`, {
         date: sessionEntryForm.date || getTodayKey(),
         treatmentType: sessionEntryForm.treatmentType,
+        treatmentLocation: sessionEntryForm.treatmentLocation || "clinic",
         doneByStaffId: sessionEntryForm.doneByStaffId,
       });
 
@@ -508,6 +522,7 @@ export default function PatientProfile() {
         planId,
         date: getTodayKey(),
         treatmentType: "",
+        treatmentLocation: "clinic",
         doneByStaffId: "",
       });
       setError("");
@@ -1350,6 +1365,42 @@ export default function PatientProfile() {
                                   ))}
                                 </select>
                               </div>
+                              <div>
+                                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                  Visit Type
+                                </label>
+                                <div className="mt-2 grid grid-cols-2 gap-2">
+                                  {[
+                                    ["clinic", "Clinic"],
+                                    ["home", "Home"],
+                                  ].map(([value, label]) => {
+                                    const active =
+                                      (sessionEntryForm.planId === plan.id
+                                        ? sessionEntryForm.treatmentLocation
+                                        : plan.treatmentLocation || "clinic") === value;
+                                    return (
+                                      <button
+                                        key={value}
+                                        type="button"
+                                        onClick={() =>
+                                          setSessionEntryForm((current) => ({
+                                            ...current,
+                                            planId: plan.id,
+                                            treatmentLocation: value,
+                                          }))
+                                        }
+                                        className={`rounded-xl border px-3 py-2 text-xs font-semibold ${
+                                          active
+                                            ? "border-cyan-300 bg-cyan-50 text-cyan-800"
+                                            : "border-slate-200 bg-white text-slate-500"
+                                        }`}
+                                      >
+                                        {label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
                               <button
                                 type="submit"
                                 className="inline-flex h-11 items-center justify-center rounded-xl bg-cyan-700 px-4 text-sm font-semibold text-white hover:bg-cyan-800"
@@ -1377,6 +1428,11 @@ export default function PatientProfile() {
                                     </p>
                                     <p className="mt-0.5 truncate text-[11px] text-slate-400">
                                       {day.doneByStaffName ? `By ${day.doneByStaffName}` : "Staff not added"}
+                                    </p>
+                                    <p className="mt-0.5 truncate text-[11px] font-semibold text-cyan-700">
+                                      {String(day.treatmentLocation || plan.treatmentLocation || "clinic").toLowerCase() === "home"
+                                        ? "Home visit"
+                                        : "Clinic visit"}
                                     </p>
                                   </div>
                                   <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-700">

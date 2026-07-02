@@ -148,7 +148,7 @@ function PatientCard({
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-emerald-700">
             Add today&apos;s treatment done details
           </p>
-          <div className="grid gap-2 lg:grid-cols-[140px_minmax(160px,1fr)_minmax(160px,1fr)_auto]">
+          <div className="grid gap-2 lg:grid-cols-[140px_minmax(160px,1fr)_minmax(160px,1fr)_minmax(150px,0.8fr)_auto]">
             <input
               type="date"
               value={sessionForm?.date || getTodayKey()}
@@ -177,6 +177,16 @@ function PatientCard({
                   {staff.name || staff.email || "Staff"}
                 </option>
               ))}
+            </select>
+            <select
+              value={sessionForm?.treatmentLocation || activePlan.treatmentLocation || "clinic"}
+              onChange={(event) =>
+                onSessionFormChange(activePlan.id, "treatmentLocation", event.target.value)
+              }
+              className="rounded-xl border border-emerald-100 bg-white px-3 py-2 text-xs outline-none focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+            >
+              <option value="clinic">Clinic visit</option>
+              <option value="home">Home visit</option>
             </select>
             <button
               type="button"
@@ -543,6 +553,7 @@ export default function TreatmentTracker() {
               date: getTodayKey(),
               treatmentType: "",
               doneByStaffId: "",
+              treatmentLocation: plan.treatmentLocation || "clinic",
             };
           }
         });
@@ -585,7 +596,12 @@ export default function TreatmentTracker() {
     setSessionForms((current) => ({
       ...current,
       [planId]: {
-        ...(current[planId] || { date: getTodayKey(), treatmentType: "", doneByStaffId: "" }),
+        ...(current[planId] || {
+          date: getTodayKey(),
+          treatmentType: "",
+          doneByStaffId: "",
+          treatmentLocation: "clinic",
+        }),
         [key]: value,
       },
     }));
@@ -673,6 +689,7 @@ export default function TreatmentTracker() {
     const date = form.date || getTodayKey();
     const treatmentType = String(form.treatmentType || "").trim();
     const doneByStaffId = form.doneByStaffId || "";
+    const treatmentLocation = form.treatmentLocation || plan.treatmentLocation || "clinic";
 
     if (!date || !treatmentType || !doneByStaffId) {
       setError("Please add date, treatment done, and done by staff before saving.");
@@ -684,6 +701,7 @@ export default function TreatmentTracker() {
       await API.post(`/patients/${patient.id}/treatment-plans/${plan.id}/session-days`, {
         date,
         treatmentType,
+        treatmentLocation,
         doneByStaffId,
       });
       setSessionForms((current) => ({
@@ -692,6 +710,7 @@ export default function TreatmentTracker() {
           date: getTodayKey(),
           treatmentType: "",
           doneByStaffId,
+          treatmentLocation,
         },
       }));
       await loadTracker();

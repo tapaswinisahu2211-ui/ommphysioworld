@@ -628,6 +628,7 @@ private fun StaffAdminApp() {
                         payload.text("planId"),
                         payload.text("date"),
                         payload.text("treatmentType"),
+                        payload.text("treatmentLocation", fallback = "clinic"),
                         payload.text("doneByStaffId"),
                     )
                     "deleteTreatmentSessionEntry" -> api.deleteTreatmentSessionEntry(
@@ -1335,7 +1336,7 @@ private fun StaffAdminApp() {
         }
     }
 
-    fun addTreatmentSessionEntry(patientId: String, planId: String, date: String, treatmentType: String, doneByStaffId: String) {
+    fun addTreatmentSessionEntry(patientId: String, planId: String, date: String, treatmentType: String, treatmentLocation: String, doneByStaffId: String) {
         val activeSession = session ?: return
         if (patientId.isBlank() || planId.isBlank()) return
         scope.launch {
@@ -1346,6 +1347,7 @@ private fun StaffAdminApp() {
                     planId,
                     date,
                     treatmentType,
+                    treatmentLocation,
                     doneByStaffId,
                 )
                 applyUpdatedPatient(updated)
@@ -1371,6 +1373,7 @@ private fun StaffAdminApp() {
                             .put("date", date)
                             .put("status", "done")
                             .put("treatmentType", treatmentType)
+                            .put("treatmentLocation", treatmentLocation.ifBlank { "clinic" })
                             .put("doneByStaffId", doneByStaffId)
                             .put("doneByStaffName", doneByStaff.name.ifBlank { "Staff" })
                             .put("offlinePending", true)
@@ -1385,6 +1388,7 @@ private fun StaffAdminApp() {
                         .put("planId", planId)
                         .put("date", date)
                         .put("treatmentType", treatmentType)
+                        .put("treatmentLocation", treatmentLocation.ifBlank { "clinic" })
                         .put("doneByStaffId", doneByStaffId),
                     "Network is slow. Treatment saved offline and will sync automatically.",
                 )
@@ -2881,7 +2885,7 @@ private fun DashboardScreen(
     onTreatmentPlanSave: (String, String?, JSONObject) -> Unit,
     onTreatmentPlanStatusChange: (String, String, String) -> Unit,
     onSessionDayStatusChange: (String, String, String, String) -> Unit,
-    onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
+    onTreatmentSessionEntryAdd: (String, String, String, String, String, String) -> Unit,
     onTreatmentSessionEntryDelete: (String, String, String) -> Unit,
     onTreatmentPaymentAdd: (String, String, Double, String, String) -> Unit,
     onTreatmentPaymentUpdate: (String, String, String, Double, String, String) -> Unit,
@@ -5185,7 +5189,7 @@ private fun PatientsTab(
     onTreatmentPlanSave: (String, String?, JSONObject) -> Unit,
     onTreatmentPlanStatusChange: (String, String, String) -> Unit,
     onSessionDayStatusChange: (String, String, String, String) -> Unit,
-    onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
+    onTreatmentSessionEntryAdd: (String, String, String, String, String, String) -> Unit,
     onTreatmentSessionEntryDelete: (String, String, String) -> Unit,
     onTreatmentPaymentAdd: (String, String, Double, String, String) -> Unit,
     onTreatmentPaymentUpdate: (String, String, String, Double, String, String) -> Unit,
@@ -6378,7 +6382,7 @@ private fun PatientDetailScreen(
     onTreatmentPlanSave: (String, String?, JSONObject) -> Unit,
     onTreatmentPlanStatusChange: (String, String, String) -> Unit,
     onSessionDayStatusChange: (String, String, String, String) -> Unit,
-    onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
+    onTreatmentSessionEntryAdd: (String, String, String, String, String, String) -> Unit,
     onTreatmentSessionEntryDelete: (String, String, String) -> Unit,
     onTreatmentPaymentAdd: (String, String, Double, String, String) -> Unit,
     onTreatmentPaymentUpdate: (String, String, String, Double, String, String) -> Unit,
@@ -6831,7 +6835,7 @@ private fun TreatmentPlansSection(
     canEdit: Boolean,
     onStatusChange: (String, String, String) -> Unit,
     onTreatmentModeChange: (String, String, String) -> Unit,
-    onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
+    onTreatmentSessionEntryAdd: (String, String, String, String, String, String) -> Unit,
     onTreatmentSessionEntryDelete: (String, String, String) -> Unit,
     onDelete: (String, String) -> Unit,
 ) {
@@ -6888,7 +6892,7 @@ private fun TreatmentPlanCard(
     canEdit: Boolean,
     onStatusChange: (String, String, String) -> Unit,
     onTreatmentModeChange: (String, String, String) -> Unit,
-    onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
+    onTreatmentSessionEntryAdd: (String, String, String, String, String, String) -> Unit,
     onTreatmentSessionEntryDelete: (String, String, String) -> Unit,
     onDelete: (String, String) -> Unit,
 ) {
@@ -6903,6 +6907,7 @@ private fun TreatmentPlanCard(
         .ifBlank { "clinic" }
     var entryDate by rememberSaveable(planId) { mutableStateOf(todayDateKey()) }
     var entryTreatmentType by rememberSaveable(planId) { mutableStateOf("") }
+    var entryTreatmentLocation by rememberSaveable(planId) { mutableStateOf(treatmentMode) }
     var entryStaffId by rememberSaveable(planId) { mutableStateOf("") }
     var confirmAction by rememberSaveable(planId) { mutableStateOf("") }
     var deleteDayId by rememberSaveable(planId) { mutableStateOf("") }
@@ -7091,6 +7096,13 @@ private fun TreatmentPlanCard(
                         query = entryTreatmentType,
                         onSelected = { entryTreatmentType = it },
                     )
+                    ChoiceChipRow(
+                        options = listOf("Clinic", "Home"),
+                        selected = if (entryTreatmentLocation == "home") "Home" else "Clinic",
+                        onSelected = { selected ->
+                            entryTreatmentLocation = if (selected == "Home") "home" else "clinic"
+                        },
+                    )
                     Button(
                         onClick = {
                             onTreatmentSessionEntryAdd(
@@ -7098,9 +7110,11 @@ private fun TreatmentPlanCard(
                                 planId,
                                 entryDate,
                                 entryTreatmentType,
+                                entryTreatmentLocation,
                                 entryStaffId,
                             )
                             entryTreatmentType = ""
+                            entryTreatmentLocation = treatmentMode
                             entryStaffId = ""
                             entryDate = todayDateKey()
                         },
@@ -7132,6 +7146,15 @@ private fun TreatmentPlanCard(
                                 color = Color(0xFF64748B),
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                if (day.text("treatmentLocation", fallback = treatmentMode).lowercase() == "home") {
+                                    "Home visit"
+                                } else {
+                                    "Clinic visit"
+                                },
+                                color = Color(0xFF2D8A82),
+                                fontWeight = FontWeight.Bold,
                             )
                             day.text("doneByStaffName").takeIf { it.isNotBlank() }?.let { staffName ->
                                 Text(
@@ -9209,7 +9232,7 @@ private fun TreatmentTab(
     users: List<StaffUser>,
     onAppointmentRequestDecision: (String, JSONObject, String, String, String, String) -> Unit,
     onAppointmentStatusChange: (JSONObject, String) -> Unit,
-    onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
+    onTreatmentSessionEntryAdd: (String, String, String, String, String, String) -> Unit,
     canEdit: Boolean,
 ) {
     if (tracker == null) {
@@ -9500,14 +9523,20 @@ private fun TreatmentTrackerActiveSessionCard(
     plan: JSONObject?,
     staffOptions: List<StaffUser>,
     canEdit: Boolean,
-    onTreatmentSessionEntryAdd: (String, String, String, String, String) -> Unit,
+    onTreatmentSessionEntryAdd: (String, String, String, String, String, String) -> Unit,
 ) {
     val patientId = patient.text("id")
     val planId = plan?.text("id").orEmpty()
     val sessionDays = sortedTreatmentSessionDays(plan)
     val treatmentSuggestions = treatmentDetailSuggestions(sessionDays)
+    val planTreatmentLocation = plan
+        ?.text("treatmentLocation", "serviceLocation", fallback = "clinic")
+        .orEmpty()
+        .ifBlank { "clinic" }
+        .lowercase()
     var entryDate by rememberSaveable(patientId, planId) { mutableStateOf(todayDateKey()) }
     var treatmentDone by rememberSaveable(patientId, planId) { mutableStateOf("") }
+    var treatmentLocation by rememberSaveable(patientId, planId) { mutableStateOf(planTreatmentLocation) }
     var doneByStaffId by rememberSaveable(patientId, planId) { mutableStateOf("") }
     var showEntryDatePicker by rememberSaveable(patientId, planId) { mutableStateOf(false) }
     var showStaffMenu by rememberSaveable(patientId, planId) { mutableStateOf(false) }
@@ -9590,6 +9619,13 @@ private fun TreatmentTrackerActiveSessionCard(
                     query = treatmentDone,
                     onSelected = { treatmentDone = it },
                 )
+                ChoiceChipRow(
+                    options = listOf("Clinic", "Home"),
+                    selected = if (treatmentLocation == "home") "Home" else "Clinic",
+                    onSelected = { selected ->
+                        treatmentLocation = if (selected == "Home") "home" else "clinic"
+                    },
+                )
                 Button(
                     onClick = {
                         onTreatmentSessionEntryAdd(
@@ -9597,10 +9633,12 @@ private fun TreatmentTrackerActiveSessionCard(
                             planId,
                             entryDate,
                             treatmentDone,
+                            treatmentLocation,
                             doneByStaffId,
                         )
                         entryDate = todayDateKey()
                         treatmentDone = ""
+                        treatmentLocation = planTreatmentLocation
                         doneByStaffId = ""
                     },
                     modifier = Modifier.fillMaxWidth(),

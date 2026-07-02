@@ -125,6 +125,11 @@ const sessionDaySchema = new mongoose.Schema(
       default: "not_done",
     },
     treatmentType: { type: String, default: "", trim: true },
+    treatmentLocation: {
+      type: String,
+      enum: ["clinic", "home"],
+      default: "clinic",
+    },
     doneByStaffId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     doneByStaffName: { type: String, default: "", trim: true },
     updatedAt: { type: Date, default: null },

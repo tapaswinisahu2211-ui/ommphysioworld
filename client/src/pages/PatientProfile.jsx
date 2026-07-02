@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import DashboardLayout from "../layout/DashboardLayout";
 import API from "../services/api";
+import { canEditModule, getStoredUser, isAdminUser } from "../utils/auth";
 
 const formatDate = (value) => {
   if (!value) {
@@ -153,6 +154,9 @@ const getTodayKey = () => {
 export default function PatientProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const currentUser = getStoredUser();
+  const canEditPayments = canEditModule("payments", currentUser);
+  const canDeletePayments = isAdminUser(currentUser);
   const [patient, setPatient] = useState(null);
   const [form, setForm] = useState({
     name: "",
@@ -210,6 +214,7 @@ export default function PatientProfile() {
   const [editingPlanId, setEditingPlanId] = useState("");
   const [planPaymentForm, setPlanPaymentForm] = useState({
     planId: "",
+    paymentId: "",
     amount: "",
     method: "",
     paymentDate: getTodayKey(),
@@ -311,7 +316,7 @@ export default function PatientProfile() {
     setEditingPlanId("");
     setBillingSettingsModalPlanId("");
     setBillingSettingsForm(defaultBillingSettings);
-    setPlanPaymentForm({ planId: "", amount: "", method: "", paymentDate: getTodayKey() });
+    setPlanPaymentForm({ planId: "", paymentId: "", amount: "", method: "", paymentDate: getTodayKey() });
     setSessionEntryForm({
       planId: "",
       date: getTodayKey(),
@@ -646,21 +651,56 @@ export default function PatientProfile() {
       const selectedPlan = (patient.treatmentPlans || []).find(
         (plan) => plan.id === planPaymentForm.planId
       );
-      const response = await API.post(
-        `/patients/${id}/treatment-plans/${planPaymentForm.planId}/payments`,
-        {
-          amount: Number(planPaymentForm.amount || 0),
-          method: planPaymentForm.method,
-          paymentDate: planPaymentForm.paymentDate || getTodayKey(),
-          billingSettings: normalizeBillingSettings(selectedPlan?.billingSettings),
-        }
-      );
+      const payload = {
+        amount: Number(planPaymentForm.amount || 0),
+        method: planPaymentForm.method,
+        paymentDate: planPaymentForm.paymentDate || getTodayKey(),
+        billingSettings: normalizeBillingSettings(selectedPlan?.billingSettings),
+      };
+      const response = planPaymentForm.paymentId
+        ? await API.put(
+            `/patients/${id}/treatment-plans/${planPaymentForm.planId}/payments/${planPaymentForm.paymentId}`,
+            payload
+          )
+        : await API.post(
+            `/patients/${id}/treatment-plans/${planPaymentForm.planId}/payments`,
+            payload
+          );
 
       setPatient(response.data);
-      setPlanPaymentForm({ planId: "", amount: "", method: "", paymentDate: getTodayKey() });
+      setPlanPaymentForm({ planId: "", paymentId: "", amount: "", method: "", paymentDate: getTodayKey() });
       setError("");
     } catch (saveError) {
-      setError(saveError.response?.data?.message || "Failed to add payment.");
+      setError(saveError.response?.data?.message || "Failed to save payment.");
+    }
+  };
+
+  const handleEditPlanPayment = (plan, payment) => {
+    setPlanPaymentForm({
+      planId: plan.id,
+      paymentId: payment.id,
+      amount: String(payment.amount || ""),
+      method: payment.method || plan.paymentMethod || "",
+      paymentDate: payment.paymentDate || getTodayKey(),
+    });
+  };
+
+  const handleDeletePlanPayment = async (planId, paymentId) => {
+    if (!window.confirm("Delete this payment entry?")) {
+      return;
+    }
+
+    try {
+      const response = await API.delete(
+        `/patients/${id}/treatment-plans/${planId}/payments/${paymentId}`
+      );
+      setPatient(response.data);
+      if (planPaymentForm.paymentId === paymentId) {
+        setPlanPaymentForm({ planId: "", paymentId: "", amount: "", method: "", paymentDate: getTodayKey() });
+      }
+      setError("");
+    } catch (deleteError) {
+      setError(deleteError.response?.data?.message || "Failed to delete payment.");
     }
   };
 
@@ -1547,6 +1587,7 @@ export default function PatientProfile() {
                             const billing = selectedPlan ? calculateTreatmentBilling(selectedPlan) : null;
                             setPlanPaymentForm({
                               planId: e.target.value,
+                              paymentId: "",
                               amount: billing?.balanceAmount ? String(Math.round(billing.balanceAmount)) : "",
                               method: selectedPlan?.paymentMethod || "",
                               paymentDate: getTodayKey(),
@@ -1619,8 +1660,25 @@ export default function PatientProfile() {
                         disabled={!planPaymentForm.planId || !planPaymentForm.amount}
                         className="rounded-xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
                       >
-                        Add Payment
+                        {planPaymentForm.paymentId ? "Update Payment" : "Add Payment"}
                       </button>
+                      {planPaymentForm.paymentId ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPlanPaymentForm({
+                              planId: "",
+                              paymentId: "",
+                              amount: "",
+                              method: "",
+                              paymentDate: getTodayKey(),
+                            })
+                          }
+                          className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          Cancel
+                        </button>
+                      ) : null}
                     </div>
                     {selectedPaymentBilling ? (
                       <div className="mt-4 grid gap-2 md:grid-cols-3">
@@ -1726,11 +1784,33 @@ export default function PatientProfile() {
                                       {payment.method || plan.paymentMethod || "Method not added"}
                                     </p>
                                   </div>
-                                  <p className="shrink-0 text-xs text-slate-400">
-                                    {payment.paymentDate
-                                      ? formatDateOnly(payment.paymentDate)
-                                      : formatDate(payment.createdAt)}
-                                  </p>
+                                  <div className="flex shrink-0 items-center gap-2">
+                                    <p className="text-xs text-slate-400">
+                                      {payment.paymentDate
+                                        ? formatDateOnly(payment.paymentDate)
+                                        : formatDate(payment.createdAt)}
+                                    </p>
+                                    {canEditPayments ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleEditPlanPayment(plan, payment)}
+                                        className="rounded-full border border-slate-200 bg-white p-2 text-slate-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                                        title="Edit payment"
+                                      >
+                                        <Pencil size={14} />
+                                      </button>
+                                    ) : null}
+                                    {canDeletePayments ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeletePlanPayment(plan.id, payment.id)}
+                                        className="rounded-full border border-red-100 bg-white p-2 text-red-500 transition hover:bg-red-50"
+                                        title="Delete payment"
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    ) : null}
+                                  </div>
                                 </div>
                               ))}
                             </div>

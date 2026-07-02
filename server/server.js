@@ -4977,6 +4977,37 @@ app.put("/api/patients/:id/treatment-plans/:planId/payments/:paymentId", require
   }
 });
 
+app.delete("/api/patients/:id/treatment-plans/:planId/payments/:paymentId", requireAdminAuth, async (req, res) => {
+  try {
+    const patient = await Patient.findById(req.params.id);
+
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found." });
+    }
+
+    const plan = patient.treatmentPlans.id(req.params.planId);
+
+    if (!plan) {
+      return res.status(404).json({ message: "Treatment plan not found." });
+    }
+
+    const payment = plan.payments.id(req.params.paymentId);
+
+    if (!payment) {
+      return res.status(404).json({ message: "Payment not found." });
+    }
+
+    plan.payments.pull(payment._id);
+    applyTreatmentBilling(plan, normalizeTreatmentBillingSettings(plan.billingSettings || {}));
+    await patient.save();
+
+    res.json(await serializePatientWithTreatmentStaff(patient));
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to delete treatment payment." });
+  }
+});
+
 app.delete("/api/patients/:id/treatment-plans/:planId", requireStaffPermission("treatment_plans", "edit"), async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);

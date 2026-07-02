@@ -6,6 +6,7 @@ import {
   CalendarRange,
   ClipboardList,
   IndianRupee,
+  TrendingDown,
   Users,
 } from "lucide-react";
 import DashboardLayout from "../layout/DashboardLayout";
@@ -107,6 +108,8 @@ export default function ReportsPage() {
   const totalHomeVisitCommissionBaseAmount = Number(
     selectedReport?.totalHomeVisitCommissionBaseAmount || 0
   );
+  const linkedExpenseAmount = Number(selectedReport?.linkedExpenseAmount || 0);
+  const linkedExpenses = selectedReport?.linkedExpenses || [];
   const clinicCommissionRate = Math.max(0, Number(clinicCommissionPercent || 0));
   const homeVisitCommissionRate = Math.max(0, Number(homeVisitCommissionPercent || 0));
   const clinicCommissionAmount = (totalClinicCommissionBaseAmount * clinicCommissionRate) / 100;
@@ -159,6 +162,13 @@ export default function ReportsPage() {
       note: `Clinic ${clinicCommissionRate || 0}% + home ${homeVisitCommissionRate || 0}%`,
       icon: Calculator,
       tone: "bg-violet-50 text-violet-700",
+    },
+    {
+      label: "Linked Expense",
+      value: formatMoney(linkedExpenseAmount),
+      note: "Expenses assigned to selected staff",
+      icon: TrendingDown,
+      tone: "bg-rose-50 text-rose-700",
     },
   ];
 
@@ -273,7 +283,7 @@ export default function ReportsPage() {
           </div>
         </form>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
           {cards.map(({ label, value, note, icon: Icon, tone }) => (
             <div key={label} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex items-start justify-between gap-3">
@@ -409,6 +419,57 @@ export default function ReportsPage() {
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-slate-900">Staff-Linked Expenses</h2>
+              <p className="text-sm text-slate-500">
+                Expenses from Finance that are assigned to the selected staff member.
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700">
+              <TrendingDown size={16} />
+              {formatMoney(linkedExpenseAmount)}
+            </div>
+          </div>
+
+          {linkedExpenses.length === 0 ? (
+            <EmptyState message="No linked expense found for this staff and date range." />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
+                    <th className="px-3 py-3">Expense</th>
+                    <th className="px-3 py-3">Category</th>
+                    <th className="px-3 py-3">Date</th>
+                    <th className="px-3 py-3">Method</th>
+                    <th className="px-3 py-3 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linkedExpenses.map((expense) => (
+                    <tr key={expense.id} className="border-b border-slate-100">
+                      <td className="px-3 py-3">
+                        <p className="font-medium text-slate-900">{expense.title || "Expense"}</p>
+                        {expense.note ? (
+                          <p className="text-xs text-slate-500">{expense.note}</p>
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-3 text-slate-600">{expense.category || "-"}</td>
+                      <td className="px-3 py-3 text-slate-600">{formatDate(expense.date)}</td>
+                      <td className="px-3 py-3 text-slate-600">{expense.method || "-"}</td>
+                      <td className="px-3 py-3 text-right font-semibold text-rose-700">
+                        {formatMoney(expense.amount)}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

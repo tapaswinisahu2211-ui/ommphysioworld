@@ -12293,6 +12293,8 @@ private fun ReportsTab(
         "totalHomeVisitCommissionBaseAmount",
         0.0,
     ) ?: 0.0
+    val linkedExpenseAmount = selectedStaffReport?.optDouble("linkedExpenseAmount", 0.0) ?: 0.0
+    val linkedExpenses = selectedStaffReport?.array("linkedExpenses")?.toJsonObjects().orEmpty()
     val clinicCommissionRate = (clinicCommissionPercent.toDoubleOrNull() ?: 0.0).coerceAtLeast(0.0)
     val homeVisitCommissionRate = (homeVisitCommissionPercent.toDoubleOrNull() ?: 0.0).coerceAtLeast(0.0)
     val clinicCommissionAmount = totalClinicCommissionBaseAmount * (clinicCommissionRate / 100.0)
@@ -12405,6 +12407,13 @@ private fun ReportsTab(
             )
         }
 
+        MetricCard(
+            modifier = Modifier.fillMaxWidth(),
+            label = "Linked Expense",
+            value = formatMoney(linkedExpenseAmount),
+            accent = OpwDanger,
+        )
+
         Surface(
             shape = RoundedCornerShape(28.dp),
             color = Color(0xFFEFFBFF),
@@ -12497,6 +12506,25 @@ private fun ReportsTab(
                 } else {
                     emptyList()
                 },
+            )
+        }
+
+        ReportRecordsSection(
+            title = "Staff-linked Expenses",
+            emptyMessage = "No linked expense found for selected staff and date range.",
+            items = linkedExpenses,
+            accent = OpwDanger,
+        ) { expense ->
+            ReportRecordCard(
+                title = expense.text("title", fallback = "Expense"),
+                subtitle = appointmentDateLabel(expense.text("date")),
+                status = formatMoney(expense.optDouble("amount", 0.0)),
+                statusColor = OpwDanger,
+                rows = listOf(
+                    "Category" to expense.text("category", fallback = "-"),
+                    "Method" to expense.text("method", fallback = "-"),
+                    "Note" to expense.text("note", fallback = "-"),
+                ),
             )
         }
     }

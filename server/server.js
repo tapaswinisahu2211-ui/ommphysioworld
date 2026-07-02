@@ -2408,7 +2408,16 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
       return res.status(400).json({ message: "From date cannot be after to date." });
     }
 
-    const patients = await Patient.find().sort({ name: 1, createdAt: -1 });
+    const [patients, linkedExpenseEntries] = await Promise.all([
+      Patient.find().sort({ name: 1, createdAt: -1 }),
+      FinanceEntry.find({
+        type: "expense",
+        staffId: { $ne: null },
+        date: { $gte: fromKey, $lte: toKey },
+      })
+        .populate("staffId", "name email mobile role status")
+        .sort({ date: -1, createdAt: -1 }),
+    ]);
     const patientsNeedingSessionDays = patients.filter(ensureTreatmentPlanSessionDays);
     if (patientsNeedingSessionDays.length) {
       await Promise.all(patientsNeedingSessionDays.map((patient) => patient.save()));
@@ -2649,11 +2658,15 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
       (a, b) => b.doneCount - a.doneCount || a.staffName.localeCompare(b.staffName)
     );
     const staffWorkMap = new Map();
-    Array.from(staffPatientWorkMap.values()).forEach((record) => {
-      const staffKey = record.staffId || record.staffName || "Unassigned";
-      const staffWork = staffWorkMap.get(staffKey) || {
-        staffId: record.staffId,
-        staffName: record.staffName || "Unassigned",
+    const ensureStaffWork = (staffKey, staffId = "", staffName = "Unassigned") => {
+      const existing = staffWorkMap.get(staffKey);
+      if (existing) {
+        return existing;
+      }
+
+      const staffWork = {
+        staffId,
+        staffName: staffName || "Unassigned",
         totalDoneDays: 0,
         totalClinicDays: 0,
         totalHomeVisitDays: 0,
@@ -2661,8 +2674,17 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
         totalCommissionBaseAmount: 0,
         totalClinicCommissionBaseAmount: 0,
         totalHomeVisitCommissionBaseAmount: 0,
+        linkedExpenseAmount: 0,
+        linkedExpenses: [],
         patients: [],
       };
+      staffWorkMap.set(staffKey, staffWork);
+      return staffWork;
+    };
+
+    Array.from(staffPatientWorkMap.values()).forEach((record) => {
+      const staffKey = record.staffId || record.staffName || "Unassigned";
+      const staffWork = ensureStaffWork(staffKey, record.staffId, record.staffName);
       const paidAmount = Number(patientPaymentMap.get(record.patientId) || 0);
       const commissionBaseAmount = Number(patientCommissionBaseMap.get(record.patientId) || 0);
       const clinicCommissionBaseAmount = Number(patientClinicCommissionBaseMap.get(record.patientId) || 0);
@@ -2684,9 +2706,36 @@ app.get("/api/reports", requireStaffPermission("reports", "view"), async (req, r
       });
       staffWorkMap.set(staffKey, staffWork);
     });
+
+    linkedExpenseEntries.forEach((entry) => {
+      const staffId = entry.staffId?._id ? entry.staffId._id.toString() : String(entry.staffId || "");
+      if (!staffId) {
+        return;
+      }
+
+      const staffName = entry.staffId?.name || "Unassigned";
+      const staffWork = ensureStaffWork(staffId, staffId, staffName);
+      const amount = Number(entry.amount || 0);
+      staffWork.linkedExpenseAmount += amount;
+      staffWork.linkedExpenses.push({
+        id: entry._id.toString(),
+        title: entry.title || "",
+        category: entry.category || "",
+        amount,
+        method: entry.method || "",
+        date: entry.date || "",
+        note: entry.note || "",
+        staffId,
+        staffName,
+      });
+    });
+
     const staffWorkReports = Array.from(staffWorkMap.values())
       .map((staff) => ({
         ...staff,
+        linkedExpenses: staff.linkedExpenses.sort((a, b) =>
+          String(b.date || "").localeCompare(String(a.date || ""))
+        ),
         patients: staff.patients.sort(
           (a, b) => Number(b.doneDays || 0) - Number(a.doneDays || 0) || a.patientName.localeCompare(b.patientName)
         ),
@@ -5634,7 +5683,7 @@ app.post("/api/patients/:id/payments", requireStaffPermission("payments", "add")
   }
 });
 
-app.delete("/api/patients/:id/payments/:paymentId", requireStaffPermission("payments", "edit"), async (req, res) => {
+app.delete("/api/patients/:id/payments/:paymentId", requireAdminAuth, async (req, res) => {
   try {
     const patient = await Patient.findById(req.params.id);
 
